@@ -179,6 +179,23 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         msgdict['type'] = 'plain'
         return msgdict
 
+    def maybeDummify(key, builder, delay=0, triggers=None):
+        """Replaces builder with a dummy version if `key` is set in the releaseConfig"""
+        if not releaseConfig.get(key) and not releaseConfig.get('skip_all'):
+            return builder
+
+        allSlaves = []
+        for p in branchConfig['platforms']:
+            allSlaves.extend(branchConfig['platforms'][p]['slaves'])
+
+        return makeDummyBuilder(
+            name=builder['name'],
+            slaves=allSlaves,
+            category=builder['category'],
+            delay=delay,
+            triggers=triggers,
+            )
+
     def l10nBuilders(platform):
         builders = {}
         for n in range(1, l10nChunks+1):
@@ -458,159 +475,126 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
     }
 
     if staging:
-        if not releaseConfig.get('skip_repo_setup'):
-            repository_setup_factory = StagingRepositorySetupFactory(
-                hgHost=branchConfig['hghost'],
-                buildToolsRepoPath=branchConfig['build_tools_repo_path'],
-                username=releaseConfig['hgUsername'],
-                sshKey=releaseConfig['hgSshKey'],
-                repositories=clone_repositories,
-                clobberURL=branchConfig['base_clobber_url'],
-            )
-
-            builders.append({
-                'name': builderPrefix('repo_setup'),
-                'slavenames': branchConfig['platforms']['linux']['slaves'],
-                'category': builderPrefix(''),
-                'builddir': builderPrefix('repo_setup'),
-                'slavebuilddir': reallyShort(builderPrefix('repo_setup')),
-                'factory': repository_setup_factory,
-                'nextSlave': _nextFastReservedSlave,
-                'env': builder_env,
-                'properties': { 'slavebuilddir':
-                    reallyShort(builderPrefix('repo_setup'))},
-            })
-        else:
-            builders.append(makeDummyBuilder(
-                name=builderPrefix('repo_setup'),
-                slaves=branchConfig['platforms']['linux']['slaves'],
-                category=builderPrefix(''),
-                ))
-
-        if not releaseConfig.get('skip_release_download'):
-            release_downloader_factory = ScriptFactory(
-                scriptRepo=tools_repo,
-                extra_args=[branchConfigFile],
-                scriptName='scripts/staging/release_downloader.sh',
-            )
-
-            builders.append({
-                'name': builderPrefix('release_downloader'),
-                'slavenames': branchConfig['platforms']['linux']['slaves'],
-                'category': builderPrefix(''),
-                'builddir': builderPrefix('release_downloader'),
-                'slavebuilddir': reallyShort(builderPrefix('release_downloader')),
-                'factory': release_downloader_factory,
-                'nextSlave': _nextFastReservedSlave,
-                'env': builder_env,
-                'properties': {'builddir': builderPrefix('release_downloader'),
-                               'slavebuilddir': reallyShort(builderPrefix('release_downloader'))}
-            })
-        else:
-            builders.append(makeDummyBuilder(
-                name=builderPrefix('release_downloader'),
-                slaves=branchConfig['platforms']['linux']['slaves'],
-                category=builderPrefix(''),
-                ))
-
-    if not releaseConfig.get('skip_tag'):
-        pf = branchConfig['platforms']['linux']
-        tag_env = builder_env.copy()
-        if pf['env'].get('HG_SHARE_BASE_DIR', None):
-            tag_env['HG_SHARE_BASE_DIR'] = pf['env']['HG_SHARE_BASE_DIR']
-
-        tag_factory = ScriptFactory(
-            scriptRepo=tools_repo,
-            scriptName='scripts/release/tagging.sh',
+        repository_setup_factory = StagingRepositorySetupFactory(
+            hgHost=branchConfig['hghost'],
+            buildToolsRepoPath=branchConfig['build_tools_repo_path'],
+            username=releaseConfig['hgUsername'],
+            sshKey=releaseConfig['hgSshKey'],
+            repositories=clone_repositories,
+            clobberURL=branchConfig['base_clobber_url'],
         )
 
-        builders.append({
-            'name': builderPrefix('tag'),
-            'slavenames': pf['slaves'],
+        builders.append(maybeDummify('skip_repo_setup', {
+            'name': builderPrefix('repo_setup'),
+            'slavenames': branchConfig['platforms']['linux']['slaves'],
             'category': builderPrefix(''),
-            'builddir': builderPrefix('tag'),
-            'slavebuilddir': reallyShort(builderPrefix('tag')),
-            'factory': tag_factory,
+            'builddir': builderPrefix('repo_setup'),
+            'slavebuilddir': reallyShort(builderPrefix('repo_setup')),
+            'factory': repository_setup_factory,
             'nextSlave': _nextFastReservedSlave,
-            'env': tag_env,
-            'properties': {'builddir': builderPrefix('tag'), 'slavebuilddir': reallyShort(builderPrefix('tag'))}
-        })
-        notify_builders.append(builderPrefix('tag'))
-    else:
-        builders.append(makeDummyBuilder(
-            name=builderPrefix('tag'),
-            slaves=branchConfig['platforms']['linux']['slaves'],
-            category=builderPrefix(''),
-            ))
+            'env': builder_env,
+            'properties': { 'slavebuilddir':
+                reallyShort(builderPrefix('repo_setup'))},
+            }))
 
-    if not releaseConfig.get('skip_source'):
-        source_factory = SingleSourceFactory(
+        release_downloader_factory = ScriptFactory(
+            scriptRepo=tools_repo,
+            extra_args=[branchConfigFile],
+            scriptName='scripts/staging/release_downloader.sh',
+        )
+
+        builders.append(maybeDummify('skip_release_download', {
+            'name': builderPrefix('release_downloader'),
+            'slavenames': branchConfig['platforms']['linux']['slaves'],
+            'category': builderPrefix(''),
+            'builddir': builderPrefix('release_downloader'),
+            'slavebuilddir': reallyShort(builderPrefix('release_downloader')),
+            'factory': release_downloader_factory,
+            'nextSlave': _nextFastReservedSlave,
+            'env': builder_env,
+            'properties': {'builddir': builderPrefix('release_downloader'),
+                            'slavebuilddir': reallyShort(builderPrefix('release_downloader'))}
+        }))
+
+    pf = branchConfig['platforms']['linux']
+    tag_env = builder_env.copy()
+    if pf['env'].get('HG_SHARE_BASE_DIR', None):
+        tag_env['HG_SHARE_BASE_DIR'] = pf['env']['HG_SHARE_BASE_DIR']
+
+    tag_factory = ScriptFactory(
+        scriptRepo=tools_repo,
+        scriptName='scripts/release/tagging.sh',
+    )
+
+    builders.append(maybeDummify('skip_tag', {
+        'name': builderPrefix('tag'),
+        'slavenames': pf['slaves'],
+        'category': builderPrefix(''),
+        'builddir': builderPrefix('tag'),
+        'slavebuilddir': reallyShort(builderPrefix('tag')),
+        'factory': tag_factory,
+        'nextSlave': _nextFastReservedSlave,
+        'env': tag_env,
+        'properties': {'builddir': builderPrefix('tag'), 'slavebuilddir': reallyShort(builderPrefix('tag'))}
+    }))
+    if not releaseConfig.get('skip_tag'):
+        notify_builders.append(builderPrefix('tag'))
+
+    source_factory = SingleSourceFactory(
+        hgHost=branchConfig['hghost'],
+        buildToolsRepoPath=branchConfig['build_tools_repo_path'],
+        repoPath=sourceRepoInfo['path'],
+        productName=releaseConfig['productName'],
+        version=releaseConfig['version'],
+        baseTag=releaseConfig['baseTag'],
+        stagingServer=branchConfig['stage_server'],
+        stageUsername=branchConfig['stage_username'],
+        stageSshKey=branchConfig['stage_ssh_key'],
+        buildNumber=releaseConfig['buildNumber'],
+        autoconfDirs=['.', 'js/src'],
+        clobberURL=branchConfig['base_clobber_url'],
+    )
+
+    builders.append(maybeDummify('skip_source', {
+        'name': builderPrefix('source'),
+        'slavenames': branchConfig['platforms']['linux']['slaves'],
+        'category': builderPrefix(''),
+        'builddir': builderPrefix('source'),
+        'slavebuilddir': reallyShort(builderPrefix('source')),
+        'factory': source_factory,
+        'env': builder_env,
+        'nextSlave': _nextFastReservedSlave,
+        'properties': { 'slavebuilddir':
+            reallyShort(builderPrefix('source'))}
+    }))
+
+    if releaseConfig['xulrunnerPlatforms']:
+        xulrunner_source_factory = SingleSourceFactory(
             hgHost=branchConfig['hghost'],
             buildToolsRepoPath=branchConfig['build_tools_repo_path'],
             repoPath=sourceRepoInfo['path'],
-            productName=releaseConfig['productName'],
-            version=releaseConfig['version'],
+            productName='xulrunner',
+            version=releaseConfig['milestone'],
             baseTag=releaseConfig['baseTag'],
             stagingServer=branchConfig['stage_server'],
-            stageUsername=branchConfig['stage_username'],
-            stageSshKey=branchConfig['stage_ssh_key'],
+            stageUsername=branchConfig['stage_username_xulrunner'],
+            stageSshKey=branchConfig['stage_ssh_xulrunner_key'],
             buildNumber=releaseConfig['buildNumber'],
             autoconfDirs=['.', 'js/src'],
             clobberURL=branchConfig['base_clobber_url'],
         )
 
-        builders.append({
-           'name': builderPrefix('source'),
-           'slavenames': branchConfig['platforms']['linux']['slaves'],
-           'category': builderPrefix(''),
-           'builddir': builderPrefix('source'),
-           'slavebuilddir': reallyShort(builderPrefix('source')),
-           'factory': source_factory,
-           'env': builder_env,
-           'nextSlave': _nextFastReservedSlave,
-           'properties': { 'slavebuilddir':
-               reallyShort(builderPrefix('source'))}
-        })
-
-        if releaseConfig['xulrunnerPlatforms']:
-            xulrunner_source_factory = SingleSourceFactory(
-                hgHost=branchConfig['hghost'],
-                buildToolsRepoPath=branchConfig['build_tools_repo_path'],
-                repoPath=sourceRepoInfo['path'],
-                productName='xulrunner',
-                version=releaseConfig['milestone'],
-                baseTag=releaseConfig['baseTag'],
-                stagingServer=branchConfig['stage_server'],
-                stageUsername=branchConfig['stage_username_xulrunner'],
-                stageSshKey=branchConfig['stage_ssh_xulrunner_key'],
-                buildNumber=releaseConfig['buildNumber'],
-                autoconfDirs=['.', 'js/src'],
-                clobberURL=branchConfig['base_clobber_url'],
-            )
-
-            builders.append({
-               'name': builderPrefix('xulrunner_source'),
-               'slavenames': branchConfig['platforms']['linux']['slaves'],
-               'category': builderPrefix(''),
-               'builddir': builderPrefix('xulrunner_source'),
-               'slavebuilddir': reallyShort(builderPrefix('xulrunner_source')),
-               'factory': xulrunner_source_factory,
-               'env': builder_env,
-               'properties': { 'slavebuilddir':
-                   reallyShort(builderPrefix('xulrunner_source'))}
-            })
-    else:
-        builders.append(makeDummyBuilder(
-            name=builderPrefix('source'),
-            slaves=branchConfig['platforms']['linux']['slaves'],
-            category=builderPrefix(''),
-            ))
-        if releaseConfig['xulrunnerPlatforms']:
-            builders.append(makeDummyBuilder(
-                name=builderPrefix('xulrunner_source'),
-                slaves=branchConfig['platforms']['linux']['slaves'],
-                category=builderPrefix(''),
-                ))
+        builders.append(maybeDummify('skip_source', {
+            'name': builderPrefix('xulrunner_source'),
+            'slavenames': branchConfig['platforms']['linux']['slaves'],
+            'category': builderPrefix(''),
+            'builddir': builderPrefix('xulrunner_source'),
+            'slavebuilddir': reallyShort(builderPrefix('xulrunner_source')),
+            'factory': xulrunner_source_factory,
+            'env': builder_env,
+            'properties': { 'slavebuilddir':
+                reallyShort(builderPrefix('xulrunner_source'))}
+        }))
 
     for platform in releaseConfig['enUSPlatforms']:
         # shorthand
@@ -630,62 +614,55 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             unittestMasters = None
             unittestBranch = None
 
-        if not releaseConfig.get('skip_build'):
-            build_factory = ReleaseBuildFactory(
-                env=pf['env'],
-                objdir=pf['platform_objdir'],
-                platform=platform,
-                hgHost=branchConfig['hghost'],
-                repoPath=sourceRepoInfo['path'],
-                buildToolsRepoPath=branchConfig['build_tools_repo_path'],
-                configRepoPath=branchConfig['config_repo_path'],
-                configSubDir=branchConfig['config_subdir'],
-                profiledBuild=pf['profiled_build'],
-                mozconfig=mozconfig,
-                buildRevision=releaseTag,
-                stageServer=branchConfig['stage_server'],
-                stageUsername=branchConfig['stage_username'],
-                stageGroup=branchConfig['stage_group'],
-                stageSshKey=branchConfig['stage_ssh_key'],
-                stageBasePath=branchConfig['stage_base_path'],
-                codesighs=False,
-                uploadPackages=True,
-                uploadSymbols=True,
-                createSnippet=False,
-                doCleanup=True, # this will clean-up the mac build dirs, but not delete
-                                # the entire thing
-                buildSpace=10,
-                productName=releaseConfig['productName'],
-                version=releaseConfig['version'],
-                buildNumber=releaseConfig['buildNumber'],
-                talosMasters=talosMasters,
-                packageTests=packageTests,
-                unittestMasters=unittestMasters,
-                unittestBranch=unittestBranch,
-                clobberURL=branchConfig['base_clobber_url'],
-                triggerBuilds=True,
-                triggeredSchedulers=[builderPrefix('%s_repack' % platform)],
-                signingServer=signingServer,
-            )
+        build_factory = ReleaseBuildFactory(
+            env=pf['env'],
+            objdir=pf['platform_objdir'],
+            platform=platform,
+            hgHost=branchConfig['hghost'],
+            repoPath=sourceRepoInfo['path'],
+            buildToolsRepoPath=branchConfig['build_tools_repo_path'],
+            configRepoPath=branchConfig['config_repo_path'],
+            configSubDir=branchConfig['config_subdir'],
+            profiledBuild=pf['profiled_build'],
+            mozconfig=mozconfig,
+            buildRevision=releaseTag,
+            stageServer=branchConfig['stage_server'],
+            stageUsername=branchConfig['stage_username'],
+            stageGroup=branchConfig['stage_group'],
+            stageSshKey=branchConfig['stage_ssh_key'],
+            stageBasePath=branchConfig['stage_base_path'],
+            codesighs=False,
+            uploadPackages=True,
+            uploadSymbols=True,
+            createSnippet=False,
+            doCleanup=True, # this will clean-up the mac build dirs, but not delete
+                            # the entire thing
+            buildSpace=10,
+            productName=releaseConfig['productName'],
+            version=releaseConfig['version'],
+            buildNumber=releaseConfig['buildNumber'],
+            talosMasters=talosMasters,
+            packageTests=packageTests,
+            unittestMasters=unittestMasters,
+            unittestBranch=unittestBranch,
+            clobberURL=branchConfig['base_clobber_url'],
+            triggerBuilds=True,
+            triggeredSchedulers=[builderPrefix('%s_repack' % platform)],
+            signingServer=signingServer,
+        )
 
-            builders.append({
-                'name': builderPrefix('%s_build' % platform),
-                'slavenames': pf['slaves'],
-                'category': builderPrefix(''),
-                'builddir': builderPrefix('%s_build' % platform),
-                'slavebuilddir': reallyShort(builderPrefix('%s_build' % platform)),
-                'factory': build_factory,
-                'nextSlave': _nextFastReservedSlave,
-                'env': builder_env,
-                'properties': { 'slavebuilddir':
-                    reallyShort(builderPrefix('%s_build' % platform))}
-            })
-        else:
-            builders.append(makeDummyBuilder(
-                name=builderPrefix('%s_build' % platform),
-                slaves=branchConfig['platforms']['linux']['slaves'],
-                category=builderPrefix(''),
-                ))
+        builders.append(maybeDummify('skip_build', {
+            'name': builderPrefix('%s_build' % platform),
+            'slavenames': pf['slaves'],
+            'category': builderPrefix(''),
+            'builddir': builderPrefix('%s_build' % platform),
+            'slavebuilddir': reallyShort(builderPrefix('%s_build' % platform)),
+            'factory': build_factory,
+            'nextSlave': _nextFastReservedSlave,
+            'env': builder_env,
+            'properties': { 'slavebuilddir':
+                reallyShort(builderPrefix('%s_build' % platform))}
+        }, triggers=[builderPrefix('%s_repack' % platform)]))
 
         if platform in releaseConfig['l10nPlatforms']:
             standalone_factory = ScriptFactory(
@@ -717,10 +694,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                                 str(l10nChunks), str(n)]
                 )
                 builddir = builderPrefix('%s_repack' % platform) + \
-                                         '_' + str(n)
+                                        '_' + str(n)
                 env = builder_env.copy()
                 env.update(pf['env'])
-                builders.append({
+                builders.append(maybeDummify('skip_repacks', {
                     'name': builderName,
                     'slavenames': branchConfig['l10n_slaves'][platform],
                     'category': builderPrefix(''),
@@ -730,7 +707,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                     'nextSlave': _nextFastReservedSlave,
                     'env': env,
                     'properties': {'builddir': builddir, 'slavebuilddir': reallyShort(builddir)}
-                })
+                }))
 
             builders.append(makeDummyBuilder(
                 name=builderPrefix('repack_complete', platform),
@@ -761,54 +738,47 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         xr_env['SYMBOL_SERVER_SSH_KEY'] = \
             xr_env['SYMBOL_SERVER_SSH_KEY'].replace(branchConfig['stage_ssh_key'],
                                                     branchConfig['stage_ssh_xulrunner_key'])
-        if not releaseConfig.get('skip_build'):
-            xulrunner_build_factory = XulrunnerReleaseBuildFactory(
-                env=xr_env,
-                objdir=pf['platform_objdir'],
-                platform=platform,
-                hgHost=branchConfig['hghost'],
-                repoPath=sourceRepoInfo['path'],
-                buildToolsRepoPath=branchConfig['build_tools_repo_path'],
-                configRepoPath=branchConfig['config_repo_path'],
-                configSubDir=branchConfig['config_subdir'],
-                profiledBuild=None,
-                mozconfig = '%s/%s/xulrunner' % (platform, sourceRepoInfo['name']),
-                buildRevision=releaseTag,
-                stageServer=branchConfig['stage_server'],
-                stageUsername=branchConfig['stage_username_xulrunner'],
-                stageGroup=branchConfig['stage_group'],
-                stageSshKey=branchConfig['stage_ssh_xulrunner_key'],
-                stageBasePath=branchConfig['stage_base_path_xulrunner'],
-                codesighs=False,
-                uploadPackages=True,
-                uploadSymbols=True,
-                createSnippet=False,
-                doCleanup=True, # this will clean-up the mac build dirs, but not delete
-                                # the entire thing
-                buildSpace=pf.get('build_space', branchConfig['default_build_space']),
-                productName='xulrunner',
-                version=releaseConfig['milestone'],
-                buildNumber=releaseConfig['buildNumber'],
-                clobberURL=branchConfig['base_clobber_url'],
-                packageSDK=True,
-            )
-            builders.append({
-                'name': builderPrefix('xulrunner_%s_build' % platform),
-                'slavenames': pf['slaves'],
-                'category': builderPrefix(''),
-                'builddir': builderPrefix('xulrunner_%s_build' % platform),
-                'slavebuilddir': reallyShort(builderPrefix('xulrunner_%s_build' % platform)),
-                'factory': xulrunner_build_factory,
-                'env': builder_env,
-                'properties': {'slavebuilddir':
-                    reallyShort(builderPrefix('xulrunner_%s_build' % platform))}
-            })
-        else:
-            builders.append(makeDummyBuilder(
-                name=builderPrefix('xulrunner_%s_build' % platform),
-                slaves=branchConfig['platforms']['linux']['slaves'],
-                category=builderPrefix(''),
-                ))
+        xulrunner_build_factory = XulrunnerReleaseBuildFactory(
+            env=xr_env,
+            objdir=pf['platform_objdir'],
+            platform=platform,
+            hgHost=branchConfig['hghost'],
+            repoPath=sourceRepoInfo['path'],
+            buildToolsRepoPath=branchConfig['build_tools_repo_path'],
+            configRepoPath=branchConfig['config_repo_path'],
+            configSubDir=branchConfig['config_subdir'],
+            profiledBuild=None,
+            mozconfig = '%s/%s/xulrunner' % (platform, sourceRepoInfo['name']),
+            buildRevision=releaseTag,
+            stageServer=branchConfig['stage_server'],
+            stageUsername=branchConfig['stage_username_xulrunner'],
+            stageGroup=branchConfig['stage_group'],
+            stageSshKey=branchConfig['stage_ssh_xulrunner_key'],
+            stageBasePath=branchConfig['stage_base_path_xulrunner'],
+            codesighs=False,
+            uploadPackages=True,
+            uploadSymbols=True,
+            createSnippet=False,
+            doCleanup=True, # this will clean-up the mac build dirs, but not delete
+                            # the entire thing
+            buildSpace=pf.get('build_space', branchConfig['default_build_space']),
+            productName='xulrunner',
+            version=releaseConfig['milestone'],
+            buildNumber=releaseConfig['buildNumber'],
+            clobberURL=branchConfig['base_clobber_url'],
+            packageSDK=True,
+        )
+        builders.append(maybeDummify('skip_build', {
+            'name': builderPrefix('xulrunner_%s_build' % platform),
+            'slavenames': pf['slaves'],
+            'category': builderPrefix(''),
+            'builddir': builderPrefix('xulrunner_%s_build' % platform),
+            'slavebuilddir': reallyShort(builderPrefix('xulrunner_%s_build' % platform)),
+            'factory': xulrunner_build_factory,
+            'env': builder_env,
+            'properties': {'slavebuilddir':
+                reallyShort(builderPrefix('xulrunner_%s_build' % platform))}
+        }))
 
     if releaseConfig['doPartnerRepacks']:
          for platform in releaseConfig['l10nPlatforms']:
@@ -832,7 +802,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                  slaves = branchConfig['platforms']['macosx64']['slaves']
              else:
                  slaves = branchConfig['platforms']['macosx']['slaves']
-             builders.append({
+             builders.append(maybeDummify('skip_partner_repacks', {
                  'name': builderPrefix('partner_repack', platform),
                  'slavenames': slaves,
                  'category': builderPrefix(''),
@@ -843,7 +813,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                  'env': builder_env,
                  'properties': {'slavebuilddir':
                      reallyShort(builderPrefix('partner_repack', platform))}
-             })
+             }))
 
     for platform in releaseConfig['l10nPlatforms']:
         l10n_verification_factory = L10nVerifyFactory(
@@ -864,7 +834,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             slaves = branchConfig['platforms']['macosx64']['slaves']
         else:
             slaves = branchConfig['platforms']['macosx']['slaves']
-        builders.append({
+        builders.append(maybeDummify('skip_l10n_verification', {
             'name': builderPrefix('l10n_verification', platform),
             'slavenames': slaves,
             'category': builderPrefix(''),
@@ -875,7 +845,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             'env': builder_env,
             'properties': {'slavebuilddir':
                 reallyShort(builderPrefix('l10n_verification', platform))}
-        })
+        }))
 
     updates_factory = ReleaseUpdatesFactory(
         hgHost=branchConfig['hghost'],
@@ -919,7 +889,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         triggerSchedulers=[builderPrefix('update_verify', platform)],
     )
 
-    builders.append({
+    builders.append(maybeDummify('skip_updates', {
         'name': builderPrefix('updates'),
         'slavenames': branchConfig['platforms']['linux']['slaves'],
         'category': builderPrefix(''),
@@ -929,7 +899,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'nextSlave': _nextFastReservedSlave,
         'env': builder_env,
         'properties': {'slavebuilddir': reallyShort(builderPrefix('updates'))},
-    })
+        },
+        triggers=[builderPrefix('update_verify', p) for p in releaseConfig['verifyConfigs'].keys()],
+        ))
     notify_builders.append(builderPrefix('updates'))
 
 
@@ -942,7 +914,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             useOldUpdater=branchConfig.get('use_old_updater', False),
         )
 
-        builders.append({
+        builders.append(maybeDummify('skip_update_verify', {
             'name': builderPrefix('update_verify', platform),
             'slavenames': branchConfig['platforms'][platform]['slaves'],
             'category': builderPrefix(''),
@@ -953,7 +925,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             'env': builder_env,
             'properties': {'slavebuilddir':
                 reallyShort(builderPrefix('%s_up_vrfy' % platform))}
-        })
+        }))
 
     check_permissions_factory = ScriptFactory(
         scriptRepo=tools_repo,
@@ -962,7 +934,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         scriptName='scripts/release/push-to-mirrors.sh',
     )
 
-    builders.append({
+    builders.append(maybeDummify('skip_check_permissions', {
         'name': builderPrefix('check_permissions'),
         'slavenames': branchConfig['platforms']['linux']['slaves'],
         'category': builderPrefix(''),
@@ -974,7 +946,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'properties': {'slavebuilddir': reallyShort(builderPrefix('chk_prms')),
                        'script_repo_revision': releaseTag,
                        'release_config': releaseConfigFile},
-    })
+    }))
 
     antivirus_factory = ScriptFactory(
         scriptRepo=tools_repo,
@@ -983,7 +955,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         scriptName='scripts/release/push-to-mirrors.sh',
     )
 
-    builders.append({
+    builders.append(maybeDummify('skip_antivirus', {
         'name': builderPrefix('antivirus'),
         'slavenames': branchConfig['platforms']['linux']['slaves'],
         'category': builderPrefix(''),
@@ -995,7 +967,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'properties': {'slavebuilddir': reallyShort(builderPrefix('av')),
                        'script_repo_revision': releaseTag,
                        'release_config': releaseConfigFile},
-    })
+    }))
 
     push_to_mirrors_factory = ScriptFactory(
         scriptRepo=tools_repo,
@@ -1011,7 +983,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
     ))
 
 
-    builders.append({
+    builders.append(maybeDummify('skip_push_to_mirrors', {
         'name': builderPrefix('push_to_mirrors'),
         'slavenames': branchConfig['platforms']['linux']['slaves'],
         'category': builderPrefix(''),
@@ -1022,7 +994,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'env': builder_env,
         'properties': {'slavebuilddir':
                         reallyShort(builderPrefix('psh_mrrrs'))},
-    })
+    }))
     notify_builders.append(builderPrefix('push_to_mirrors'))
 
     final_verification_factory = ReleaseFinalVerification(
@@ -1032,7 +1004,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         clobberURL=branchConfig['base_clobber_url'],
     )
 
-    builders.append({
+    builders.append(maybeDummify('skip_final_verification', {
         'name': builderPrefix('final_verification'),
         'slavenames': branchConfig['platforms']['linux']['slaves'],
         'category': builderPrefix(''),
@@ -1043,7 +1015,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'env': builder_env,
         'properties': {'slavebuilddir':
             reallyShort(builderPrefix('fnl_verf'))}
-    })
+    }))
 
     builders.append(makeDummyBuilder(
         name=builderPrefix('ready_for_releasetest_testing'),
@@ -1100,7 +1072,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             releaseNotesUrl=releaseConfig['majorUpdateReleaseNotesUrl'],
         )
 
-        builders.append({
+        builders.append(maybeDummify('skip_major_update', {
             'name': builderPrefix('major_update'),
             'slavenames': branchConfig['platforms']['linux']['slaves'],
             'category': builderPrefix(''),
@@ -1110,7 +1082,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             'nextSlave': _nextFastReservedSlave,
             'env': builder_env,
             'properties': {'slavebuilddir': reallyShort(builderPrefix('mu'))}
-        })
+        }))
         notify_builders.append(builderPrefix('major_update'))
 
         for platform in sorted(releaseConfig['majorUpdateVerifyConfigs'].keys()):
@@ -1122,7 +1094,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                 useOldUpdater=branchConfig.get('use_old_updater', False),
             )
 
-            builders.append({
+            builders.append(maybeDummify('skip_major_update_verify', {
                 'name': builderPrefix('%s_major_update_verify' % platform),
                 'slavenames': branchConfig['platforms'][platform]['slaves'],
                 'category': builderPrefix(''),
@@ -1133,7 +1105,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                 'env': builder_env,
                 'properties': {'slavebuilddir':
                     reallyShort(builderPrefix('%s_mu_verify' % platform))}
-            })
+            }))
 
     bouncer_submitter_factory = TuxedoEntrySubmitterFactory(
         baseTag=releaseConfig['baseTag'],
@@ -1152,7 +1124,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         credentialsFile=os.path.join(os.getcwd(), "BuildSlaves.py")
     )
 
-    builders.append({
+    builders.append(maybeDummify('skip_bouncer', {
         'name': builderPrefix('bouncer_submitter'),
         'slavenames': branchConfig['platforms']['linux']['slaves'],
         'category': builderPrefix(''),
@@ -1162,7 +1134,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'env': builder_env,
         'properties': {'slavebuilddir':
             reallyShort(builderPrefix('bncr_sub'))}
-    })
+    }))
 
     if releaseConfig['doPartnerRepacks']:
         euballot_bouncer_submitter_factory = TuxedoEntrySubmitterFactory(
@@ -1183,7 +1155,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             credentialsFile=os.path.join(os.getcwd(), "BuildSlaves.py"),
         )
 
-        builders.append({
+        builders.append(maybeDummify('skip_euballot_bouncer_submitter', {
             'name': builderPrefix('euballot_bouncer_submitter'),
             'slavenames': branchConfig['platforms']['linux']['slaves'],
             'category': builderPrefix(''),
@@ -1193,91 +1165,92 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             'env': builder_env,
             'properties': {'slavebuilddir':
                 reallyShort(builderPrefix('eu_bncr_sub'))}
-        })
+        }))
 
-    # Separate email messages per list. Mailman doesn't try to avoid duplicate
-    # messages in this case. See Bug 635527 for the details.
-    tagging_started_recipients = releaseConfig['AllRecipients'][:]
-    if not releaseConfig.get('skip_tag'):
-        tagging_started_recipients.extend(releaseConfig['PassRecipients'])
-    for recipient in tagging_started_recipients:
-        #send a message when we receive the sendchange and start tagging
-        status.append(ChangeNotifier(
-                fromaddr="release@mozilla.com",
-                relayhost="mail.build.mozilla.org",
-                sendToInterestedUsers=False,
-                extraRecipients=[recipient],
-                branches=[sourceRepoInfo['path']],
-                messageFormatter=createReleaseChangeMessage,
-            ))
-
-    if not signingServer:
-        for recipient in releaseConfig['AllRecipients'] + \
-                        releaseConfig['PassRecipients']:
-            #send a message when signing is complete
+    if not releaseConfig.get('skip_all'):
+        # Separate email messages per list. Mailman doesn't try to avoid duplicate
+        # messages in this case. See Bug 635527 for the details.
+        tagging_started_recipients = releaseConfig['AllRecipients'][:]
+        if not releaseConfig.get('skip_tag') and not releaseConfig.get('skip_all'):
+            tagging_started_recipients.extend(releaseConfig['PassRecipients'])
+        for recipient in tagging_started_recipients:
+            #send a message when we receive the sendchange and start tagging
             status.append(ChangeNotifier(
                     fromaddr="release@mozilla.com",
                     relayhost="mail.build.mozilla.org",
                     sendToInterestedUsers=False,
                     extraRecipients=[recipient],
-                    branches=[builderPrefix('post_signing')],
+                    branches=[sourceRepoInfo['path']],
                     messageFormatter=createReleaseChangeMessage,
                 ))
 
-    #send the nice(passing) release messages
-    status.append(MailNotifier(
-            fromaddr='release@mozilla.com',
-            sendToInterestedUsers=False,
-            extraRecipients=releaseConfig['PassRecipients'],
-            mode='passing',
-            builders=notify_builders,
-            relayhost='mail.build.mozilla.org',
-            messageFormatter=createReleaseMessage,
+        if not signingServer:
+            for recipient in releaseConfig['AllRecipients'] + \
+                            releaseConfig['PassRecipients']:
+                #send a message when signing is complete
+                status.append(ChangeNotifier(
+                        fromaddr="release@mozilla.com",
+                        relayhost="mail.build.mozilla.org",
+                        sendToInterestedUsers=False,
+                        extraRecipients=[recipient],
+                        branches=[builderPrefix('post_signing')],
+                        messageFormatter=createReleaseChangeMessage,
+                    ))
+
+        #send the nice(passing) release messages
+        status.append(MailNotifier(
+                fromaddr='release@mozilla.com',
+                sendToInterestedUsers=False,
+                extraRecipients=releaseConfig['PassRecipients'],
+                mode='passing',
+                builders=notify_builders,
+                relayhost='mail.build.mozilla.org',
+                messageFormatter=createReleaseMessage,
+            ))
+
+        #send all release messages
+        status.append(MailNotifier(
+                fromaddr='release@mozilla.com',
+                sendToInterestedUsers=False,
+                extraRecipients=releaseConfig['AllRecipients'],
+                mode='all',
+                categories=[builderPrefix('')],
+                relayhost='mail.build.mozilla.org',
+                messageFormatter=createReleaseMessage,
+            ))
+
+        status.append(TinderboxMailNotifier(
+            fromaddr="mozilla2.buildbot@build.mozilla.org",
+            tree=branchConfig["tinderbox_tree"] + "-Release",
+            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org",],
+            relayhost="mail.build.mozilla.org",
+            builders=[b['name'] for b in builders],
+            logCompression="gzip")
+        )
+
+        status.append(TinderboxMailNotifier(
+            fromaddr="mozilla2.buildbot@build.mozilla.org",
+            tree=branchConfig["tinderbox_tree"] + "-Release",
+            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org",],
+            relayhost="mail.build.mozilla.org",
+            builders=[b['name'] for b in test_builders],
+            logCompression="gzip",
+            errorparser="unittest")
+        )
+
+
+        logUploadCmd = makeLogUploadCommand(sourceRepoInfo['name'], branchConfig,
+                platform_prop=None)
+
+        status.append(SubprocessLogHandler(
+            logUploadCmd + [
+                '--release', '%s/%s' % (
+                    releaseConfig['appVersion'], releaseConfig['buildNumber'])
+                ],
+            builders=[b['name'] for b in builders + test_builders],
         ))
-
-    #send all release messages
-    status.append(MailNotifier(
-            fromaddr='release@mozilla.com',
-            sendToInterestedUsers=False,
-            extraRecipients=releaseConfig['AllRecipients'],
-            mode='all',
-            categories=[builderPrefix('')],
-            relayhost='mail.build.mozilla.org',
-            messageFormatter=createReleaseMessage,
-        ))
-
-    status.append(TinderboxMailNotifier(
-        fromaddr="mozilla2.buildbot@build.mozilla.org",
-        tree=branchConfig["tinderbox_tree"] + "-Release",
-        extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org",],
-        relayhost="mail.build.mozilla.org",
-        builders=[b['name'] for b in builders],
-        logCompression="gzip")
-    )
-
-    status.append(TinderboxMailNotifier(
-        fromaddr="mozilla2.buildbot@build.mozilla.org",
-        tree=branchConfig["tinderbox_tree"] + "-Release",
-        extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org",],
-        relayhost="mail.build.mozilla.org",
-        builders=[b['name'] for b in test_builders],
-        logCompression="gzip",
-        errorparser="unittest")
-    )
 
     builders.extend(test_builders)
-
-    logUploadCmd = makeLogUploadCommand(sourceRepoInfo['name'], branchConfig,
-            platform_prop=None)
-
-    status.append(SubprocessLogHandler(
-        logUploadCmd + [
-            '--release', '%s/%s' % (
-                releaseConfig['appVersion'], releaseConfig['buildNumber'])
-            ],
-        builders=[b['name'] for b in builders + test_builders],
-    ))
-
     return {
             "builders": builders,
             "status": status,

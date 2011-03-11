@@ -67,14 +67,19 @@ from buildbot.status.builder import SUCCESS, FAILURE
 hg_try_lock = locks.MasterLock("hg_try_lock", maxCount=20)
 
 class DummyFactory(BuildFactory):
-    def __init__(self):
+    def __init__(self, delay=5, triggers=None):
         BuildFactory.__init__(self)
-        self.addStep(Dummy())
+        self.addStep(Dummy(delay))
+        if triggers:
+            self.addStep(Trigger(
+                schedulerNames=triggers,
+                waitForFinish=False,
+                ))
 
-def makeDummyBuilder(name, slaves, category=None):
+def makeDummyBuilder(name, slaves, category=None, delay=0, triggers=None):
     builder = {
             'name': name,
-            'factory': DummyFactory(),
+            'factory': DummyFactory(delay, triggers),
             'builddir': name,
             'slavenames': slaves,
             }
