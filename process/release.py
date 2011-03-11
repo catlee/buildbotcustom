@@ -342,6 +342,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         )
         schedulers.append(updates_scheduler)
     else:
+        # TODO: Trigger updates per platform onces repacks are done
         upstreamBuilders = [builderPrefix('repack_complete', p) for p in releaseConfig['enUSPlatforms']]
         if releaseConfig['doPartnerRepacks']:
             upstreamBuilders.extend(
@@ -359,16 +360,12 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         schedulers.append(updates_scheduler)
 
 
-    # TODO: trigger per-platform verification once updates for that platform are done
-    updateBuilderNames = []
     for platform in sorted(releaseConfig['verifyConfigs'].keys()):
-        updateBuilderNames.append(builderPrefix('%s_update_verify' % platform))
-    update_verify_scheduler = Dependent(
-        name=builderPrefix('update_verify'),
-        upstream=updates_scheduler,
-        builderNames=updateBuilderNames
-    )
-    schedulers.append(update_verify_scheduler)
+        update_verify_scheduler = Triggerable(
+            name=builderPrefix('update_verify', platform),
+            builderNames=[builderPrefix('update_verify', platform)],
+        )
+        schedulers.append(update_verify_scheduler)
 
     check_permissions_scheduler = Dependent(
         name=builderPrefix('check_permissions'),
@@ -920,6 +917,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             binaryName=releaseConfig['binaryName'],
             oldBinaryName=releaseConfig['oldBinaryName'],
             testOlderPartials=releaseConfig['testOlderPartials'],
+            triggerSchedulers=[builderPrefix('update_verify', platform)],
         )
 
         builders.append({
@@ -946,11 +944,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         )
 
         builders.append({
-            'name': builderPrefix('%s_update_verify' % platform),
+            'name': builderPrefix('update_verify', platform),
             'slavenames': branchConfig['platforms'][platform]['slaves'],
             'category': builderPrefix(''),
-            'builddir': builderPrefix('%s_update_verify' % platform),
-            'slavebuilddir': reallyShort(builderPrefix('%s_up_vrfy' % platform)),
+            'builddir': builderPrefix('update_verify', platform),
+            'slavebuilddir': reallyShort(builderPrefix('up_vrfy', platform)),
             'factory': update_verify_factory,
             'nextSlave': _nextFastReservedSlave,
             'env': builder_env,
