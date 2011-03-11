@@ -4470,7 +4470,8 @@ class ReleaseUpdatesFactory(ReleaseFactory):
         return bcmd
 
     def getSnippetDir(self):
-        return '%s-%s-%s' % (self.brandName, self.version, self.buildNumber)
+        date = strftime('%Y%m%d')
+        return '%s-%s-%s' % (date, self.brandName, self.version)
 
 
 
