@@ -2222,8 +2222,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         self.unittestBranch = unittestBranch
         self.signingServer = signingServer
 
-        # TODO: Do something with it!
-
         if self.unittestMasters:
             assert self.unittestBranch
 
@@ -2238,10 +2236,23 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         # The latter is only strictly necessary for RCs.
         env['MOZ_PKG_PRETTYNAMES'] = '1'
         env['MOZ_PKG_VERSION'] = version
-        if signingServer:
-            # TODO: Need specific win32/osx post-stage/post-package commands
-            env['SIGNING_SERVER'] = signingServer
         MercurialBuildFactory.__init__(self, env=env, **kwargs)
+        if signingServer:
+            env['MOZ_SIGNING_SERVER'] = signingServer
+            env['MOZ_POST_STAGEPKG_CMD'] = WithProperties(" ".join([
+                "python", "%(toolsdir)s/release/signing/signtool.py",
+                "-H", signingServer,
+                "-p", self.platform,
+                "--stage", "stage",
+                "-s", self.stageSshKey,
+                ]))
+            env['MOZ_POST_PKG_CMD'] = WithProperties(" ".join([
+                "python", "%(toolsdir)s/release/signing/signtool.py",
+                "-H", signingServer,
+                "-p", self.platform,
+                "--stage", "package",
+                "-s", self.stageSshKey,
+                ]))
 
     def addFilePropertiesSteps(self, filename=None, directory=None,
                                fileType=None, maxDepth=1, haltOnFailure=False):
