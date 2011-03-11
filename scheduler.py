@@ -346,16 +346,21 @@ class AggregatingScheduler(BaseScheduler):
     sourcestamps from `upstreamBuilders`.
 
     `okResults` should be a tuple of acceptable result codes, and defaults to (SUCCESS,)
+
+    `maxTriggers` if set should represent how many times this scheduler will
+    fire. After firing `maxTriggers` times, the scheduler will shut down.
     """
-    compare_attrs = ('name', 'builderNames', 'properties', 'upstreamBuilders', 'okResults')
+    compare_attrs = ('name', 'builderNames', 'properties', 'upstreamBuilders', 'okResults',
+            'maxTriggers')
 
     def __init__(self, name, branch, builderNames, upstreamBuilders, okResults=(SUCCESS,),
-            properties={}):
+            maxTriggers=None, properties={}):
         BaseScheduler.__init__(self, name, builderNames, properties)
         self.branch = branch
         self.upstreamBuilders = upstreamBuilders
         self.reason = "AccumulatingScheduler(%s)" % name
         self.okResults = okResults
+        self.maxTriggers = maxTriggers
 
     def get_initial_state(self, max_changeid):
         return {
@@ -389,6 +394,7 @@ class AggregatingScheduler(BaseScheduler):
         return t.fetchall()
 
     def _run(self, t):
+        # TODO: Support self.maxTriggers
         db = self.parent.db
 
         # Check for new builds completed since lastCheck

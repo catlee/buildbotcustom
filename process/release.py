@@ -28,7 +28,7 @@ from buildbotcustom.process.factory import StagingRepositorySetupFactory, \
 from buildbotcustom.changes.ftppoller import UrlPoller, LocalesFtpPoller
 from release.platforms import buildbot2ftp, sl_platform_map
 from release.paths import makeCandidatesDir
-from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler
+from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler, AggregatingScheduler
 from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
 from buildbotcustom.status.log_handlers import SubprocessLogHandler
 import BuildSlaves
