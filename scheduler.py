@@ -14,6 +14,7 @@ from buildbot.schedulers.timed import Nightly
 from buildbot.schedulers.triggerable import Triggerable
 from buildbot.sourcestamp import SourceStamp
 from buildbot.process.properties import Properties
+from buildbot.status.builder import SUCCESS
 
 from buildbot.util import now
 
@@ -336,6 +337,89 @@ class TriggerBouncerCheck(Triggerable):
         assert self.working
         self.working = False
         return None # eat the failure
+
+class AccumulatingScheduler(BaseScheduler):
+    """This scheduler waits until at least one build of each of
+    `upstreamBuilders` completes with a result in `okResults`. Once this
+    happens, it triggers builds on `builderNames` with `properties` set. The
+    sourcestamp for the new builds will be the result of merging all the
+    sourcestamps from `upstreamBuilders`.
+
+    `okResults` should be a tuple of acceptable result codes, and defaults to (SUCCESS,)
+    """
+    compare_attrs = ('name', 'builderNames', 'properties', 'upstreamBuilders', 'okResults')
+
+    def __init__(self, name, branch, builderNames, upstreamBuilders, okResults=(SUCCESS,),
+            properties={}):
+        BaseScheduler.__init__(self, name, builderNames, properties)
+        self.branch = branch
+        self.upstreamBuilders = upstreamBuilders
+        self.reason = "AccumulatingScheduler(%s)" % name
+        self.okResults = okResults
+
+    def get_initial_state(self, max_changeid):
+        return {
+                "upstreamBuilders": self.upstreamBuilders,
+                "remainingBuilders": self.upstreamBuilders,
+                "lastCheck": now(),
+                }
+
+    def startService(self):
+        # TODO: Check if list of builders has changed.
+        # if it has...reset?
+        pass
+
+    def run(self):
+        d = self.parent.db.runInteraction(self._run)
+        return d
+
+    def findNewBuilds(self, db, t, lastCheck):
+        q = """SELECT buildername, sourcestampid FROM
+                buildrequests, buildsets WHERE
+                buildrequests.buildsetid = buildsets.id AND
+                buildername IN %s AND
+                buildrequests.complete = 1 AND
+                buildrequests.results IN %s AND
+                buildrequests.complete_at > ?
+            """ % (
+                    db.parmlist(len(self.upstreamBuilders)),
+                    db.parmlist(len(self.okResults)),
+                    )
+        t.execute(q, tuple(self.upstreamBuilders) + tuple(self.okResults) + (lastCheck,))
+        return t.fetchall()
+
+    def _run(self, t):
+        db = self.parent.db
+
+        # Check for new builds completed since lastCheck
+        state = self.get_state(t)
+        lastCheck = state['lastCheck']
+        remainingBuilders = state['remainingBuilders']
+
+        n = now()
+        newBuilds = self.findNewBuilds(db, t, lastCheck)
+        state['lastCheck'] = n
+
+        for builder, ssid in newBuilds:
+            if builder in remainingBuilders:
+                remainingBuilders.remove(builder)
+
+        if remainingBuilders:
+            state['remainingBuilders'] = remainingBuilders
+            self.set_state(t, state)
+            return
+
+        if not remainingBuilders:
+            ss = SourceStamp(branch=self.branch)
+            ssid = db.get_sourcestampid(ss, t)
+
+            # Start a build!
+            self.create_buildset(ssid, "downstream", t)
+
+            # Reset the list of builders we're waiting for
+            state['remainingBuilders'] = self.upstreamBuilders
+            self.set_state(t, state)
+
 
 def makePropertiesScheduler(base_class, propfuncs, *args, **kw):
     """Return a subclass of `base_class` that will call each of `propfuncs` to

@@ -2208,13 +2208,17 @@ class CCNightlyBuildFactory(CCMercurialBuildFactory, NightlyBuildFactory):
 class ReleaseBuildFactory(MercurialBuildFactory):
     def __init__(self, env, version, buildNumber, brandName=None,
             unittestMasters=None, unittestBranch=None, talosMasters=None,
-            **kwargs):
+            signingServer=None, **kwargs):
         self.version = version
         self.buildNumber = buildNumber
 
         self.talosMasters = talosMasters or []
         self.unittestMasters = unittestMasters or []
         self.unittestBranch = unittestBranch
+        self.signingServer = signingServer
+
+        # TODO: Do something with it!
+
         if self.unittestMasters:
             assert self.unittestBranch
 
@@ -2229,6 +2233,9 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         # The latter is only strictly necessary for RCs.
         env['MOZ_PKG_PRETTYNAMES'] = '1'
         env['MOZ_PKG_VERSION'] = version
+        if signingServer:
+            # TODO: Need specific win32/osx post-stage/post-package commands
+            env['SIGNING_SERVER'] = signingServer
         MercurialBuildFactory.__init__(self, env=env, **kwargs)
 
     def addFilePropertiesSteps(self, filename=None, directory=None,
@@ -3179,6 +3186,7 @@ class ReleaseFactory(MozillaBuildFactory):
 class ReleaseRepackFactory(BaseRepackFactory, ReleaseFactory):
     def __init__(self, platform, buildRevision, version, buildNumber,
                  env={}, brandName=None, mergeLocales=False, **kwargs):
+        # TODO signedPlatfoms
         self.buildRevision = buildRevision
         self.version = version
         self.buildNumber = buildNumber
@@ -3254,11 +3262,13 @@ class ReleaseRepackFactory(BaseRepackFactory, ReleaseFactory):
             builds[filename] = '%s-%s.tar.bz2' % (self.project, self.version)
             self.env['ZIP_IN'] = WithProperties('%(srcdir)s/' + filename)
         elif self.platform.startswith('macosx'):
+            # TODO: Adjust based on signedPlatfoms / signingServer
             filename = '%s.dmg' % self.project
             builds[filename] = '%s %s.dmg' % (self.brandName,
                                               longVersion)
             self.env['ZIP_IN'] = WithProperties('%(srcdir)s/' + filename)
         elif self.platform.startswith('win32'):
+            # TODO: Adjust based on signedPlatfoms / signingServer
             platformDir = 'unsigned/' + platformDir
             filename = '%s.zip' % self.project
             instname = '%s.exe' % self.project
@@ -8005,7 +8015,8 @@ class PartnerRepackFactory(ReleaseFactory):
                  buildNumber=1, partnersRepoRevision='default',
                  nightlyDir="nightly", platformList=None, packageDmg=True,
                  partnerUploadDir='unsigned/partner-repacks',
-                 baseWorkDir='.', python='python', **kwargs):
+                 baseWorkDir='.', python='python', signingServer=None,
+                 **kwargs):
         ReleaseFactory.__init__(self, baseWorkDir=baseWorkDir, **kwargs)
         self.productName = productName
         self.version = version
@@ -8020,6 +8031,7 @@ class PartnerRepackFactory(ReleaseFactory):
         self.packageDmg = packageDmg
         self.python = python
         self.platformList = platformList
+        self.signingServer = signingServer
         self.candidatesDir = self.getCandidatesDir(productName,
                                                    version,
                                                    buildNumber,

@@ -56,6 +56,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
     else:
         signedPlatforms = ('win32',)
 
+    signingServer = releaseConfig.get('signingServer')
+
     def builderPrefix(s, platform=None):
         if platform:
             return "release-%s-%s_%s" % (sourceRepoInfo['name'], platform, s)
@@ -209,7 +211,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                       releaseConfig['buildNumber'],
                       ftpPlatform)]
 
-            if p in signedPlatforms:
+            if p in signedPlatforms and not signingServer:
                 ftpURLs = [
                     "http://%s/pub/mozilla.org/%s/nightly/%s-candidates/build%s/unsigned/%s" % (
                       releaseConfig['stagingServer'],
@@ -227,14 +229,15 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                 sl_platform_map = sl_platform_map,
             ))
 
-    change_source.append(UrlPoller(
-        branch=builderPrefix("post_signing"),
-        url='http://%s/pub/mozilla.org/%s/nightly/%s-candidates/build%s/win32_signing_build%s.log' % (
-            releaseConfig['stagingServer'],
-            releaseConfig['productName'], releaseConfig['version'],
-            releaseConfig['buildNumber'], releaseConfig['buildNumber']),
-        pollInterval=60*10,
-    ))
+    if not signingServer:
+        change_source.append(UrlPoller(
+            branch=builderPrefix("post_signing"),
+            url='http://%s/pub/mozilla.org/%s/nightly/%s-candidates/build%s/win32_signing_build%s.log' % (
+                releaseConfig['stagingServer'],
+                releaseConfig['productName'], releaseConfig['version'],
+                releaseConfig['buildNumber'], releaseConfig['buildNumber']),
+            pollInterval=60*10,
+        ))
 
     if staging:
         repo_setup_scheduler = Scheduler(
@@ -321,23 +324,26 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             )
             schedulers.append(partner_scheduler)
 
-    for platform in releaseConfig['l10nPlatforms']:
-        l10n_verify_scheduler = Scheduler(
-            name=builderPrefix('l10n_verification', platform),
+    if not signingServer:
+        for platform in releaseConfig['l10nPlatforms']:
+            l10n_verify_scheduler = Scheduler(
+                name=builderPrefix('l10n_verification', platform),
+                treeStableTimer=0,
+                branch=builderPrefix('post_signing'),
+                builderNames=[builderPrefix('l10n_verification', platform)]
+            )
+            schedulers.append(l10n_verify_scheduler)
+
+        updates_scheduler = Scheduler(
+            name=builderPrefix('updates'),
             treeStableTimer=0,
             branch=builderPrefix('post_signing'),
-            builderNames=[builderPrefix('l10n_verification', platform)]
+            builderNames=[builderPrefix('updates')]
         )
-        schedulers.append(l10n_verify_scheduler)
-
-    updates_scheduler = Scheduler(
-        name=builderPrefix('updates'),
-        treeStableTimer=0,
-        branch=builderPrefix('post_signing'),
-        builderNames=[builderPrefix('updates')]
-    )
-    schedulers.append(updates_scheduler)
-    notify_builders.append(builderPrefix('updates'))
+        schedulers.append(updates_scheduler)
+    else:
+        # TODO: Need to fire updates after all repacks are done
+        updates_scheduler = None
 
     updateBuilderNames = []
     for platform in sorted(releaseConfig['verifyConfigs'].keys()):
@@ -647,6 +653,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                 clobberURL=branchConfig['base_clobber_url'],
                 triggerBuilds=True,
                 triggeredSchedulers=[builderPrefix('%s_repack' % platform)],
+                signingServer=signingServer,
             )
 
             builders.append({
@@ -806,8 +813,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                  stagingServer=releaseConfig['stagingServer'],
                  stageUsername=branchConfig['stage_username'],
                  stageSshKey=branchConfig['stage_ssh_key'],
+                 signingServer=signingServer,
              )
-  
+
              if 'macosx64' in branchConfig['platforms']:
                  slaves = branchConfig['platforms']['macosx64']['slaves']
              else:
@@ -910,6 +918,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
         'env': builder_env,
         'properties': {'slavebuilddir': reallyShort(builderPrefix('updates'))}
     })
+    notify_builders.append(builderPrefix('updates'))
 
 
     for platform in sorted(releaseConfig['verifyConfigs'].keys()):
@@ -1189,17 +1198,19 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                 branches=[sourceRepoInfo['path']],
                 messageFormatter=createReleaseChangeMessage,
             ))
-    for recipient in releaseConfig['AllRecipients'] + \
-                     releaseConfig['PassRecipients']:
-        #send a message when signing is complete
-        status.append(ChangeNotifier(
-                fromaddr="release@mozilla.com",
-                relayhost="mail.build.mozilla.org",
-                sendToInterestedUsers=False,
-                extraRecipients=[recipient],
-                branches=[builderPrefix('post_signing')],
-                messageFormatter=createReleaseChangeMessage,
-            ))
+
+    if not signingServer:
+        for recipient in releaseConfig['AllRecipients'] + \
+                        releaseConfig['PassRecipients']:
+            #send a message when signing is complete
+            status.append(ChangeNotifier(
+                    fromaddr="release@mozilla.com",
+                    relayhost="mail.build.mozilla.org",
+                    sendToInterestedUsers=False,
+                    extraRecipients=[recipient],
+                    branches=[builderPrefix('post_signing')],
+                    messageFormatter=createReleaseChangeMessage,
+                ))
 
     #send the nice(passing) release messages
     status.append(MailNotifier(
