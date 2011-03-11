@@ -338,23 +338,23 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
             name=builderPrefix('updates'),
             treeStableTimer=0,
             branch=builderPrefix('post_signing'),
-            builderNames=[builderPrefix('updates', p) for p in releaseConfig['verifyConfigs']]
+            builderNames=[builderPrefix('updates')],
         )
         schedulers.append(updates_scheduler)
     else:
-        # TODO: Trigger updates per platform onces repacks are done
         upstreamBuilders = [builderPrefix('repack_complete', p) for p in releaseConfig['enUSPlatforms']]
         if releaseConfig['doPartnerRepacks']:
             upstreamBuilders.extend(
                     builderPrefix('partner_repack', p) for p in releaseConfig['l10nPlatforms'])
 
-        builderNames = [builderPrefix('updates', p) for p in releaseConfig['verifyConfigs']]
+        builderNames = [builderPrefix('updates')]
+        # TODO: run this after repacks are done
         builderNames.extend(builderPrefix('l10n_verification', p) for p in releaseConfig['l10nPlatforms'])
 
         updates_scheduler = AggregatingScheduler(
             name=builderPrefix('updates'),
             branch=builderPrefix('post_signing'),
-            builderNames=[builderPrefix('updates', p) for p in releaseConfig['verifyConfigs']],
+            builderNames=builderNames,
             upstreamBuilders=upstreamBuilders,
             )
         schedulers.append(updates_scheduler)
@@ -877,61 +877,60 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig, staging,
                 reallyShort(builderPrefix('l10n_verification', platform))}
         })
 
-    for platform in releaseConfig['verifyConfigs'].keys():
-        updates_factory = ReleaseUpdatesFactory(
-            hgHost=branchConfig['hghost'],
-            repoPath=sourceRepoInfo['path'],
-            buildToolsRepoPath=branchConfig['build_tools_repo_path'],
-            cvsroot=releaseConfig['cvsroot'],
-            patcherToolsTag=releaseConfig['patcherToolsTag'],
-            patcherConfig=releaseConfig['patcherConfig'],
-            verifyConfigs={platform: releaseConfig['verifyConfigs'][platform]},
-            appName=releaseConfig['appName'],
-            productName=releaseConfig['productName'],
-            version=releaseConfig['version'],
-            appVersion=releaseConfig['appVersion'],
-            baseTag=releaseConfig['baseTag'],
-            buildNumber=releaseConfig['buildNumber'],
-            oldVersion=releaseConfig['oldVersion'],
-            oldAppVersion=releaseConfig['oldAppVersion'],
-            oldBaseTag=releaseConfig['oldBaseTag'],
-            oldBuildNumber=releaseConfig['oldBuildNumber'],
-            ftpServer=releaseConfig['ftpServer'],
-            bouncerServer=releaseConfig['bouncerServer'],
-            stagingServer=releaseConfig['stagingServer'],
-            useBetaChannel=releaseConfig['useBetaChannel'],
-            stageUsername=branchConfig['stage_username'],
-            stageSshKey=branchConfig['stage_ssh_key'],
-            ausUser=releaseConfig['ausUser'],
-            ausSshKey=releaseConfig['ausSshKey'],
-            ausHost=branchConfig['aus2_host'],
-            ausServerUrl=releaseConfig['ausServerUrl'],
-            hgSshKey=releaseConfig['hgSshKey'],
-            hgUsername=releaseConfig['hgUsername'],
-            # We disable this on staging, because we don't have a CVS mirror to
-            # commit to
-            commitPatcherConfig=(not staging),
-            clobberURL=branchConfig['base_clobber_url'],
-            oldRepoPath=sourceRepoInfo['path'],
-            releaseNotesUrl=releaseConfig['releaseNotesUrl'],
-            binaryName=releaseConfig['binaryName'],
-            oldBinaryName=releaseConfig['oldBinaryName'],
-            testOlderPartials=releaseConfig['testOlderPartials'],
-            triggerSchedulers=[builderPrefix('update_verify', platform)],
-        )
+    updates_factory = ReleaseUpdatesFactory(
+        hgHost=branchConfig['hghost'],
+        repoPath=sourceRepoInfo['path'],
+        buildToolsRepoPath=branchConfig['build_tools_repo_path'],
+        cvsroot=releaseConfig['cvsroot'],
+        patcherToolsTag=releaseConfig['patcherToolsTag'],
+        patcherConfig=releaseConfig['patcherConfig'],
+        verifyConfigs=releaseConfig['verifyConfigs'],
+        appName=releaseConfig['appName'],
+        productName=releaseConfig['productName'],
+        version=releaseConfig['version'],
+        appVersion=releaseConfig['appVersion'],
+        baseTag=releaseConfig['baseTag'],
+        buildNumber=releaseConfig['buildNumber'],
+        oldVersion=releaseConfig['oldVersion'],
+        oldAppVersion=releaseConfig['oldAppVersion'],
+        oldBaseTag=releaseConfig['oldBaseTag'],
+        oldBuildNumber=releaseConfig['oldBuildNumber'],
+        ftpServer=releaseConfig['ftpServer'],
+        bouncerServer=releaseConfig['bouncerServer'],
+        stagingServer=releaseConfig['stagingServer'],
+        useBetaChannel=releaseConfig['useBetaChannel'],
+        stageUsername=branchConfig['stage_username'],
+        stageSshKey=branchConfig['stage_ssh_key'],
+        ausUser=releaseConfig['ausUser'],
+        ausSshKey=releaseConfig['ausSshKey'],
+        ausHost=branchConfig['aus2_host'],
+        ausServerUrl=releaseConfig['ausServerUrl'],
+        hgSshKey=releaseConfig['hgSshKey'],
+        hgUsername=releaseConfig['hgUsername'],
+        # We disable this on staging, because we don't have a CVS mirror to
+        # commit to
+        commitPatcherConfig=(not staging),
+        clobberURL=branchConfig['base_clobber_url'],
+        oldRepoPath=sourceRepoInfo['path'],
+        releaseNotesUrl=releaseConfig['releaseNotesUrl'],
+        binaryName=releaseConfig['binaryName'],
+        oldBinaryName=releaseConfig['oldBinaryName'],
+        testOlderPartials=releaseConfig['testOlderPartials'],
+        triggerSchedulers=[builderPrefix('update_verify', platform)],
+    )
 
-        builders.append({
-            'name': builderPrefix('updates', platform),
-            'slavenames': branchConfig['platforms']['linux']['slaves'],
-            'category': builderPrefix(''),
-            'builddir': builderPrefix('updates', platform),
-            'slavebuilddir': reallyShort(builderPrefix('updates', platform)),
-            'factory': updates_factory,
-            'nextSlave': _nextFastReservedSlave,
-            'env': builder_env,
-            'properties': {'slavebuilddir': reallyShort(builderPrefix('updates', platform))}
-        })
-        notify_builders.append(builderPrefix('updates', platform))
+    builders.append({
+        'name': builderPrefix('updates'),
+        'slavenames': branchConfig['platforms']['linux']['slaves'],
+        'category': builderPrefix(''),
+        'builddir': builderPrefix('updates'),
+        'slavebuilddir': reallyShort(builderPrefix('updates')),
+        'factory': updates_factory,
+        'nextSlave': _nextFastReservedSlave,
+        'env': builder_env,
+        'properties': {'slavebuilddir': reallyShort(builderPrefix('updates'))},
+    })
+    notify_builders.append(builderPrefix('updates'))
 
 
     for platform in sorted(releaseConfig['verifyConfigs'].keys()):
