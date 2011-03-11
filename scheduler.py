@@ -338,7 +338,7 @@ class TriggerBouncerCheck(Triggerable):
         self.working = False
         return None # eat the failure
 
-class AccumulatingScheduler(BaseScheduler):
+class AggregatingScheduler(BaseScheduler):
     """This scheduler waits until at least one build of each of
     `upstreamBuilders` completes with a result in `okResults`. Once this
     happens, it triggers builds on `builderNames` with `properties` set. The
