@@ -376,10 +376,10 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             workdir='.',
         ))
         # XX remove flunkOnFailure after bug 558430 is fixed
-        self.addStep(ShellCommand,
+        self.addRmdirSteps(
          name='rm_buildtools',
-         command=['rm', '-rf', 'tools'],
-         description=['clobber', 'build tools'],
+         directory='tools',
+         platform=self.platform,
          workdir='.',
          flunkOnFailure=False,
         )
