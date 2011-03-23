@@ -570,6 +570,42 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             extract_fn = self.unsetFilepath,
         )
 
+    def addRmdirSteps(self, platform, directory,
+            name='rmdir',
+            workdir='build',
+            haltOnFailure=True,
+            flunkOnFailure=True,
+            warnOnFailure=True,
+            timeout=1200,
+            ):
+        if 'win' in platform:
+            self.addStep(ShellCommand(
+                name='%s_attribs' % name,
+                command=['cmd', '/c', 'attrib /S -R -S -H %s' % directory],
+                workdir=workdir,
+                haltOnFailure=haltOnFailure,
+                flunkOnFailure=flunkOnFailure,
+                warnOnFailure=warnOnFailure,
+                timeout=timeout,
+            ))
+            self.addStep(ShellCommand(
+                name=name,
+                command=['cmd', '/c', 'rmdir /S /Q %s' % directory],
+                workdir=workdir,
+                haltOnFailure=haltOnFailure,
+                flunkOnFailure=flunkOnFailure,
+                warnOnFailure=warnOnFailure,
+                timeout=timeout,
+            ))
+        else:
+            self.addStep(ShellCommand(
+                name=name,
+                command=['rm', '-rf', directory],
+                haltOnFailure=haltOnFailure,
+                flunkOnFailure=flunkOnFailure,
+                warnOnFailure=warnOnFailure,
+                timeout=timeout,
+            ))
 
 class MercurialBuildFactory(MozillaBuildFactory):
     def __init__(self, env, objdir, platform, configRepoPath, configSubDir,
@@ -776,13 +812,13 @@ class MercurialBuildFactory(MozillaBuildFactory):
 
     def addPreBuildSteps(self):
         if self.nightly:
-            self.addStep(ShellCommand,
-             name='rm_builddir',
-             command=['rm', '-rf', 'build'],
-             env=self.env,
-             workdir='.',
-             timeout=60*60 # 1 hour
-            )
+            self.addRmdirSteps(
+                    platform=self.platform,
+                    directory='build',
+                    name='rm_builddir',
+                    workdir='.',
+                    timeout=60*60 # 1 hour
+                    )
         self.addStep(ShellCommand,
          name='rm_old_pkg',
          command="rm -rf %s/dist/%s-* %s/dist/install/sea/*.exe " %
@@ -845,12 +881,11 @@ class MercurialBuildFactory(MozillaBuildFactory):
 
         self.mozconfig = 'configs/%s/%s/mozconfig' % (self.configSubDir,
                                                       self.mozconfig)
-        self.addStep(ShellCommand,
+        self.addRmdirSteps(
          name='rm_configs',
-         command=['rm', '-rf', 'configs'],
-         description=['removing', 'configs'],
-         descriptionDone=['remove', 'configs'],
-         haltOnFailure=True
+         directory='configs',
+         platform=self.platform,
+         haltOnFailure=True,
         )
         self.addStep(MercurialCloneCommand,
          name='hg_clone_configs',
@@ -1361,10 +1396,10 @@ class MercurialBuildFactory(MozillaBuildFactory):
 
     def addPostBuildCleanupSteps(self):
         if self.nightly:
-            self.addStep(ShellCommand,
+            self.addRmdirSteps(
              name='rm_builddir',
-             command=['rm', '-rf', 'build'],
-             env=self.env,
+             platform=self.platform,
+             directory='build',
              workdir='.',
              timeout=5400 # 1.5 hours
             )
@@ -1399,12 +1434,13 @@ class TryBuildFactory(MercurialBuildFactory):
         if self.useSharedCheckouts:
             # We normally rely on the Mercurial step to clobber for us, but
             # since we're managing the checkout ourselves...
-            self.addStep(ShellCommand(
+            self.addRmdirSteps(
+                platform=self.platform,
                 name='clobber_build',
-                command=['rm', '-rf', 'build'],
+                directory='build',
                 workdir='.',
                 timeout=60*60,
-            ))
+            )
             self.addStep(JSONPropertiesDownload(
                 name="download_props",
                 slavedest="buildprops.json",
