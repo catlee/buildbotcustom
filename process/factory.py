@@ -581,7 +581,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         if 'win' in platform:
             self.addStep(ShellCommand(
                 name='%s_attribs' % name,
-                command=['cmd', '/c', 'attrib /S -R -S -H %s' % directory],
+                command=["bash", "-c", "test -d '%s' && cmd /c 'attrib /S -R -S -H %s'" % (directory, directory)],
                 workdir=workdir,
                 haltOnFailure=haltOnFailure,
                 flunkOnFailure=flunkOnFailure,
@@ -590,7 +590,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             ))
             self.addStep(ShellCommand(
                 name=name,
-                command=['cmd', '/c', 'rmdir /S /Q %s' % directory],
+                command=["bash", "-c", "test -d '%s' && cmd /c 'rmdir /S /Q %s'" % (directory, directory)],
                 workdir=workdir,
                 haltOnFailure=haltOnFailure,
                 flunkOnFailure=flunkOnFailure,
