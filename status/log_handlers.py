@@ -9,7 +9,10 @@ from twisted.internet import defer, reactor
 from buildbot.status import base
 
 class ThreadedLogHandler(base.StatusReceiverMultiService):
-    compare_attrs = ['categories', 'builders']
+    # TODO: 'size' isn't needed, but due to
+    # http://trac.buildbot.net/ticket/1791 we can't change compare_attrs on a
+    # running master.
+    compare_attrs = ['categories', 'builders', 'size']
     def __init__(self, categories=None, builders=None):
         base.StatusReceiverMultiService.__init__(self)
 
@@ -22,6 +25,8 @@ class ThreadedLogHandler(base.StatusReceiverMultiService):
             raise ValueError("Please specify only builders or categories")
 
         self.watched = []
+
+        self.size = None # Unused, see TODO above
 
     def setServiceParent(self, parent):
         base.StatusReceiverMultiService.setServiceParent(self, parent)
@@ -65,7 +70,7 @@ class ThreadedLogHandler(base.StatusReceiverMultiService):
         pass
 
 class SubprocessLogHandler(ThreadedLogHandler):
-    compare_attrs = ['command', 'categories', 'builders']
+    compare_attrs = ['command', 'categories', 'builders', 'size']
     def __init__(self, command, categories=None, builders=None):
         ThreadedLogHandler.__init__(self, categories, builders)
         self.command = command
