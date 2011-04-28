@@ -879,39 +879,50 @@ class MercurialBuildFactory(MozillaBuildFactory):
         assert self.configRepoPath is not None
         assert self.configSubDir is not None
         assert self.mozconfig is not None
-        configRepo = self.getRepository(self.configRepoPath)
+        if self.bakedInMozconfigs:
+            self.mozconfig = 'build/mozconfigs/%s/mozconfig' % self.mozconfig
+            self.addStep(ShellCommand,
+            # cp build/mozconfigs/$platform/$type/mozconfig .mozconfig
+            name='cp_mozconfig',
+            command=['cp', self.mozconfig, '.mozconfig'],
+            description=['copying', 'mozconfig'],
+            descriptionDone=['copy', 'mozconfig'],
+            haltOnFailure=True
+            )
+        else:
+            configRepo = self.getRepository(self.configRepoPath)
 
-        self.mozconfig = 'configs/%s/%s/mozconfig' % (self.configSubDir,
-                                                      self.mozconfig)
-        self.addStep(ShellCommand,
-         name='rm_configs',
-         command=['rm', '-rf', 'configs'],
-         description=['removing', 'configs'],
-         descriptionDone=['remove', 'configs'],
-         haltOnFailure=True
-        )
-        self.addStep(MercurialCloneCommand,
-         name='hg_clone_configs',
-         command=['hg', 'clone', configRepo, 'configs'],
-         description=['checking', 'out', 'configs'],
-         descriptionDone=['checkout', 'configs'],
-         haltOnFailure=True
-        )
-        self.addStep(ShellCommand,
-         name='hg_update',
-         command=['hg', 'update', '-r', self.mozconfigBranch],
-         description=['updating', 'mozconfigs'],
-         workdir="build/configs",
-         haltOnFailure=True
-        )
-        self.addStep(ShellCommand,
-         # cp configs/mozilla2/$platform/$repo/$type/mozconfig .mozconfig
-         name='cp_mozconfig',
-         command=['cp', self.mozconfig, '.mozconfig'],
-         description=['copying', 'mozconfig'],
-         descriptionDone=['copy', 'mozconfig'],
-         haltOnFailure=True
-        )
+            self.mozconfig = 'configs/%s/%s/mozconfig' % (self.configSubDir,
+                                                        self.mozconfig)
+            self.addStep(ShellCommand,
+            name='rm_configs',
+            command=['rm', '-rf', 'configs'],
+            description=['removing', 'configs'],
+            descriptionDone=['remove', 'configs'],
+            haltOnFailure=True
+            )
+            self.addStep(MercurialCloneCommand,
+            name='hg_clone_configs',
+            command=['hg', 'clone', configRepo, 'configs'],
+            description=['checking', 'out', 'configs'],
+            descriptionDone=['checkout', 'configs'],
+            haltOnFailure=True
+            )
+            self.addStep(ShellCommand,
+            name='hg_update',
+            command=['hg', 'update', '-r', self.mozconfigBranch],
+            description=['updating', 'mozconfigs'],
+            workdir="build/configs",
+            haltOnFailure=True
+            )
+            self.addStep(ShellCommand,
+            # cp configs/mozilla2/$platform/$repo/$type/mozconfig .mozconfig
+            name='cp_mozconfig',
+            command=['cp', self.mozconfig, '.mozconfig'],
+            description=['copying', 'mozconfig'],
+            descriptionDone=['copy', 'mozconfig'],
+            haltOnFailure=True
+            )
         self.addStep(ShellCommand,
          name='cat_mozconfig',
          command=['cat', '.mozconfig'],
