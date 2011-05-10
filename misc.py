@@ -1061,6 +1061,7 @@ def generateBranchObjects(config, name):
                 testPrettyNames=pf.get('test_pretty_names', False),
                 stagePlatform=pf.get('stage_platform'),
                 l10nCheckTest=pf.get('l10n_check_test', False),
+                mozconfigsInTree=config.get('mozconfigs_in_tree', False),
                 **extra_args
             )
             mozilla2_dep_builder = {

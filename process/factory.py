@@ -597,8 +597,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  enable_ccache=False, stageLogBaseUrl=None,
                  triggeredSchedulers=None, triggerBuilds=False,
                  mozconfigBranch="production", useSharedCheckouts=False,
-                 stagePlatform=None, testPrettyNames=False, l10nCheckTest=False, 
-                 **kwargs):
+                 stagePlatform=None, testPrettyNames=False, l10nCheckTest=False,
+                 mozconfigsInTree=False, **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
         # Make sure we have a buildid and builduid
@@ -652,6 +652,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.useSharedCheckouts = useSharedCheckouts
         self.testPrettyNames = testPrettyNames
         self.l10nCheckTest = l10nCheckTest
+        self.mozconfigsInTree = mozconfigsInTree
 
         if self.uploadPackages:
             assert productName and stageServer and stageUsername
@@ -879,7 +880,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         assert self.configRepoPath is not None
         assert self.configSubDir is not None
         assert self.mozconfig is not None
-        if self.bakedInMozconfigs:
+        if self.mozconfigsInTree:
             self.mozconfig = 'build/mozconfigs/%s/mozconfig' % self.mozconfig
             self.addStep(ShellCommand,
             # cp build/mozconfigs/$platform/$type/mozconfig .mozconfig
