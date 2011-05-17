@@ -881,9 +881,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
         assert self.configSubDir is not None
         assert self.mozconfig is not None
         if self.mozconfigsInTree:
-            self.mozconfig = 'build/mozconfigs/%s/mozconfig' % self.mozconfig
             self.addStep(ShellCommand,
-            # cp build/mozconfigs/$platform/$type/mozconfig .mozconfig
+            # cp build/mozconfigs/$platform/$type .mozconfig
             name='cp_mozconfig',
             command=['cp', self.mozconfig, '.mozconfig'],
             description=['copying', 'mozconfig'],
