@@ -1162,6 +1162,7 @@ def generateBranchObjects(config, name):
                 testPrettyNames=pf.get('test_pretty_names', False),
                 l10nCheckTest=pf.get('l10n_check_test', False),
                 stagePlatform=pf.get('stage_platform'),
+                mozconfigsInTree=config.get('mozconfigs_in_tree', False),
             )
 
             mozilla2_nightly_builder = {
