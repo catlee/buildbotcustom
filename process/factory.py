@@ -583,7 +583,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
 
 class MercurialBuildFactory(MozillaBuildFactory):
     def __init__(self, env, objdir, platform, configRepoPath, configSubDir,
-                 profiledBuild, mozconfig, productName=None,
+                 profiledBuild, mozconfig, srcMozconfig=None, productName=None,
                  buildRevision=None, stageServer=None, stageUsername=None,
                  stageGroup=None, stageSshKey=None, stageBasePath=None,
                  ausBaseUploadDir=None, updatePlatform=None,
@@ -598,7 +598,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  triggeredSchedulers=None, triggerBuilds=False,
                  mozconfigBranch="production", useSharedCheckouts=False,
                  stagePlatform=None, testPrettyNames=False, l10nCheckTest=False,
-                 mozconfigsInTree=False, **kwargs):
+                 **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
         # Make sure we have a buildid and builduid
@@ -614,6 +614,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.configSubDir = configSubDir
         self.profiledBuild = profiledBuild
         self.mozconfig = mozconfig
+        self.srcMozconfig = srcMozconfig
         self.productName = productName
         self.buildRevision = buildRevision
         self.stageServer = stageServer
@@ -652,7 +653,6 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.useSharedCheckouts = useSharedCheckouts
         self.testPrettyNames = testPrettyNames
         self.l10nCheckTest = l10nCheckTest
-        self.mozconfigsInTree = mozconfigsInTree
 
         if self.uploadPackages:
             assert productName and stageServer and stageUsername
@@ -877,52 +877,31 @@ class MercurialBuildFactory(MozillaBuildFactory):
         ))
 
     def addConfigSteps(self):
-        assert self.configRepoPath is not None
         assert self.configSubDir is not None
+        assert self.configRepoPath is not None
         assert self.mozconfig is not None
-        if self.mozconfigsInTree:
-            self.addStep(ShellCommand,
-            # cp build/mozconfigs/$platform/$type .mozconfig
-            name='cp_mozconfig',
-            command=['cp', self.mozconfig, '.mozconfig'],
-            description=['copying', 'mozconfig'],
-            descriptionDone=['copy', 'mozconfig'],
-            haltOnFailure=True
-            )
-        else:
-            configRepo = self.getRepository(self.configRepoPath)
 
-            self.mozconfig = 'configs/%s/%s/mozconfig' % (self.configSubDir,
-                                                        self.mozconfig)
-            self.addStep(ShellCommand,
-            name='rm_configs',
-            command=['rm', '-rf', 'configs'],
-            description=['removing', 'configs'],
-            descriptionDone=['remove', 'configs'],
-            haltOnFailure=True
-            )
-            self.addStep(MercurialCloneCommand,
-            name='hg_clone_configs',
-            command=['hg', 'clone', configRepo, 'configs'],
-            description=['checking', 'out', 'configs'],
-            descriptionDone=['checkout', 'configs'],
-            haltOnFailure=True
-            )
-            self.addStep(ShellCommand,
-            name='hg_update',
-            command=['hg', 'update', '-r', self.mozconfigBranch],
-            description=['updating', 'mozconfigs'],
-            workdir="build/configs",
-            haltOnFailure=True
-            )
-            self.addStep(ShellCommand,
-            # cp configs/mozilla2/$platform/$repo/$type/mozconfig .mozconfig
+        configRepo = self.getRepository(self.configRepoPath)
+        hg_mozconfig = '%s/raw-file/%s/%s/%s' % (
+                configRepo, self.configBranch, self.configSubDir, self.mozconfig)
+        if self.srcMozconfig:
+            cmd = ['bash', '-c',
+                    '''if [ -f "%(src_mozconfig)s" ]; then
+                        cp %(src_mozconfig)s .mozconfig;
+                    else
+                        wget -O .mozconfig %(hg_mozconfig)s
+                    fi''' % {src_mozconfig: self.srcMozconfig, hg_mozconfig: hg_mozconfig}]
+        else:
+            cmd = ['wget', '-O', '.mozconfig', hg_mozconfig]
+
+        self.addStep(ShellCommand(
             name='cp_mozconfig',
-            command=['cp', self.mozconfig, '.mozconfig'],
+            command=cmd,
             description=['copying', 'mozconfig'],
             descriptionDone=['copy', 'mozconfig'],
             haltOnFailure=True
-            )
+        )
+
         self.addStep(ShellCommand,
          name='cat_mozconfig',
          command=['cat', '.mozconfig'],
