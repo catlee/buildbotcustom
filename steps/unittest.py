@@ -139,22 +139,26 @@ def summarizeLogXpcshelltests(name, log):
         r"INFO \| (Passed|Failed): (\d+)")
 
 def summarizeLogJetpacktests(name, log):
+    log = log.getText()
     infoRe = re.compile(r"(\d+) of (\d+) tests passed")
+    successCount = 0
+    failCount = 0
+    totalCount = 0
     summary=""
-    for line in log.readlines():
+    for line in log.splitlines():
         m = infoRe.match(line)
         if m:
-            successCount = int(m.group(1))
-            totalCount = int(m.group(2))
-            failCount = int(totalCount - successCount)
-            # Handle failCount.
-            failCountStr = str(failCount)
-            if failCount > 0:
-                failCountStr = emphasizeFailureText(failCountStr)
-            # Format the counts
-            summary = "%d/%s" % (totalCount, failCountStr)
+            successCount += int(m.group(1))
+            totalCount += int(m.group(2))
+    failCount = int(totalCount - successCount)
+    # Handle failCount.
+    failCountStr = str(failCount)
+    if failCount > 0:
+        failCountStr = emphasizeFailureText(failCountStr)
+    # Format the counts
+    summary = "%d/%d" % (totalCount, failCount)
     # Return the summary.
-    return "TinderboxPrint: %s<br/>%s\n" % (name, summary)
+    return "TinderboxPrint:%s<br />%s\n" % (name, summary)
 
 def summarizeTUnit(name, log):
     # Counts and flags.
@@ -259,7 +263,7 @@ class MochitestMixin(object):
     def getVariantOptions(self, variant):
         if variant == 'ipcplugins':
             return ['--setpref=dom.ipc.plugins.enabled=false',
-                    '--test-path=modules/plugin/test']
+                    '--%s' % variant]
         elif variant != 'plain':
             return ['--%s' % variant]
         else:
@@ -296,6 +300,9 @@ class ReftestMixin(object):
         elif suite == 'reftest-no-d2d-d3d':
             return ['--setpref=gfx.direct2d.disabled=true',
                     '--setpref=layers.accelerate-none=true',
+                    'reftest/tests/layout/reftests/reftest.list']
+        elif suite == 'opengl-no-accel':
+            return ['--setpref=layers.acceleration.force-enabled=disabled',
                     'reftest/tests/layout/reftests/reftest.list']
         elif suite == 'jsreftest':
             return ['--extra-profile-file=jsreftest/tests/user.js',
@@ -801,7 +808,7 @@ class MozillaPackagedJetpackTests(ShellCommandReportTimeout):
 
         self.name = suite
 
-        self.command = ['bash', '-c', WithProperties("%(toolsdir)s/buildfarm/utils/run_jetpack.sh %(platform)s")]
+        self.command = ['python', WithProperties("%(toolsdir)s/buildfarm/utils/run_jetpack.py"), '-p', WithProperties("%(platform)s")]
 
         # TODO: When jetpack can handle symbols path and leak testing, add those
         # until then, we skip that.
