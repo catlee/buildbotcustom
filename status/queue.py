@@ -116,7 +116,7 @@ class QueueDir(object):
             notifier = pyinotify.Notifier(wm, _MovedHandler())
             notifier.check_events(timeout)
             # TODO: need to call these?
-            notifier.read_events()
+            #notifier.read_events()
             notifier.process_events()
         finally:
             wm.close()

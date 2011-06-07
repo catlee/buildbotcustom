@@ -1,10 +1,6 @@
 """
 pulse status plugin for buildbot
-
-see http://hg.mozilla.org/users/clegnitto_mozilla.com/mozillapulse/ for pulse
-code
 """
-from datetime import tzinfo, timedelta, datetime
 import re
 import os.path
 import time
@@ -16,51 +12,8 @@ from twisted.internet.task import LoopingCall
 from twisted.internet import reactor
 from twisted.python import log
 
-from mozillapulse.messages.build import BuildMessage
-
 from buildbot.status.status_push import StatusPush
 from buildbot.util import json
-
-ZERO = timedelta(0)
-HOUR = timedelta(hours=1)
-
-# A UTC class.
-
-class UTC(tzinfo):
-    """UTC"""
-
-    def utcoffset(self, dt):
-        return ZERO
-
-    def tzname(self, dt):
-        return "UTC"
-
-    def dst(self, dt):
-        return ZERO
-
-def transform_time(t):
-    """Transform an epoch time to a string representation of the form
-    YYYY-mm-ddTHH:MM:SS+0000"""
-    if t is None:
-        return None
-    elif isinstance(t, basestring):
-        return t
-
-    dt = datetime.fromtimestamp(t, UTC())
-    return dt.strftime('%Y-%m-%dT%H:%M:%S%z')
-
-def transform_times(event):
-    """Replace epoch times in event with string representations of the time"""
-    if isinstance(event, dict):
-        retval = {}
-        for key, value in event.items():
-            if key == 'times' and len(value) == 2:
-                retval[key] = [transform_time(t) for t in value]
-            else:
-                retval[key] = transform_times(value)
-    else:
-        retval = event
-    return retval
 
 def escape(name):
     return name.replace(".", "_").replace(" ", "_")
@@ -137,6 +90,7 @@ class PulseStatus(StatusPush):
         # Write out any pending events
         if self.delayed_push:
             self.delayed_push.cancel()
+            self.delayed_push = None
 
         while self.queue.nbItems() > 0:
             self._do_push()
