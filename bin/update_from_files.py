@@ -157,6 +157,43 @@ def updateSlaveTimes(session, master, builder, db_builder, last_time):
 
     session.commit()
 
+def updateBuild(session, master_url, master_name, builder, build_number, update_times):
+    master = model.Master.get(session, master_url)
+    master.name = unicode(master_name)
+    s = time.time()
+    master = session.merge(master)
+    builder_name = os.path.basename(builder)
+    bb_builder = getBuilder(builder)
+    db_builder = model.Builder.get(session, builder_name, master.id)
+    db_builder.category = unicode(bb_builder.category)
+
+    updateBuilderSlaves(session, bb_builder, db_builder)
+    if update_times:
+        updateSlaveTimes(session, master, bb_builder, db_builder, last_time)
+
+    build = getBuild(builder, build_number)
+    if not build:
+        continue
+    starttime = None
+    endtime = None
+    if build.started:
+        starttime = datetime.utcfromtimestamp(build.started)
+    if build.finished:
+        endtime = datetime.utcfromtimestamp(build.finished)
+
+    q = session.query(model.Build).filter_by(
+            builder=db_builder,
+            buildnumber=build.number,
+            starttime=starttime,
+            endtime=endtime,
+            )
+    db_build = q.first()
+    if not db_build:
+        db_build = model.Build.fromBBBuild(session, build, builder_name, master.id)
+    else:
+        db_build.updateFromBBBuild(session, build)
+    session.commit()
+    session.expunge_all()
 
 def updateFromFiles(session, master_url, master_name, builders, last_time, update_times):
     master = model.Master.get(session, master_url)

@@ -24,7 +24,11 @@ class _MovedHandler(pyinotify.ProcessEvent):
         pass
 
 class QueueDir(object):
-    def __init__(self, queue_dir):
+    cleanup_time = 300 # 5 minutes
+    _objects = {}
+    def __init__(self, name, queue_dir):
+        assert name not in self._objects
+        self._objects[name] = self
         self.queue_dir = queue_dir
 
         self.pid = os.getpid()
@@ -37,6 +41,10 @@ class QueueDir(object):
 
         self.setup()
 
+    @classmethod
+    def getQueue(cls, name)
+        return cls._objects[name]
+
     def setup(self):
         for d in (self.tmp_dir, self.new_dir, self.cur_dir):
             if not os.path.exists(d):
@@ -44,13 +52,31 @@ class QueueDir(object):
             else:
                 os.chmod(d, 0700)
 
-        # Clean out stuff in tmp.
-        # TODO: This assumes we're the only producer. Limit this by mtime?
-        for f in os.listdir(self.tmp_dir):
-            os.unlink(os.path.join(self.tmp_dir, f))
+        self.cleanup()
 
-        # TODO: What about cur? Probably should look in cur and move back into
-        # new on some interval if stuff gets too old
+    def cleanup(self):
+        """
+        Removes old items from tmp
+        Moves old items from cur into new
+
+        'old' is defined by the cleanup_time property
+        """
+        now = time.time()
+        for f in os.listdir(self.tmp_dir):
+            fn = os.path.join(self.tmp_dir, f)
+            try:
+                if os.path.getmtime(fn) < now - self.cleanup_time:
+                    os.unlink(fn)
+            except OSError:
+                pass
+
+        for f in os.listdir(self.cur_dir):
+            fn = os.path.join(self.cur_dir, f)
+            try:
+                if os.path.getmtime(fn) < now - self.cleanup_time:
+                    self.requeue(f)
+            except OSError:
+                pass
 
     ###
     # For producers
@@ -59,6 +85,7 @@ class QueueDir(object):
         """
         Adds a new item to the queue
         """
+        self.cleanup()
         # write data to tmp
         fd, tmp_name = tempfile.mkstemp(prefix="%i-%i-%i" % (self.started, self.count, self.pid),
                 dir=self.tmp_dir)
@@ -79,6 +106,7 @@ class QueueDir(object):
         Returns None if queue is empty
         If sorted is True, then the earliest item is returned
         """
+        self.cleanup()
         items = os.listdir(self.new_dir)
         if sorted:
             items.sort(key=_intkeys)
@@ -86,6 +114,7 @@ class QueueDir(object):
             try:
                 dst_name = os.path.join(self.cur_dir, item)
                 os.rename(os.path.join(self.new_dir, item), dst_name)
+                os.utime(dst_name, None)
                 return item, open(dst_name, 'rb')
             except OSError:
                 pass
@@ -103,6 +132,7 @@ class QueueDir(object):
         """
         dst_name = os.path.join(self.new_dir, item_id)
         os.rename(os.path.join(self.cur_dir, item_id), dst_name)
+        os.utime(dst_name, None)
 
     def wait(self, timeout=None):
         """

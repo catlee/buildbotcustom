@@ -1,4 +1,9 @@
 """
+Publisher for Pulse events.
+
+Consumes new events being written into a queue directory by the PulseStatus
+plugin
+
 see http://hg.mozilla.org/users/clegnitto_mozilla.com/mozillapulse/ for pulse
 code
 """
@@ -16,7 +21,6 @@ ZERO = timedelta(0)
 HOUR = timedelta(hours=1)
 
 # A UTC class.
-
 class UTC(tzinfo):
     """UTC"""
 
@@ -54,17 +58,40 @@ def transform_times(event):
     return retval
 
 class PulsePusher(object):
+    """
+    Publish buildbot events via pulse.
+
+    `queuedir`         - a directory to look for incoming events being written
+                         by a buildbot master
+
+    `publisher`        - an instance of mozillapulse.GenericPublisher indicating where
+                         these messages should be sent
+
+    `max_idle_time`    - number of seconds since last activity after which we'll
+                         disconnect. Set to None/0 to disable
+
+    `max_connect_time` - number of seconds since we last connected after which
+                         we'll disconnect. Set to None/0 to disable
+    """
     def __init__(self, queuedir, publisher, max_idle_time=300, max_connect_time=600):
         self.queuedir= QueueDir(queuedir)
         self.publisher = publisher
         self.max_idle_time = max_idle_time
         self.max_connect_time = max_connect_time
 
+        # When should we next disconnect
         self._disconnect_timer = None
+        # When did we last have activity
         self._last_activity = None
+        # When did we last connect
         self._last_connection = None
 
     def send(self, events):
+        """
+        Send events to pulse
+
+        `events` - a list of buildbot event dicts
+        """
         if not self._last_connection and self.max_connect_time:
             self._last_connection = time.time()
         log.debug("Sending %i messages", len(events))
@@ -73,7 +100,7 @@ class PulsePusher(object):
             msg = BuildMessage(transform_times(e))
             self.publisher.publish(msg)
         end = time.time()
-        log.debug("Sent %i messages in %.2fs", len(events), end-start)
+        log.info("Sent %i messages in %.2fs", len(events), end-start)
         self._last_activity = time.time()
 
         # Update our timers
@@ -89,6 +116,7 @@ class PulsePusher(object):
             self._disconnect_timer = t
 
     def maybe_disconnect(self):
+        "Disconnect from pulse if our timer has expired"
         now = time.time()
         if self._disconnect_timer and now > self._disconnect_timer:
             log.info("Disconnecting")
@@ -98,28 +126,50 @@ class PulsePusher(object):
             self._last_activity = None
 
     def loop(self):
+        """
+        Main processing loop. Read new items from the queue, push them to
+        pulse, remove processed items, and then wait for more.
+        """
         while True:
-            # possibly disconnect
             self.maybe_disconnect()
 
             # Grab any new events
-            while True:
-                item = self.queuedir.pop()
-                if not item:
-                    break
-                item_id, fp = item
-                log.debug("Got %s", item)
-                try:
-                    events = json.load(fp)
-                    self.send(events)
+            item_ids = []
+            events = []
+            come_back_soon = False
+            try:
+                while True:
+                    item = self.queuedir.pop()
+                    if not item:
+                        break
+                    if len(events) > 50:
+                        come_back_soon = True
+                        break
+
+                    try:
+                        item_id, fp = item
+                        item_ids.append(item_id)
+                        log.debug("Loading %s", item)
+                        events.extend(json.load(fp))
+                    except:
+                        log.exception("Error loading %s", item_id)
+                        raise
+                    finally:
+                        fp.close()
+                log.info("Loaded %i events", len(events))
+                self.send(events)
+                for item_id in item_ids:
                     log.info("Removing %s", item_id)
                     self.queuedir.remove(item_id)
-                except:
+            except:
+                for item_id in item_ids:
                     self.queuedir.requeue(item_id)
-                    log.exception("Error loading %s", item_id)
-                    raise
-                finally:
-                    fp.close()
+                raise
+
+            if come_back_soon:
+                # Let's do more right now!
+                log.info("Doing more!")
+                continue
 
             # Wait for more
             # don't wait more than our max_idle/max_connect_time
@@ -142,7 +192,7 @@ def main():
     parser.add_option("--passwords", dest="passwords")
     parser.add_option("-q", "--queuedir", dest="queuedir")
 
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.INFO)
 
     options, args = parser.parse_args()
     if not options.passwords:
@@ -160,7 +210,7 @@ def main():
             ),
             exchange=passwords['PULSE_EXCHANGE'])
 
-    pusher = PulsePusher(options.queuedir, publisher, max_connect_time=30, max_idle_time=15)
+    pusher = PulsePusher(options.queuedir, publisher)
     pusher.loop()
 
 if __name__ == '__main__':

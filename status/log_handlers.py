@@ -7,12 +7,15 @@ from twisted.python import failure
 from twisted.internet import defer, reactor
 
 from buildbot.status import base
+from buildbot.util import json
 
-class ThreadedLogHandler(base.StatusReceiverMultiService):
-    compare_attrs = ['categories', 'builders']
-    def __init__(self, categories=None, builders=None):
+class QueuedCommandLogHandler(base.StatusReceiverMultiService):
+    compare_attrs = ['command', 'categories', 'builders']
+    def __init__(self, command, queuedir, categories=None, builders=None):
         base.StatusReceiverMultiService.__init__(self)
 
+        self.command = command
+        self.queuedir = queuedir
         self.categories = categories
         self.builders = builders
 
@@ -25,9 +28,6 @@ class ThreadedLogHandler(base.StatusReceiverMultiService):
 
     def setServiceParent(self, parent):
         base.StatusReceiverMultiService.setServiceParent(self, parent)
-        self.setup()
-
-    def setup(self):
         self.master_status = self.parent.getStatus()
         self.master_status.subscribe(self)
 
@@ -59,37 +59,15 @@ class ThreadedLogHandler(base.StatusReceiverMultiService):
                builder.category not in self.categories:
             return # ignore this build
 
-        reactor.callInThread(self.handleLogs, builder, build, results)
-
-    def handleLogs(self, builder, build, results):
-        pass
-
-class SubprocessLogHandler(ThreadedLogHandler):
-    compare_attrs = ['command', 'categories', 'builders']
-    def __init__(self, command, categories=None, builders=None):
-        ThreadedLogHandler.__init__(self, categories, builders)
-        self.command = command
+        return self.handleLogs(builder, build, results)
 
     def handleLogs(self, builder, build, results):
         if isinstance(self.command, str):
             cmd = [self.command]
         else:
             cmd = self.command[:]
+        cmd = build.getProperties().render(cmd)
         cmd.extend([
                os.path.join(self.master_status.basedir, builder.basedir),
                str(build.number)])
-
-        properties = build.getProperties()
-        cmd = properties.render(cmd)
-        output = tempfile.TemporaryFile()
-
-        try:
-            twlog.msg("Running %s" % cmd)
-            subprocess.check_call(cmd, stdout=output, stderr=subprocess.STDOUT)
-            output.seek(0)
-            twlog.msg("Log output: %s" % output.read())
-        except:
-            twlog.msg("Error running %s" % cmd)
-            output.seek(0)
-            twlog.msg("Log output: %s" % output.read())
-            twlog.err()
+        self.queuedir.add(json.dumps(cmd))
