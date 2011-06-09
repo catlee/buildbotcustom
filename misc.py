@@ -23,7 +23,7 @@ import buildbotcustom.l10n
 import buildbotcustom.scheduler
 import buildbotcustom.status.mail
 import buildbotcustom.status.generators
-import buildbotcustom.status.log_handlers
+import buildbotcustom.status.queued_command
 import buildbotcustom.status.queue
 import buildbotcustom.misc_scheduler
 import build.paths
@@ -34,8 +34,8 @@ reload(buildbotcustom.l10n)
 reload(buildbotcustom.scheduler)
 reload(buildbotcustom.status.mail)
 reload(buildbotcustom.status.generators)
-reload(buildbotcustom.status.log_handlers)
-reload(buildbotcustom.status.queue
+reload(buildbotcustom.status.queued_command)
+reload(buildbotcustom.status.queue)
 reload(buildbotcustom.misc_scheduler)
 reload(build.paths)
 
@@ -56,7 +56,7 @@ from buildbotcustom.status.generators import buildTryChangeMessage
 from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
     buildUIDSchedFunc, lastGoodFunc
-from buildbotcustom.status.log_handlers import QueuedCommandLogHandler
+from buildbotcustom.status.queued_command import QueuedCommandHandler
 from buildbotcustom.status.queue import QueueDir
 from build.paths import getRealpath
 
@@ -715,14 +715,14 @@ def generateBranchObjects(config, name):
     logUploadCmd = makeLogUploadCommand(name, config, is_try=config.get('enable_try'),
             is_shadow=bool(name=='shadow-central'), platform_prop='stage_platform',product_prop='product')
 
-    branchObjects['status'].append(QueuedCommandLogHandler(
+    branchObjects['status'].append(QueuedCommandHandler(
         logUploadCmd,
         QueueDir.getQueue('commands'),
         builders=builders + unittestBuilders + debugBuilders,
     ))
 
     if nightlyBuilders:
-        branchObjects['status'].append(QueuedCommandLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd + ['--nightly'],
             QueueDir.getQueue('commands'),
             builders=nightlyBuilders,
@@ -821,13 +821,13 @@ def generateBranchObjects(config, name):
         ))
 
         # Log uploads for dep l10n repacks
-        branchObjects['status'].append(QueuedCommandLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd + ['--l10n'],
             QueueDir.getQueue('commands'),
             builders=[l10nBuilders[b]['l10n_builder'] for b in l10nBuilders],
         ))
         # and for nightly repacks
-        branchObjects['status'].append(QueuedCommandLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd + ['--l10n', '--nightly'],
             QueueDir.getQueue('commands'),
             builders=[l10nNightlyBuilders['%s nightly' % b]['l10n_builder'] for b in l10nBuilders]
@@ -940,7 +940,7 @@ def generateBranchObjects(config, name):
             errorparser="unittest"
         ))
 
-        branchObjects['status'].append(QueuedCommandLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd,
             QueueDir.getQueue('commands'),
             builders=test_builders,
@@ -2781,7 +2781,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
             platform_prop='stage_platform',
             product_prop='product')
 
-    branchObjects['status'].append(QueuedCommandLogHandler(
+    branchObjects['status'].append(QueuedCommandHandler(
         logUploadCmd,
         QueueDir.getQueue('commands'),
         builders=all_builders,
@@ -3057,7 +3057,7 @@ def generateMobileBranchObjects(config, name):
             is_shadow=bool(name=='shadow-central'),
             product_prop='product')
 
-    mobile_objects['status'].append(QueuedCommandLogHandler(
+    mobile_objects['status'].append(QueuedCommandHandler(
         logUploadCmd,
         QueueDir.getQueue('commands'),
         builders=builders + debugBuilders,

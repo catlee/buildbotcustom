@@ -9,7 +9,10 @@ from twisted.internet import defer, reactor
 from buildbot.status import base
 from buildbot.util import json
 
-class QueuedCommandLogHandler(base.StatusReceiverMultiService):
+class QueuedCommandHandler(base.StatusReceiverMultiService):
+    """
+    Runs a command when a build finishes
+    """
     compare_attrs = ['command', 'categories', 'builders']
     def __init__(self, command, queuedir, categories=None, builders=None):
         base.StatusReceiverMultiService.__init__(self)
@@ -59,13 +62,11 @@ class QueuedCommandLogHandler(base.StatusReceiverMultiService):
                builder.category not in self.categories:
             return # ignore this build
 
-        return self.handleLogs(builder, build, results)
-
-    def handleLogs(self, builder, build, results):
         if isinstance(self.command, str):
             cmd = [self.command]
         else:
             cmd = self.command[:]
+
         cmd = build.getProperties().render(cmd)
         cmd.extend([
                os.path.join(self.master_status.basedir, builder.basedir),

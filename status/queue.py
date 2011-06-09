@@ -27,7 +27,6 @@ class QueueDir(object):
     cleanup_time = 300 # 5 minutes
     _objects = {}
     def __init__(self, name, queue_dir):
-        assert name not in self._objects
         self._objects[name] = self
         self.queue_dir = queue_dir
 
@@ -42,7 +41,7 @@ class QueueDir(object):
         self.setup()
 
     @classmethod
-    def getQueue(cls, name)
+    def getQueue(cls, name):
         return cls._objects[name]
 
     def setup(self):
