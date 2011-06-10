@@ -735,6 +735,13 @@ class DisconnectStep(ShellCommand):
         self._disconnected = True
         return self.finished(SUCCESS)
 
+    def start(self):
+        # Give the machine 60 seconds to go away on its own
+        def die():
+            log.msg("Forcibly disconnecting")
+            self.remote.disconnect()
+        reactor.callLater(60, die)
+
     def checkDisconnect(self, f):
         # This is called if there's a problem executing the command because the connection was disconnected.
         # Again, we assume this is the expected behaviour
