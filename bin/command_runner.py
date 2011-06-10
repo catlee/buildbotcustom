@@ -2,7 +2,7 @@
 """
 Runs commands from a queue!
 """
-import subprocess
+import subprocess, os
 import time
 from buildbotcustom.status.queue import QueueDir
 from buildbot.util import json
@@ -18,7 +18,8 @@ class CommandRunner(object):
     def run(self, cmd, item_id):
         log.info("Running %s", cmd)
         # TODO: Where to stdout/stderr go?
-        p = subprocess.Popen(cmd, close_fds=True)
+        devnull = open(os.devnull, 'r')
+        p = subprocess.Popen(cmd, close_fds=True, stdin=devnull)
         self.active.append((p, item_id))
 
     def monitor(self):
