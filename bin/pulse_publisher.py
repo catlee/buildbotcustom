@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Publisher for Pulse events.
 
