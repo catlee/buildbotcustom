@@ -741,6 +741,7 @@ class DisconnectStep(ShellCommand):
             log.msg("Forcibly disconnecting")
             self.buildslave.disconnect()
         reactor.callLater(60, die)
+        return self.super_class.start(self)
 
     def checkDisconnect(self, f):
         # This is called if there's a problem executing the command because the connection was disconnected.
