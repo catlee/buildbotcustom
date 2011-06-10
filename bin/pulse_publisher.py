@@ -75,7 +75,7 @@ class PulsePusher(object):
                          we'll disconnect. Set to None/0 to disable
     """
     def __init__(self, queuedir, publisher, max_idle_time=300, max_connect_time=600):
-        self.queuedir= QueueDir(queuedir)
+        self.queuedir= QueueDir('pulse', queuedir)
         self.publisher = publisher
         self.max_idle_time = max_idle_time
         self.max_connect_time = max_connect_time
