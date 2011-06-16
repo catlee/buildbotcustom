@@ -137,7 +137,7 @@ class ScratchboxCommand(ShellCommand):
                     string_list.append(arg.fmtstring)
                 else:
                     string_list.append(arg)
-            string_command = ' '.join(string_list)
+            string_command = ' '.join([str(x) for x in string_list])
         elif issubclass(self.command.__class__, WithProperties):
             use_with_properties = True
             string_command = self.command.fmtstring
@@ -598,7 +598,7 @@ class FindFile(ShellCommand):
             pass
         return worst
 
-class MozillaClobberer(RetryingShellCommand):
+class MozillaClobberer(ShellCommand):
     flunkOnFailure = False
     description=['checking', 'clobber', 'times']
 
@@ -617,7 +617,7 @@ class MozillaClobberer(RetryingShellCommand):
             WithProperties("%(master)s"),
         ])
 
-        self.super_class = RetryingShellCommand
+        self.super_class = ShellCommand
 
         self.super_class.__init__(self, command=command, timeout=timeout,
                               workdir=workdir, **kwargs)
