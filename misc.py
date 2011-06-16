@@ -3502,22 +3502,34 @@ def makeLogUploadCommand(branch_name, config, is_try=False, is_shadow=False,
 
     return logUploadCmd
 
-def builderPriority(builder, branch_priorities):
+def builderPriority(builder, branch_priorities, request):
     """
     Returns the priority number for this builder.
     Lower value is more important
     """
     # Release stuff is always 0
     if builder.builder_status.category.startswith('release'):
-        return 0
+        builder_priority = 0
     # If the builder has a branch, and we have a priority assigned for that
     # branch, then use that
-    elif builder.properties and builder.properties.has_key('branch'):
-        if builder.properties['branch'] in branch_priorities:
-            return branch_priorities[builder.properties['branch']]
+    elif builder.properties and builder.properties.has_key('branch') and \
+        builder.properties['branch'] in branch_priorities:
+            builder_priority = branch_priorities[builder.properties['branch']]
+    else:
+        # Otherwise return our default priority, or 10 if no default has been specified
+        builder_priority = branch_priorities.get(None, 10)
 
-    # Otherwise return our default priority, or 10 if no default has been specified
-    return branch_priorities.get(None, 10)
+    # Offset p by the request priority
+    req_priority = request[1]
+    submitted_at = request[2]
+
+    # We let request priority offset builder priority, but never let this
+    # get equal or below 0, which is reserved for release work
+    priority = builder_priority - (req_priority/10.0)
+    if builder_priority > 0 and priority <= 0:
+        priority = 0.1
+
+    return priority, submitted_at
 
 # Give the release builders priority over other builders
 def prioritizeBuilders(botmaster, builders, branch_priorities):
@@ -3545,7 +3557,7 @@ def prioritizeBuilders(botmaster, builders, branch_priorities):
     builders = filter(lambda builder: builder.name in requests, builders)
 
     # Annotate the list of builders with their priority
-    builders = map(lambda builder: (builderPriority(builder, branch_priorities), builder), builders)
+    builders = map(lambda builder: (builderPriority(builder, branch_priorities, requests[builder.name]), builder), builders)
 
     # For each set of slaves, create a list of (priority, builder) for that set
     # of slaves
@@ -3567,31 +3579,14 @@ def prioritizeBuilders(botmaster, builders, branch_priorities):
         best_priority = None
         for p, b in builder_list:
             if best_priority is None:
-                best_priority = p
+                best_priority = p[0]
 
-            if p == best_priority:
-                important_builders.add(b)
+            if p[0] == best_priority:
+                important_builders.add((p,b))
             else:
                 break
 
     # Now we're left with important builders for all the slave pools
-    builders = list(important_builders)
-
-    # Our sorting function
-    def sortkey(builder):
-        request = requests[builder.name]
-        req_priority = request[1]
-        submitted_at = request[2]
-        builder_priority = builderPriority(builder, branch_priorities)
-
-        # We let request priority offset builder priority, but never let this
-        # get equal or below 0, which is reserved for release work
-        priority = builder_priority - req_priority
-        if builder_priority > 0 and priority <= 0:
-            priority = 0.1
-
-        return priority, submitted_at
-
-    builders.sort(key=sortkey)
+    builders = [b[1] for b in sorted(important_builders)]
     log.msg("Sorted %i builders in %.2fs" % (len(builders), time.time() - s))
     return builders
