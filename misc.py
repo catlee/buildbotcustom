@@ -3501,3 +3501,97 @@ def makeLogUploadCommand(branch_name, config, is_try=False, is_shadow=False,
         logUploadCmd.append('--shadow')
 
     return logUploadCmd
+
+def builderPriority(builder, branch_priorities):
+    """
+    Returns the priority number for this builder.
+    Lower value is more important
+    """
+    # Release stuff is always 0
+    if builder.builder_status.category.startswith('release'):
+        return 0
+    # If the builder has a branch, and we have a priority assigned for that
+    # branch, then use that
+    elif builder.properties and builder.properties.has_key('branch'):
+        if builder.properties['branch'] in branch_priorities:
+            return branch_priorities[builder.properties['branch']]
+
+    # Otherwise return our default priority, or 10 if no default has been specified
+    return branch_priorities.get(None, 10)
+
+# Give the release builders priority over other builders
+def prioritizeBuilders(botmaster, builders, branch_priorities):
+    s = time.time()
+    # Get the list pending builds, at most one per builder
+    db = botmaster.db
+    q = ("SELECT br.buildername, max(br.priority), min(br.submitted_at)"
+            " FROM buildrequests AS br"
+            " WHERE br.complete=0"
+            " AND (br.claimed_at<?"
+            "      OR (br.claimed_by_name=?"
+            "          AND br.claimed_by_incarnation!=?))"
+            " GROUP BY br.buildername ")
+    requests = db.runQueryNow(db.quoteq(q),
+            (time.time() - 3600, botmaster.master_name, botmaster.master_incarnation))
+
+    # Filter out requests we're not running builders for
+    allBuilderNames = set(builder.name for builder in builders)
+    requests = filter(lambda request: request[0] in allBuilderNames, requests)
+
+    # Turn into a dictionary keyed by buildername
+    requests = dict( (request[0], request) for request in requests )
+
+    # Remove builders we don't have requests for
+    builders = filter(lambda builder: builder.name in requests, builders)
+
+    # Annotate the list of builders with their priority
+    builders = map(lambda builder: (builderPriority(builder, branch_priorities), builder), builders)
+
+    # For each set of slaves, create a list of (priority, builder) for that set
+    # of slaves
+    builders_by_slaves = {}
+    for b in builders:
+        slaves = frozenset(s.slave.slavename for s in b[1].slaves)
+        builders_by_slaves.setdefault(slaves, []).append(b)
+
+    # Find the set of builders with the most priority for each set of slaves
+    # If there are multiple builders with the same priority, keep all of them,
+    # but discard builders with less priority.
+    # By removing lower priority builders, we avoid the situation where a slave
+    # connects when the master is partway through iterating through the full
+    # set of builders and assigns work to lower priority builders while there's
+    # still work pending for higher priority builders.
+    important_builders = set()
+    for builder_list in builders_by_slaves.values():
+        builder_list.sort()
+        best_priority = None
+        for p, b in builder_list:
+            if best_priority is None:
+                best_priority = p
+
+            if p == best_priority:
+                important_builders.add(b)
+            else:
+                break
+
+    # Now we're left with important builders for all the slave pools
+    builders = list(important_builders)
+
+    # Our sorting function
+    def sortkey(builder):
+        request = requests[builder.name]
+        req_priority = request[1]
+        submitted_at = request[2]
+        builder_priority = builderPriority(builder, branch_priorities)
+
+        # We let request priority offset builder priority, but never let this
+        # get equal or below 0, which is reserved for release work
+        priority = builder_priority - req_priority
+        if builder_priority > 0 and priority <= 0:
+            priority = 0.1
+
+        return priority, submitted_at
+
+    builders.sort(key=sortkey)
+    log.msg("Sorted %i builders in %.2fs" % (len(builders), time.time() - s))
+    return builders
