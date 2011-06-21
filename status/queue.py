@@ -6,22 +6,11 @@ import os, tempfile, time, re
 try:
     import pyinotify
     assert pyinotify
+    class _MovedHandler(pyinotify.ProcessEvent):
+        def process_IN_MOVED_TO(self, event):
+            pass
 except ImportError:
     pyinotify = None
-
-def _maybeint(i):
-    try:
-        return int(i)
-    except:
-        return i
-
-def _intkeys(s):
-    parts = [p for p in re.split("(\d+)", s) if p != '']
-    return [_maybeint(p) for p in parts]
-
-class _MovedHandler(pyinotify.ProcessEvent):
-    def process_IN_MOVED_TO(self, event):
-        pass
 
 class QueueDir(object):
     # How long before things are considered to be "old"
@@ -42,6 +31,8 @@ class QueueDir(object):
         self.started = int(time.time())
         self.count = 0
         self.last_cleanup = 0
+        # List of time, item_id for items to move from cur back into new
+        self.to_requeue = []
 
         self.tmp_dir = os.path.join(self.queue_dir, 'tmp')
         self.new_dir = os.path.join(self.queue_dir, 'new')
@@ -97,9 +88,11 @@ class QueueDir(object):
     ###
     # For producers
     ###
-    def add(self, data):
+    def add(self, data, retries=0):
         """
-        Adds a new item to the queue
+        Adds a new item to the queue.
+
+        This item can be requeued retries times before being moved into dead
         """
         # write data to tmp
         fd, tmp_name = tempfile.mkstemp(prefix="%i-%i-%i.0" % (self.started, self.count, self.pid),
@@ -124,6 +117,7 @@ class QueueDir(object):
         Returns None if queue is empty
         If sorted is True, then the earliest item is returned
         """
+        self._check_to_requeue()
         self.cleanup()
         items = os.listdir(self.new_dir)
         if sorted:
@@ -143,7 +137,11 @@ class QueueDir(object):
         Indicate that we're still working on this item
         """
         fn = os.path.join(self.cur_dir, item_id)
-        os.utime(fn, None)
+        try:
+            os.utime(fn, None)
+        except OSError:
+            # Somebody else moved this; that's probably ok
+            pass
 
     def getcount(self, item_id):
         """
@@ -175,10 +173,28 @@ class QueueDir(object):
         """
         os.unlink(os.path.join(self.cur_dir, item_id))
 
-    def requeue(self, item_id):
+    def _check_to_requeue(self):
+        if not self.to_requeue:
+            return
+        now = time.time()
+        for t, item_id, max_retries in self.to_requeue[:]:
+            if now > t:
+                self.requeue(item_id, max_retries=max_retries)
+                self.to_requeue.remove( (t, item_id, max_retries) )
+            else:
+                self.touch(item_id)
+
+    def requeue(self, item_id, delay=None, max_retries=None):
         """
         Moves item_id from cur back into new, incrementing the counter at the
-        end
+        end.
+
+        If delay is set, it is a number of seconds to wait before moving the
+        item back into new. It will remain in cur until the appropriate time
+        has expired.
+        The state for this is kept in the QueueDir instance, so if the instance
+        goes away, the item won't be requeued on schedule. It will eventually
+        be moved out of cur when the cleanup time expires however.
         """
         try:
             core_item_id, count = item_id.split(".")
@@ -186,6 +202,16 @@ class QueueDir(object):
         except:
             core_item_id = item_id
             count = 1
+
+        if max_retries is not None and count > max_retries:
+            self.murder(item_id)
+            return
+
+        if delay:
+            self.to_requeue.append( (time.time() + delay, item_id, max_retries) )
+            self.to_requeue.sort()
+            return
+
         dst_name = os.path.join(self.new_dir, "%s.%i" % (core_item_id, count))
         os.rename(os.path.join(self.cur_dir, item_id), dst_name)
         os.utime(dst_name, None)
@@ -203,8 +229,12 @@ class QueueDir(object):
     if pyinotify:
         def wait(self, timeout=None):
             """
-            Waits for new items to arrive in new, call cb when we have something
+            Waits for new items to arrive in new.
+            Returns new item from the queue.
+            timeout is in seconds
             """
+            if timeout:
+                timeout *= 1000
             wm = pyinotify.WatchManager()
             try:
                 wm.add_watch(self.new_dir, pyinotify.IN_MOVED_TO)

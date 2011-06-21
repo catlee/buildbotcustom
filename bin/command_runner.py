@@ -2,15 +2,58 @@
 """
 Runs commands from a queue!
 """
-import subprocess, os
+import subprocess, os, signal
 import time
 from buildbotcustom.status.queue import QueueDir
 from buildbot.util import json
 import logging
 log = logging.getLogger(__name__)
 
+class Job(object):
+    max_time = 30
+    def __init__(self, cmd, item_id, log_fp):
+        self.cmd = cmd
+        self.log = log_fp
+        self.item_id = item_id
+        self.started = None
+        self.last_signal_time = 0
+        self.last_signal = None
+
+        self.proc = None
+
+    def start(self):
+        devnull = open(os.devnull, 'r')
+        self.log.write("Running %s\n" % self.cmd)
+        self.log.flush()
+        self.proc = subprocess.Popen(self.cmd, close_fds=True, stdin=devnull, stdout=self.log, stderr=self.log)
+        self.started = time.time()
+
+    def check(self):
+        now = time.time()
+        if now - self.started > self.max_time:
+            log.info("Killit!")
+            # Kill stuff off
+            if now - self.last_signal_time > 60:
+                log.info("Kill it now!")
+                s = {None: signal.SIGINT, signal.SIGINT: signal.SIGTERM}.get(self.last_signal, signal.SIGKILL)
+                try:
+                    self.log.write("Killing with %s\n" % s)
+                    os.kill(self.proc.pid, s)
+                    self.last_signal = s
+                    self.last_signal_time = now
+                except OSError:
+                    # Ok, process must have exited already
+                    log.exception("Failed to kill")
+                    pass
+
+        result = self.proc.poll()
+        if result is not None:
+            self.log.write("\nResult: %s\n" % result)
+            self.log.close()
+        return result
+
 class CommandRunner(object):
-    # TODO: Configure these
+    # TODO: Make these configurable
     max_retries = 5
     retry_time = 60
 
@@ -18,64 +61,56 @@ class CommandRunner(object):
         self.queuedir = queuedir
         self.q = QueueDir('commands', queuedir)
         self.concurrency = concurrency
+
         self.active = []
 
-        # List of (requeue_time, item_id)
-        self.to_requeue = []
+        # List of (signal_time, level, proc)
+        self.to_kill = []
 
     def run(self, cmd, item_id):
-        if self.q.getcount(item_id) > self.max_retries:
-            log.info("Giving up on %s", item_id)
-            self.q.murder(item_id)
-            return
-
         log.info("Running %s", cmd)
         output = self.q.getlog(item_id)
-        output.write("Running %s\n" % cmd)
-        output.flush()
-        devnull = open(os.devnull, 'r')
         try:
-            p = subprocess.Popen(cmd, close_fds=True, stdin=devnull, stdout=output, stderr=output)
-            self.active.append((p, item_id, output))
+            j = Job(cmd, item_id, output)
+            j.start()
+            self.active.append(j)
         except OSError:
-            output.write("\nFailed with OSError; requeuing in %i seconds\n", self.retry_time)
+            output.write("\nFailed with OSError; requeuing in %i seconds\n" % self.retry_time)
             # Wait to requeue it
             # If we die, then it's still in cur, and will be moved back into 'new' eventually
-            self.to_requeue.append( (time.time() + self.retry_time, item_id) )
+            self.q.requeue(item_id, self.retry_time, self.max_retries)
 
-    def requeue(self):
+    def killjobs(self):
         now = time.time()
-        for t, item_id in self.to_requeue:
-            if now > t:
-                log.info("Requeuing %s", item_id)
-                self.q.requeue(item_id)
-                self.to_requeue.remove( (t, item_id) )
-            else:
-                self.q.touch(item_id)
+        for sigtime, level, p in self.to_kill:
+            if now > sigtime:
+                s = {0: signal.SIGINT, 1: signal.SIGTERM}.get(level, signal.SIGKILL)
+                try:
+                    os.killpg(p.pid, s)
+                except OSError:
+                    pass
 
     def monitor(self):
-        # TODO: Impose a maximum time on jobs
-        for p, item_id, output in self.active[:]:
-            self.q.touch(item_id)
-            result = p.poll()
+        for job in self.active[:]:
+            self.q.touch(job.item_id)
+            result = job.check()
+
             if result is not None:
-                output.write("\nResult: %s\n" % result)
-                output.close()
-                self.active.remove((p, item_id, output))
+                self.active.remove(job)
                 if result == 0:
-                    self.q.remove(item_id)
+                    self.q.remove(job.item_id)
                 else:
-                    log.warn("%s failed; requeuing", item_id)
+                    log.warn("%s failed; requeuing", job.item_id)
                     # Requeue it!
-                    self.q.requeue(item_id)
+                    self.q.requeue(job.item_id, self.retry_time, self.max_retries)
 
     def loop(self):
         """
         Main processing loop. Read new items from the queue and run them!
         """
         while True:
-            self.requeue()
             self.monitor()
+            self.killjobs()
             if len(self.active) >= self.concurrency:
                 # Wait!
                 time.sleep(1)
@@ -84,7 +119,10 @@ class CommandRunner(object):
             while len(self.active) < self.concurrency:
                 item = self.q.pop()
                 if not item:
-                    self.q.wait(1000)
+                    if self.active:
+                        self.q.wait(1)
+                    else:
+                        self.q.wait(60)
                     break
 
                 item_id, fp = item
@@ -101,8 +139,6 @@ class CommandRunner(object):
 
 def main():
     from optparse import OptionParser
-    from mozillapulse.publishers import GenericPublisher
-    from mozillapulse.config import PulseConfiguration
     parser = OptionParser()
     parser.set_defaults(
             concurrency=1,
