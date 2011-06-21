@@ -990,11 +990,11 @@ class MercurialBuildFactory(MozillaBuildFactory):
         else:
             cmd = ['wget', '-O', '.mozconfig', hg_mozconfig]
 
-        self.addStep(ShellCommand(
-            name='cp_mozconfig',
+        self.addStep(RetryingShellCommand(
+            name='get_mozconfig',
             command=cmd,
-            description=['copying', 'mozconfig'],
-            descriptionDone=['copy', 'mozconfig'],
+            description=['getting', 'mozconfig'],
+            descriptionDone=['got', 'mozconfig'],
             haltOnFailure=True
         )
 
