@@ -594,8 +594,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
 
 class MercurialBuildFactory(MozillaBuildFactory):
     def __init__(self, env, objdir, platform, configRepoPath, configSubDir,
-                 profiledBuild, mozconfig, srcMozconfig=None, productName=None,
-                 profiledBuild, mozconfig, srcMozconfig=None, use_scratchbox=False, productName=None,
+                 profiledBuild, mozconfig, srcMozconfig=None,
+                 use_scratchbox=False, productName=None,
                  scratchbox_target=None, android_signing=False,
                  buildRevision=None, stageServer=None, stageUsername=None,
                  stageGroup=None, stageSshKey=None, stageBasePath=None,
@@ -973,8 +973,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
         ))
 
     def addConfigSteps(self):
-        assert self.configSubDir is not None
         assert self.configRepoPath is not None
+        assert self.configSubDir is not None
         assert self.mozconfig is not None
 
         configRepo = self.getRepository(self.configRepoPath)
@@ -997,7 +997,6 @@ class MercurialBuildFactory(MozillaBuildFactory):
             descriptionDone=['got', 'mozconfig'],
             haltOnFailure=True
         )
-
         self.addStep(ShellCommand,
          name='cat_mozconfig',
          command=['cat', '.mozconfig'],
