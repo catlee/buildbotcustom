@@ -1390,7 +1390,7 @@ def generateBranchObjects(config, name):
                     profiledBuild=False,
                     productName=config['product_name'],
                     mozconfig='%s/%s/shark' % (platform, name),
-                    srcMozconfig=pf.get('src_mozconfig'), # TODO: this points to the regular mozconfig! need to do something special here
+                    srcMozconfig=pf.get('src_shark_mozconfig'),
                     stageServer=config['stage_server'],
                     stageUsername=config['stage_username'],
                     stageGroup=config['stage_group'],
@@ -1613,7 +1613,7 @@ def generateBranchObjects(config, name):
                  profiledBuild=False,
                  productName='xulrunner',
                  mozconfig=mozconfig,
-                 srcMozconfig=pf.get('src_mozconfig'), # TODO: this points to the regular mozconfig! need to do something special here
+                 srcMozconfig=pf.get('src_xulrunner_mozconfig'),
                  stageServer=config['stage_server'],
                  stageUsername=config['stage_username_xulrunner'],
                  stageGroup=config['stage_group'],
