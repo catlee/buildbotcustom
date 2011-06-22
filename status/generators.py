@@ -7,13 +7,13 @@ def buildTryChangeMessage(change, packageDir):
     packageDir = packageDir % locals()
     msgdict = {"type": "plain"}
     msgdict['subject'] = "Try submission %(revision)s" % locals()
-    msgdict['headers'] = {"In-Reply-To": "<tryserver-%(revision)s>" % locals(),
-                          "References": "<tryserver-%(revision)s>" % locals(),
+    msgdict['headers'] = {"In-Reply-To": "<try-%(revision)s>" % locals(),
+                          "References": "<try-%(revision)s>" % locals(),
                           }
     msgdict["body"] = """\
 Thanks for your try submission (http://hg.mozilla.org/try/pushloghtml?changeset=%(revision)s).  It's the best!
 
-Watch http://tbpl.mozilla.org/?tree=MozillaTry&rev=%(revision)s for your results to come in.
+Watch http://tbpl.mozilla.org/?tree=Try&rev=%(revision)s for your results to come in.
 
 Builds and logs will be available at %(packageDir)s.
 
@@ -49,8 +49,10 @@ def buildTryCompleteMessage(attrs, packageDir, tinderboxTree):
         platform = 'mac64'
     elif 'OS X 10.5' in builder:
         platform = 'mac'
-    elif 'WINNT' in builder:
+    elif 'WINNT 5.2' in builder:
         platform = 'win32'
+    elif 'WINNT 6.1' in builder:
+        platform = 'win64'
     elif 'Maemo' in builder:
         platform = 'maemo'
 

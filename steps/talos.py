@@ -10,7 +10,8 @@ class MozillaUpdateConfig(ShellCommand):
 
     def __init__(self, branch, branchName, executablePath,
             addOptions=None, useSymbols=False, addonTester=False,
-            remoteTests=False, extName=None, remoteExtras=None, **kwargs):
+            remoteTests=False, extName=None, remoteExtras=None,
+            remoteProcessName=None, **kwargs):
 
         if addOptions is None:
             self.addOptions = []
@@ -22,8 +23,8 @@ class MozillaUpdateConfig(ShellCommand):
         else:
             self.remoteExtras = {}
 
+        self.remoteProcessName = remoteProcessName
         self.remoteOptions = self.remoteExtras.get('options', [])
-        self.remoteExePath = self.remoteExtras.get('exePath', 'org.mozilla.fennec')
 
         self.branch = branch
         self.branchName = branchName
@@ -40,7 +41,8 @@ class MozillaUpdateConfig(ShellCommand):
                 branchName=branchName, executablePath=executablePath,
                 remoteTests=remoteTests, useSymbols=useSymbols,
                 extName=extName, addonTester=addonTester,
-                remoteExtras=self.remoteExtras)
+                remoteExtras=self.remoteExtras,
+                remoteProcessName=remoteProcessName)
 
     def setBuild(self, build):
         self.super_class.setBuild(self, build)
@@ -56,7 +58,7 @@ class MozillaUpdateConfig(ShellCommand):
             self.addOptions += ['--symbolsPath', '../symbols']
 
         if self.remoteTests:
-            exePath = self.remoteExePath
+            exePath = self.remoteProcessName
             perfconfigurator = "remotePerfConfigurator.py"
             self.addOptions += ['--remoteDevice', WithProperties('%(sut_ip)s'), ]
             self.addOptions += self.remoteOptions

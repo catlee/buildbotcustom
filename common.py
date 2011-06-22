@@ -2,12 +2,12 @@ import time, uuid
 
 def getCodesighsPlatforms():
     return ('linux', 'linuxqt','linux64',
-            'win32', 'macosx', 'macosx64')
+            'win32', 'win64', 'macosx', 'macosx64')
 
 def getSupportedPlatforms():
     return ('linux', 'linuxqt','linux64',
             'win32', 'macosx', 'macosx64',
-            'wince', 'win64', 'android')
+            'win64', 'android')
 
 def getPlatformFtpDir(platform):
     platform_ftp_map = {
@@ -16,8 +16,7 @@ def getPlatformFtpDir(platform):
         'macosx': 'mac',
         'macosx64': 'mac',
         'win32': 'win32',
-        'win64': 'win64',
-        'wince': 'wince-arm',
+        'win64': 'win64-x86_64',
         'android': 'android-r7',
     }
     return platform_ftp_map.get(platform)

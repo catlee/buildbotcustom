@@ -32,13 +32,13 @@ def expandTestSuites(user_suites,valid_suites):
     return test_suites
 
 def processMessage(message):
-    match = re.search('try:',str(message))
-    if match:
-        message = message.strip().split('try: ', 1)
-        message = message[1].split(' ')
-    else:
-        message =[""]
-    return message
+    for line in message.split('\n'):
+        match = re.search('try: ',str(line))
+        if match:
+            line = line.strip().split('try: ', 1)
+            line = line[1].split(' ')
+            return line
+    return [""]
 
 def getPlatformBuilders(user_platforms, builderNames, buildTypes, prettyNames):
     platformBuilders = []
@@ -72,12 +72,12 @@ def getTestBuilders(platforms, testType, tests, builderNames, buildTypes, pretty
                           # checking for list type so this is only run for test_master builders where slave_platforms are used
                           if type(prettyNames[platform])==type(list()):
                             for slave_platform in prettyNames[platform]:
-                                custom_builder = "%s tryserver %s %s %s" % (slave_platform, buildType, testType, test)
+                                custom_builder = "%s try %s %s %s" % (slave_platform, buildType, testType, test)
                                 # have to check that custom_builder is not already present
                                 if custom_builder in (builderNames) and custom_builder not in testBuilders:
                                     testBuilders.extend([custom_builder])
                           else:
-                              custom_builder = "%s tryserver %s %s %s" % (prettyNames[platform], buildType, testType, test)
+                              custom_builder = "%s try %s %s %s" % (prettyNames[platform], buildType, testType, test)
                                # have to check that custom_builder is not already present
                               if custom_builder in (builderNames) and custom_builder not in testBuilders:
                                   testBuilders.extend([custom_builder])
@@ -97,7 +97,7 @@ def getTestBuilders(platforms, testType, tests, builderNames, buildTypes, pretty
               if platform in prettyNames.keys():
                 for test in tests:
                     for slave_platform in prettyNames[platform]:
-                        custom_builder = "%s tryserver %s %s" % (slave_platform, testType, test)
+                        custom_builder = "%s try %s %s" % (slave_platform, testType, test)
                         if custom_builder in (builderNames) and custom_builder not in testBuilders:
                             testBuilders.extend([custom_builder])
 
@@ -109,10 +109,6 @@ def TryParser(message, builderNames, prettyNames, unittestPrettyNames=None, unit
                                      and tryParse populates the list with the builderNames\
                                      that need schedulers.')
 
-    parser.add_argument('--do-everything', '-a',
-                        action='store_true',
-                        dest='do_everything',
-                        help='m-c override to do all builds, tests, talos just like a trunk push')
     parser.add_argument('--build', '-b',
                         default='do',
                         dest='build',
@@ -131,12 +127,6 @@ def TryParser(message, builderNames, prettyNames, unittestPrettyNames=None, unit
                         help='provide a list of talos tests, or specify all (default is None)')
 
     (options, unknown_args) = parser.parse_known_args(processMessage(message))
-
-    if options.do_everything:
-        options.build = ['opt', 'debug']
-        options.user_platforms = 'all'
-        options.test = 'all'
-        options.talos = 'all'
 
     # Build options include a possible override of 'all' to get a buildset that matches m-c
     if options.build == 'do' or options.build == 'od':
@@ -165,7 +155,13 @@ def TryParser(message, builderNames, prettyNames, unittestPrettyNames=None, unit
                     elif buildType == 'opt' and not platform.endswith('debug'):
                         options.user_platforms.append(platform)
     elif options.user_platforms != 'none':
-        options.user_platforms = options.user_platforms.split(',')
+        # ugly
+        user_platforms = []
+        for user_platform in options.user_platforms.split(','):
+            if user_platform in ('android-r7', 'android'):
+                user_platform = 'linux-android'
+            user_platforms.append(user_platform)
+        options.user_platforms = user_platforms
 
     if unittestSuites:
       if options.test == 'all':

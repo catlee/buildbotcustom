@@ -18,6 +18,8 @@ from buildbot.status.builder import SUCCESS
 
 from buildbot.util import now
 
+import util.tuxedo
+reload(util.tuxedo)
 from util.tuxedo import get_release_uptake
 
 import time
@@ -312,6 +314,7 @@ class TriggerBouncerCheck(Triggerable):
             tuxedoServerUrl=self.release_config.get('tuxedoServerUrl'),
             bouncerProductName=bouncerProductName,
             version=self.release_config.get('version'),
+            platforms=self.release_config.get('enUSPlatforms'),
             oldVersion=self.release_config.get('oldVersion'),
             checkMARs=self.checkMARs,
             username=self.username,
