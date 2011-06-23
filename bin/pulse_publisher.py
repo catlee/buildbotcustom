@@ -218,9 +218,10 @@ def main():
     if not options.logfile:
         logging.basicConfig(level=log_level, format="%(asctime)s - %(message)s")
     else:
+        import logging.handlers
         logger = logging.getLogger()
         logger.setLevel(log_level)
-        handler = logging.RotatingFileHandler(
+        handler = logging.handlers.RotatingFileHandler(
                     options.logfile, maxBytes=1024**2, backupCount=5)
         formatter = logging.Formatter("%(asctime)s - %(message)s")
         handler.setFormatter(formatter)
