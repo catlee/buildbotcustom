@@ -180,7 +180,7 @@ def main():
     else:
         logger = logging.getLogger()
         logger.setLevel(log_level)
-        handler = logging.handlers.RotatingFileHandler(
+        handler = logging.RotatingFileHandler(
                     options.logfile, maxBytes=1024**2, backupCount=5)
         formatter = logging.Formatter("%(asctime)s - %(message)s")
         handler.setFormatter(formatter)
