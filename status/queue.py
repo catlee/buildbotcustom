@@ -132,6 +132,13 @@ class QueueDir(object):
                 pass
         return None
 
+    def peek(self):
+        """
+        Returns True if there are new items in the queue
+        """
+        items = os.listdir(self.new_dir)
+        return len(items) > 0
+
     def touch(self, item_id):
         """
         Indicate that we're still working on this item
@@ -195,6 +202,8 @@ class QueueDir(object):
         The state for this is kept in the QueueDir instance, so if the instance
         goes away, the item won't be requeued on schedule. It will eventually
         be moved out of cur when the cleanup time expires however.
+        You must be call pop() at some point in the future for requeued items
+        to be processed.
         """
         try:
             core_item_id, count = item_id.split(".")
@@ -230,11 +239,23 @@ class QueueDir(object):
         def wait(self, timeout=None):
             """
             Waits for new items to arrive in new.
-            Returns new item from the queue.
-            timeout is in seconds
+            timeout is in seconds, and is the maximum amount of time to wait. we
+            might return before that.
             """
+            # Check if we have any items to requeue
+            if self.to_requeue:
+                reque_time = self.to_requeue[0][0] - time.time()
+                # Need to do something right now!
+                if reque_time < 0:
+                    return
+                if timeout:
+                    timeout = min(reque_time, timeout)
+                else:
+                    timeout = reque_time
+
             if timeout:
                 timeout *= 1000
+
             wm = pyinotify.WatchManager()
             try:
                 wm.add_watch(self.new_dir, pyinotify.IN_MOVED_TO)
