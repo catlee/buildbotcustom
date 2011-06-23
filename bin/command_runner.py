@@ -10,7 +10,6 @@ import logging
 log = logging.getLogger(__name__)
 
 class Job(object):
-    max_time = 30
     def __init__(self, cmd, item_id, log_fp):
         self.cmd = cmd
         self.log = log_fp
@@ -31,11 +30,10 @@ class Job(object):
     def check(self):
         now = time.time()
         if now - self.started > self.max_time:
-            log.info("Killit!")
             # Kill stuff off
             if now - self.last_signal_time > 60:
-                log.info("Kill it now!")
                 s = {None: signal.SIGINT, signal.SIGINT: signal.SIGTERM}.get(self.last_signal, signal.SIGKILL)
+                log.info("Killing %i with %i", self.proc.pid, s)
                 try:
                     self.log.write("Killing with %s\n" % s)
                     os.kill(self.proc.pid, s)
@@ -53,34 +51,38 @@ class Job(object):
         return result
 
 class CommandRunner(object):
-    # TODO: Make these configurable
-    max_retries = 5
-    retry_time = 60
-
-    def __init__(self, queuedir, concurrency=1):
-        self.queuedir = queuedir
-        self.q = QueueDir('commands', queuedir)
-        self.concurrency = concurrency
+    def __init__(self, options):
+        self.queuedir = options.queuedir
+        self.q = QueueDir('commands', self.queuedir)
+        self.concurrency = options.concurrency
+        self.retry_time = options.retry_time
+        self.max_retries = options.max_retries
+        self.max_time = options.max_time
 
         self.active = []
 
         # List of (signal_time, level, proc)
         self.to_kill = []
 
-    def run(self, cmd, item_id):
-        log.info("Running %s", cmd)
-        output = self.q.getlog(item_id)
+    def run(self, job):
+        """
+        Runs the given job
+        """
+        log.info("Running %s", job.cmd)
+        output = self.q.getlog(job.item_id)
         try:
-            j = Job(cmd, item_id, output)
-            j.start()
-            self.active.append(j)
+            job.start()
+            self.active.append(job)
         except OSError:
             output.write("\nFailed with OSError; requeuing in %i seconds\n" % self.retry_time)
             # Wait to requeue it
             # If we die, then it's still in cur, and will be moved back into 'new' eventually
-            self.q.requeue(item_id, self.retry_time, self.max_retries)
+            self.q.requeue(job.item_id, self.retry_time, self.max_retries)
 
     def killjobs(self):
+        """
+        Kill jobs that have run too long
+        """
         now = time.time()
         for sigtime, level, p in self.to_kill:
             if now > sigtime:
@@ -91,6 +93,9 @@ class CommandRunner(object):
                     pass
 
     def monitor(self):
+        """
+        Monitor running jobs
+        """
         for job in self.active[:]:
             self.q.touch(job.item_id)
             result = job.check()
@@ -119,16 +124,20 @@ class CommandRunner(object):
             while len(self.active) < self.concurrency:
                 item = self.q.pop()
                 if not item:
+                    # Don't wait for very long, since we have to check up on
+                    # our children
                     if self.active:
                         self.q.wait(1)
                     else:
-                        self.q.wait(60)
+                        self.q.wait()
                     break
 
                 item_id, fp = item
                 try:
                     command = json.load(fp)
-                    self.run(command, item_id)
+                    job = Job(command, item_id, self.q.getlog(item_id))
+                    job.max_time = self.max_time
+                    self.run(job)
                 except ValueError:
                     # Couldn't parse it as json
                     # There's no hope!
@@ -142,18 +151,43 @@ def main():
     parser = OptionParser()
     parser.set_defaults(
             concurrency=1,
+            max_retries=1,
+            retry_time=0,
+            verbosity=0,
+            logfile=None,
+            max_time=60,
             )
     parser.add_option("-q", "--queuedir", dest="queuedir")
-    parser.add_option("-j", "--jobs", dest="concurrency", type="int")
-
-    # TODO: Log to another file? Use RotatingFileHandler?
-    logging.basicConfig(level=logging.INFO)
+    parser.add_option("-j", "--jobs", dest="concurrency", type="int", help="number of commands to run at once")
+    parser.add_option("-r", "--max_retries", dest="max_retries", type="int", help="number of times to retry commands")
+    parser.add_option("-t", "--retry_time", dest="retry_time", type="int", help="seconds to wait between retries")
+    parser.add_option("-v", "--verbose", dest="verbosity", action="count", help="increase verbosity")
+    parser.add_option("-l", "--logfile", dest="logfile", help="where to send logs")
+    parser.add_option("-m", "--max_time", dest="max_time", type="int", help="maximum time for a command to run")
 
     options, args = parser.parse_args()
+
+    # Set up logging
+    if options.verbosity == 0:
+        log_level = logging.WARNING
+    elif options.verbosity == 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.DEBUG
+
+    if not options.logfile:
+        logging.basicConfig(level=log_level, format="%(asctime)s - %(message)s")
+    else:
+        logger = logging.getLogger()
+        logger.setLevel(log_level)
+        handler = logging.handlers.RotatingFileHandler(
+                    options.logfile, maxBytes=1024**2, backupCount=5)
+        logger.addHandler(handler)
+
     if not options.queuedir:
         parser.error("-q/--queuedir is required")
 
-    runner = CommandRunner(options.queuedir, options.concurrency)
+    runner = CommandRunner(options)
     runner.loop()
 
 if __name__ == '__main__':

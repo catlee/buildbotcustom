@@ -1,7 +1,9 @@
 """
 Implement an on-disk queue for stuff
 """
-import os, tempfile, time, re
+import os, tempfile, time
+import logging
+log = logging.getLogger(__name__)
 
 try:
     import pyinotify
@@ -213,6 +215,7 @@ class QueueDir(object):
             count = 1
 
         if max_retries is not None and count > max_retries:
+            log.info("Maximum retry count exceeded; murdering %s", item_id)
             self.murder(item_id)
             return
 
@@ -255,6 +258,8 @@ class QueueDir(object):
 
             if timeout:
                 timeout *= 1000
+
+            log.debug("Sleeping for %s", timeout)
 
             wm = pyinotify.WatchManager()
             try:
