@@ -74,11 +74,13 @@ class PulsePusher(object):
     `max_connect_time` - number of seconds since we last connected after which
                          we'll disconnect. Set to None/0 to disable
     """
-    def __init__(self, queuedir, publisher, max_idle_time=300, max_connect_time=600):
+    def __init__(self, queuedir, publisher, max_idle_time=300, max_connect_time=600, retry_time=60, max_retries=5):
         self.queuedir= QueueDir('pulse', queuedir)
         self.publisher = publisher
         self.max_idle_time = max_idle_time
         self.max_connect_time = max_connect_time
+        self.retry_time = retry_time
+        self.max_retries = max_retries
 
         # When should we next disconnect
         self._disconnect_timer = None
@@ -164,7 +166,7 @@ class PulsePusher(object):
                     self.queuedir.remove(item_id)
             except:
                 for item_id in item_ids:
-                    self.queuedir.requeue(item_id)
+                    self.queuedir.requeue(item_id, self.retry_time, self.max_retries)
                 raise
 
             if come_back_soon:
@@ -190,12 +192,40 @@ def main():
     from mozillapulse.publishers import GenericPublisher
     from mozillapulse.config import PulseConfiguration
     parser = OptionParser()
+    parser.set_defaults(
+            verbosity=0,
+            logfile=None,
+            max_retries=1,
+            retry_time=0,
+            )
     parser.add_option("--passwords", dest="passwords")
     parser.add_option("-q", "--queuedir", dest="queuedir")
-
-    logging.basicConfig(level=logging.INFO)
+    parser.add_option("-v", "--verbose", dest="verbosity", action="count", help="increase verbosity")
+    parser.add_option("-l", "--logfile", dest="logfile", help="where to send logs")
+    parser.add_option("-r", "--max_retries", dest="max_retries", type="int", help="number of times to retry commands")
+    parser.add_option("-t", "--retry_time", dest="retry_time", type="int", help="seconds to wait between retries")
 
     options, args = parser.parse_args()
+
+    # Set up logging
+    if options.verbosity == 0:
+        log_level = logging.WARNING
+    elif options.verbosity == 1:
+        log_level = logging.INFO
+    else:
+        log_level = logging.DEBUG
+
+    if not options.logfile:
+        logging.basicConfig(level=log_level, format="%(asctime)s - %(message)s")
+    else:
+        logger = logging.getLogger()
+        logger.setLevel(log_level)
+        handler = logging.handlers.RotatingFileHandler(
+                    options.logfile, maxBytes=1024**2, backupCount=5)
+        formatter = logging.Formatter("%(asctime)s - %(message)s")
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+
     if not options.passwords:
         parser.error("--passwords is required")
     if not options.queuedir:
@@ -211,7 +241,8 @@ def main():
             ),
             exchange=passwords['PULSE_EXCHANGE'])
 
-    pusher = PulsePusher(options.queuedir, publisher)
+    pusher = PulsePusher(options.queuedir, publisher,
+            max_retries=options.max_retries, retry_time=options.retry_time)
     pusher.loop()
 
 if __name__ == '__main__':

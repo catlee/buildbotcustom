@@ -182,6 +182,8 @@ def main():
         logger.setLevel(log_level)
         handler = logging.handlers.RotatingFileHandler(
                     options.logfile, maxBytes=1024**2, backupCount=5)
+        formatter = logging.Formatter("%(asctime)s - %(message)s")
+        handler.setFormatter(formatter)
         logger.addHandler(handler)
 
     if not options.queuedir:
