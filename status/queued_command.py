@@ -1,10 +1,6 @@
 import os
-import subprocess
-import tempfile
 
 from twisted.python import log as twlog
-from twisted.python import failure
-from twisted.internet import defer, reactor
 
 from buildbot.status import base
 from buildbot.util import json
