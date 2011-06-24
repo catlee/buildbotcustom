@@ -148,6 +148,7 @@ class CommandRunner(object):
 
 def main():
     from optparse import OptionParser
+    import logging.handlers
     parser = OptionParser()
     parser.set_defaults(
             concurrency=1,
@@ -178,7 +179,6 @@ def main():
     if not options.logfile:
         logging.basicConfig(level=log_level, format="%(asctime)s - %(message)s")
     else:
-        import logging.handlers
         logger = logging.getLogger()
         logger.setLevel(log_level)
         handler = logging.handlers.RotatingFileHandler(

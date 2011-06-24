@@ -191,6 +191,7 @@ def main():
     from optparse import OptionParser
     from mozillapulse.publishers import GenericPublisher
     from mozillapulse.config import PulseConfiguration
+    import logging.handlers
     parser = OptionParser()
     parser.set_defaults(
             verbosity=0,
@@ -218,7 +219,6 @@ def main():
     if not options.logfile:
         logging.basicConfig(level=log_level, format="%(asctime)s - %(message)s")
     else:
-        import logging.handlers
         logger = logging.getLogger()
         logger.setLevel(log_level)
         handler = logging.handlers.RotatingFileHandler(
