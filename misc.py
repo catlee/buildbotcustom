@@ -1059,14 +1059,10 @@ def generateBranchObjects(config, name):
                                        pf['stage_product'])
 
 
-        platform_env = pf['env']
-        if 'update_channel' in config and config.get('create_snippet'):
-            platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
-
         # Some platforms shouldn't do dep builds (i.e. RPM)
         if pf.get('enable_dep', True):
             mozilla2_dep_factory = factory_class(
-                env=platform_env,
+                env=pf['env'],
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1164,6 +1160,10 @@ def generateBranchObjects(config, name):
 
         if do_nightly:
             nightly_builder = '%s nightly' % pf['base_name']
+
+            platform_env = pf['env']
+            if 'update_channel' in config and config.get('create_snippet'):
+                platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
 
             triggeredSchedulers=None
             if config['enable_l10n'] and pf.get('is_mobile_l10n') and pf.get('l10n_chunks'):
