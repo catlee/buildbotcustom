@@ -64,7 +64,7 @@ from build.paths import getRealpath
 
 def reallyShort(name):
     mappings = {
-        'mozilla': None,
+        'mozilla': 'm',
         'central': 'cen',
         '1.9.1': '191',
         '1.9.2': '192',
@@ -100,6 +100,14 @@ def reallyShort(name):
         'fedora': 'fed',
         'fedora64': 'fed64',
         'repack': 'rpk',
+        'alder': 'a',
+        'holly': 'h',
+        'larch': 'l',
+        'accessibility': 'a11y',
+        'inbound': 'in',
+        'devtools': 'dev',
+        'services': 'srv',
+        'private-browsing': 'pb',
     }
     hyphen_seperated_words = name.split('-')
     words = []
@@ -2957,7 +2965,7 @@ def generateValgrindObjects(config, slaves):
         builder = {'name': 'valgrind-%s' % platform,
                    'builddir': 'valgrind-%s' % platform,
                    'slavenames': slaves[platform],
-                   'nextSlave': _nextSlowIdleSlave(config['idle_slaves']),
+                   'nextSlave': _nextSlowSlave,
                    'factory': f,
                    'category': 'idle',
                    'env': env,
