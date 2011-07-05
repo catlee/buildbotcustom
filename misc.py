@@ -1,13 +1,13 @@
 from urlparse import urljoin
 try:
     import json
+    assert json # pyflakes
 except:
     import simplejson as json
 import collections
 import random
 import re
 import sys, os, time
-from copy import deepcopy
 
 from twisted.python import log
 
@@ -24,7 +24,7 @@ import buildbotcustom.scheduler
 import buildbotcustom.status.mail
 import buildbotcustom.status.generators
 import buildbotcustom.status.queued_command
-import buildbotcustom.status.queue
+import buildbotcustom.status.log_handlers
 import buildbotcustom.misc_scheduler
 import build.paths
 reload(buildbotcustom.changes.hgpoller)
@@ -35,7 +35,7 @@ reload(buildbotcustom.scheduler)
 reload(buildbotcustom.status.mail)
 reload(buildbotcustom.status.generators)
 reload(buildbotcustom.status.queued_command)
-reload(buildbotcustom.status.queue)
+reload(buildbotcustom.status.log_handlers)
 reload(buildbotcustom.misc_scheduler)
 reload(build.paths)
 
@@ -50,14 +50,14 @@ from buildbotcustom.scheduler import MultiScheduler, BuilderChooserScheduler, \
     PersistentScheduler, makePropertiesScheduler, SpecificNightly
 from buildbotcustom.l10n import TriggerableL10n
 from buildbotcustom.status.mail import MercurialEmailLookup, ChangeNotifier
-from buildbot.status.mail import MailNotifier
 from buildbotcustom.status.generators import buildTryChangeMessage
 from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
     buildUIDSchedFunc, lastGoodFunc
 from buildbotcustom.status.queued_command import QueuedCommandHandler
-from buildbotcustom.status.queue import QueueDir
+from buildbotcustom.status.log_handlers import SubprocessLogHandler
 from build.paths import getRealpath
+from queuedir import QueueDir
 
 # This file contains misc. helper function that don't make sense to put in
 # other files. For example, functions that are called in a master.cfg

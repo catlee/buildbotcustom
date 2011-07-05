@@ -36,9 +36,9 @@ from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesSchedule
 from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
 from buildbotcustom.status.errors import update_verify_error
 from buildbotcustom.status.queued_command import QueuedCommandHandler
-from buildbotcustom.status.queue import QueueDir
 from build.paths import getRealpath
 from release.info import getRuntimeTag
+from queuedir import QueueDir
 import BuildSlaves
 
 DEFAULT_PARALLELIZATION = 10
