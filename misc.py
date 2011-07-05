@@ -1059,9 +1059,14 @@ def generateBranchObjects(config, name):
                                        pf['stage_product'])
 
 
+        platform_env = pf['env']
+        if 'update_channel' in config and config.get('create_snippet'):
+            platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
+
         # Some platforms shouldn't do dep builds (i.e. RPM)
         if pf.get('enable_dep', True):
-            mozilla2_dep_factory = factory_class(env=pf['env'],
+            mozilla2_dep_factory = factory_class(
+                env=platform_env,
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1163,7 +1168,7 @@ def generateBranchObjects(config, name):
             triggeredSchedulers=None
             if config['enable_l10n'] and pf.get('is_mobile_l10n') and pf.get('l10n_chunks'):
                 mobile_l10n_scheduler_name = '%s-%s-l10n' % (name, platform)
-                builder_env = pf['env'].copy()
+                builder_env = platform_env.copy()
                 builder_env.update({
                     'BUILDBOT_CONFIGS': '%s%s' % (config['hgurl'],
                                                   config['config_repo_path']),
@@ -1252,7 +1257,7 @@ def generateBranchObjects(config, name):
             nightly_kwargs.update(ausargs)
 
             mozilla2_nightly_factory = NightlyBuildFactory(
-                env=pf['env'],
+                env=platform_env,
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1387,7 +1392,7 @@ def generateBranchObjects(config, name):
                 else:
                     shark_objdir = pf['platform_objdir']
                 mozilla2_shark_factory = NightlyBuildFactory(
-                    env= pf['env'],
+                    env=platform_env,
                     objdir=shark_objdir,
                     platform=platform,
                     hgHost=config['hghost'],
