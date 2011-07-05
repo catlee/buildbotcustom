@@ -979,14 +979,14 @@ class MercurialBuildFactory(MozillaBuildFactory):
 
         configRepo = self.getRepository(self.configRepoPath)
         hg_mozconfig = '%s/raw-file/%s/%s/%s' % (
-                configRepo, self.configBranch, self.configSubDir, self.mozconfig)
+                configRepo, self.mozconfigBranch, self.configSubDir, self.mozconfig)
         if self.srcMozconfig:
             cmd = ['bash', '-c',
                     '''if [ -f "%(src_mozconfig)s" ]; then
                         cp %(src_mozconfig)s .mozconfig;
                     else
                         wget -O .mozconfig %(hg_mozconfig)s
-                    fi''' % {src_mozconfig: self.srcMozconfig, hg_mozconfig: hg_mozconfig}]
+                    fi''' % {'src_mozconfig': self.srcMozconfig, 'hg_mozconfig': hg_mozconfig}]
         else:
             cmd = ['wget', '-O', '.mozconfig', hg_mozconfig]
 
@@ -996,7 +996,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             description=['getting', 'mozconfig'],
             descriptionDone=['got', 'mozconfig'],
             haltOnFailure=True
-        )
+        ))
         self.addStep(ShellCommand,
          name='cat_mozconfig',
          command=['cat', '.mozconfig'],
