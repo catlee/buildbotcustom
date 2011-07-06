@@ -1161,7 +1161,7 @@ def generateBranchObjects(config, name):
         if do_nightly:
             nightly_builder = '%s nightly' % pf['base_name']
 
-            platform_env = pf['env']
+            platform_env = pf['env'].copy()
             if 'update_channel' in config and config.get('create_snippet'):
                 platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
 
