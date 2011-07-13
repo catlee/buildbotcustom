@@ -6336,7 +6336,7 @@ class MozillaTestFactory(MozillaBuildFactory):
             ))
         else:
             self.addStep(SetBuildProperty(
-                name='symbols_url',
+                property_name='symbols_url',
                 value=get_symbols_url,
             ))
 
