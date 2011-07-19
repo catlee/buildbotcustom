@@ -728,12 +728,21 @@ class DisconnectStep(ShellCommand):
         self.addFactoryArguments(force_disconnect=force_disconnect)
 
         self._disconnected = False
+        self._deferred_death = None
 
     def interrupt(self, reason):
         # Called when the slave command is interrupted, e.g. by rebooting
         # We assume this is expected
         self._disconnected = True
         return self.finished(SUCCESS)
+
+    def start(self):
+        # Give the machine 60 seconds to go away on its own
+        def die():
+            log.msg("Forcibly disconnecting")
+            self.buildslave.disconnect()
+        self._deferred_death = reactor.callLater(60, die)
+        return self.super_class.start(self)
 
     def checkDisconnect(self, f):
         # This is called if there's a problem executing the command because the connection was disconnected.
@@ -764,6 +773,9 @@ class DisconnectStep(ShellCommand):
         if self._disconnected:
             self.step_status.setText(self.describe(True) + ["slave", "lost"])
             self.step_status.setText2(['slave', 'lost'])
+            if self._deferred_death:
+                self._deferred_death.cancel()
+                self._deferred_death = None
         return self.super_class.finished(self, res)
 
 class RepackPartners(ShellCommand):
