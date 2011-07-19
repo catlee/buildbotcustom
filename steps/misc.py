@@ -763,6 +763,12 @@ class DisconnectStep(ShellCommand):
                     return d
                 except:
                     log.err()
+                    return
+
+        # Otherwise, cancel our execution
+        if self._deferred_death:
+            self._deferred_death.cancel()
+            self._deferred_death = None
 
     def _disconnected_cb(self, res):
         # Successfully disconnected
