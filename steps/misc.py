@@ -739,6 +739,7 @@ class DisconnectStep(ShellCommand):
     def start(self):
         # Give the machine 60 seconds to go away on its own
         def die():
+            self._deferred_death = None
             log.msg("Forcibly disconnecting")
             self.buildslave.disconnect()
         self._deferred_death = reactor.callLater(60, die)
