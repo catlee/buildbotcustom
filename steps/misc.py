@@ -766,7 +766,7 @@ class DisconnectStep(ShellCommand):
                     return
 
         # Otherwise, cancel our execution
-        if self._deferred_death:
+        if self._deferred_death and self._deferred_death.active:
             self._deferred_death.cancel()
             self._deferred_death = None
 
@@ -779,7 +779,7 @@ class DisconnectStep(ShellCommand):
         if self._disconnected:
             self.step_status.setText(self.describe(True) + ["slave", "lost"])
             self.step_status.setText2(['slave', 'lost'])
-            if self._deferred_death:
+            if self._deferred_death and self._deferred_death.active:
                 self._deferred_death.cancel()
                 self._deferred_death = None
         return self.super_class.finished(self, res)
