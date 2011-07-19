@@ -771,6 +771,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             unittestBranch = None
 
         if not releaseConfig.get('skip_build'):
+            platform_env = pf['env'].copy()
+            if 'update_channel' in branchConfig:
+                platform_env['MOZ_UPDATE_CHANNEL'] = branchConfig['update_channel']
             if platform in releaseConfig['l10nPlatforms']:
                 triggeredSchedulers = [builderPrefix('%s_repack' % platform)]
             else:
@@ -780,7 +783,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             enableUpdatePackaging = bool(releaseConfig.get('verifyConfigs',
                                                       {}).get(platform))
             build_factory = ReleaseBuildFactory(
-                env=pf['env'],
+                env=platform_env,
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=branchConfig['hghost'],
@@ -857,6 +860,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 )
                 env = builder_env.copy()
                 env.update(pf['env'])
+                if 'update_channel' in branchConfig:
+                    env['MOZ_UPDATE_CHANNEL'] = branchConfig['update_channel']
                 builders.append({
                     'name': builderPrefix("standalone_repack", platform),
                     'slavenames': branchConfig['l10n_slaves'][platform],
