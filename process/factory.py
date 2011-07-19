@@ -990,8 +990,10 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if self.srcMozconfig:
             cmd = ['bash', '-c',
                     '''if [ -f "%(src_mozconfig)s" ]; then
+                        echo Using in-tree mozconfig
                         cp %(src_mozconfig)s .mozconfig;
                     else
+                        echo Downloading mozconfig
                         wget -O .mozconfig %(hg_mozconfig)s
                     fi''' % {'src_mozconfig': self.srcMozconfig, 'hg_mozconfig': hg_mozconfig}]
         else:
