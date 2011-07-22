@@ -35,7 +35,7 @@ from buildbotcustom.process.factory import StagingRepositorySetupFactory, \
 from buildbotcustom.changes.ftppoller import UrlPoller, LocalesFtpPoller
 from release.platforms import buildbot2ftp, sl_platform_map
 from release.paths import makeCandidatesDir
-from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler
+from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler, AggregatingScheduler
 from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
 from buildbotcustom.status.log_handlers import SubprocessLogHandler
 from buildbotcustom.status.errors import update_verify_error
@@ -478,14 +478,15 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             )
             schedulers.append(l10n_verify_scheduler)
 
-        updates_scheduler = Scheduler(
-            name=builderPrefix('updates'),
-            treeStableTimer=0,
-            branch=builderPrefix('post_signing'),
-            builderNames=[builderPrefix('updates')]
-        )
-        schedulers.append(updates_scheduler)
-        notify_builders.append(builderPrefix('updates'))
+        if not signingServer:
+            updates_scheduler = Scheduler(
+                name=builderPrefix('updates'),
+                treeStableTimer=0,
+                branch=builderPrefix('post_signing'),
+                builderNames=[builderPrefix('updates')]
+            )
+            schedulers.append(updates_scheduler)
+            notify_builders.append(builderPrefix('updates'))
 
         updateBuilderNames = []
         for platform in sorted(releaseConfig.get('verifyConfigs', {}).keys()):

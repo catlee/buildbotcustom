@@ -2583,13 +2583,15 @@ class ReleaseBuildFactory(MercurialBuildFactory):
             env['MOZ_PKG_PRETTYNAMES'] = '1'
         env['MOZ_PKG_VERSION'] = version
         if signingServer:
-            env['MOZ_INTERNAL_SIGNING_FORMAT'] = signingFormats[0]
-            env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
+            if signingFormats[0]:
+                env['MOZ_INTERNAL_SIGNING_FORMAT'] = signingFormats[0]
+            if signingFormats[1]:
+                env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
             env['MOZ_SIGN_CMD'] = 'python /home/catlee/mozilla/tools/release/signing/signtool.py -s ~/.ssh/id_dsa -c /home/catlee/mozilla/tools/release/signing/host.cert -H localhost:8080 -v'
             env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
                 "python", "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
-                "-s", self.stageSshKey,
+                "-s", kwargs['stageSshKey'],
                 "-c", "%(toolsdir)s/release/signing/server.cert"
                 ]))
         MercurialBuildFactory.__init__(self, env=env, **kwargs)
