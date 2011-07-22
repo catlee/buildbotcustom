@@ -310,6 +310,7 @@ class MochitestMixin(object):
     def getVariantOptions(self, variant):
         if variant == 'ipcplugins':
             return ['--setpref=dom.ipc.plugins.enabled=false',
+                    '--setpref=dom.ipc.plugins.enabled.x86_64=false',
                     '--%s' % variant]
         elif variant != 'plain':
             return ['--%s' % variant]
@@ -888,8 +889,6 @@ class RemoteMochitestStep(MochitestMixin, ShellCommandReportTimeout):
                                  consoleLevel=consoleLevel)
 
         self.name = 'mochitest-%s' % variant
-        if testPath:
-            self.name += " (%s)" % testPath
         self.command = ['python', 'mochitest/runtestsremote.py',
                         '--deviceIP', WithProperties('%(sut_ip)s'),
                         '--xre-path', xrePath,
