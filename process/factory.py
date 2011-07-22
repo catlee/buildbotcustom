@@ -2557,7 +2557,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
     def __init__(self, env, version, buildNumber, brandName=None,
             unittestMasters=None, unittestBranch=None, talosMasters=None,
             usePrettyNames=True, enableUpdatePackaging=True,
-            signingServer=None, **kwargs):
+            signingServer=None, signingFormats=None, **kwargs):
         self.version = version
         self.buildNumber = buildNumber
 
@@ -2582,23 +2582,17 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         if usePrettyNames:
             env['MOZ_PKG_PRETTYNAMES'] = '1'
         env['MOZ_PKG_VERSION'] = version
-        MercurialBuildFactory.__init__(self, env=env, **kwargs)
         if signingServer:
-            env['MOZ_SIGNING_SERVER'] = signingServer
-            env['MOZ_POST_STAGEPKG_CMD'] = WithProperties(" ".join([
+            env['MOZ_INTERNAL_SIGNING_FORMAT'] = signingFormats[0]
+            env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
+            env['MOZ_SIGN_CMD'] = 'python /home/catlee/mozilla/tools/release/signing/signtool.py -s ~/.ssh/id_dsa -c /home/catlee/mozilla/tools/release/signing/host.cert -H localhost:8080 -v'
+            env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
                 "python", "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
-                "-p", self.platform,
-                "--stage", "stage",
                 "-s", self.stageSshKey,
+                "-c", "%(toolsdir)s/release/signing/server.cert"
                 ]))
-            env['MOZ_POST_PKG_CMD'] = WithProperties(" ".join([
-                "python", "%(toolsdir)s/release/signing/signtool.py",
-                "-H", signingServer,
-                "-p", self.platform,
-                "--stage", "package",
-                "-s", self.stageSshKey,
-                ]))
+        MercurialBuildFactory.__init__(self, env=env, **kwargs)
 
     def addFilePropertiesSteps(self, filename=None, directory=None,
                                fileType=None, maxDepth=1, haltOnFailure=False):
@@ -3622,7 +3616,6 @@ class ReleaseFactory(MozillaBuildFactory):
 class ReleaseRepackFactory(BaseRepackFactory, ReleaseFactory):
     def __init__(self, platform, buildRevision, version, buildNumber,
                  env={}, brandName=None, mergeLocales=False, **kwargs):
-        # TODO signedPlatfoms
         self.buildRevision = buildRevision
         self.version = version
         self.buildNumber = buildNumber
@@ -3698,14 +3691,13 @@ class ReleaseRepackFactory(BaseRepackFactory, ReleaseFactory):
             builds[filename] = '%s-%s.tar.bz2' % (self.project, self.version)
             self.env['ZIP_IN'] = WithProperties('%(srcdir)s/' + filename)
         elif self.platform.startswith('macosx'):
-            # TODO: Adjust based on signedPlatfoms / signingServer
             filename = '%s.dmg' % self.project
             builds[filename] = '%s %s.dmg' % (self.brandName,
                                               longVersion)
             self.env['ZIP_IN'] = WithProperties('%(srcdir)s/' + filename)
         elif self.platform.startswith('win32'):
-            # TODO: Adjust based on signedPlatfoms / signingServer
-            platformDir = 'unsigned/' + platformDir
+            if not self.signingServer:
+                platformDir = 'unsigned/' + platformDir
             filename = '%s.zip' % self.project
             instname = '%s.exe' % self.project
             builds[filename] = '%s-%s.zip' % (self.project, self.version)
