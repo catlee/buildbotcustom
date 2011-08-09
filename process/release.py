@@ -25,7 +25,8 @@ reload(release.info)
 from buildbotcustom.status.mail import ChangeNotifier
 from buildbotcustom.misc import get_l10n_repositories, isHgPollerTriggered, \
   generateTestBuilderNames, generateTestBuilder, _nextFastReservedSlave, \
-  makeLogUploadCommand, changeContainsProduct
+  makeLogUploadCommand, changeContainsProduct, nomergeBuilders, \
+  changeContainsProperties
 from buildbotcustom.common import reallyShort
 from buildbotcustom.process.factory import StagingRepositorySetupFactory, \
   ScriptFactory, SingleSourceFactory, ReleaseBuildFactory, \
@@ -40,7 +41,7 @@ from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
 from buildbotcustom.status.log_handlers import SubprocessLogHandler
 from buildbotcustom.status.errors import update_verify_error
 from build.paths import getRealpath
-from release.info import getRuntimeTag
+from release.info import getRuntimeTag, getReleaseTag
 import BuildSlaves
 
 DEFAULT_PARALLELIZATION = 10
@@ -50,7 +51,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
     # This variable is one thing that forces us into reconfiging prior to a
     # release. It should be removed as soon as nothing depends on it.
     sourceRepoInfo = releaseConfig['sourceRepositories'][sourceRepoKey]
-    releaseTag = '%s_RELEASE' % releaseConfig['baseTag']
+    releaseTag = getReleaseTag(releaseConfig['baseTag'])
     # This tag is created post-signing, when we do some additional
     # config file bumps
     runtimeTag = getRuntimeTag(releaseTag)
@@ -311,14 +312,14 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             releaseConfig['buildNumber'],
             protocol='http',
             server=releaseConfig['ftpServer'])
-        signed_apk_url = '%s%s/%s/%s-%s.%s.eabi-arm.apk' % \
+        enUS_signed_apk_url = '%s%s/%s/%s-%s.%s.eabi-arm.apk' % \
             (candidatesDir,
              branchConfig['platforms']['linux-android']['stage_platform'],
              locale, releaseConfig['productName'], releaseConfig['version'],
              locale)
         change_source.append(UrlPoller(
             branch=builderPrefix('android_post_signing'),
-            url=signed_apk_url,
+            url=enUS_signed_apk_url,
             pollInterval=60*10
         ))
         if branchConfig['platforms']['linux-android'].get('multi_locale'):
@@ -714,7 +715,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 buildToolsRepoPath=tools_repo_path,
                 repoPath=sourceRepoInfo['path'],
                 productName='xulrunner',
-                version=releaseConfig['milestone'],
+                version=releaseConfig['version'],
                 baseTag=releaseConfig['baseTag'],
                 stagingServer=branchConfig['stage_server'],
                 stageUsername=branchConfig['stage_username_xulrunner'],
@@ -962,7 +963,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                 # the entire thing
                 buildSpace=pf.get('build_space', branchConfig['default_build_space']),
                 productName='xulrunner',
-                version=releaseConfig['milestone'],
+                version=releaseConfig['version'],
                 buildNumber=releaseConfig['buildNumber'],
                 clobberURL=branchConfig['base_clobber_url'],
                 packageSDK=True,
@@ -1343,6 +1344,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                         '_' + str(n)
                 env = builder_env.copy()
                 env.update(branchConfig['platforms'][platform]['env'])
+                mu_runtimeTag = getRuntimeTag(getReleaseTag(
+                    releaseConfig['majorUpdateBaseTag']))
 
                 builders.append({
                     'name': builderName,
@@ -1355,7 +1358,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'env': env,
                     'properties': {'builddir': builddir,
                                    'slavebuilddir': reallyShort(builddir),
-                                   'script_repo_revision': runtimeTag,
+                                   'script_repo_revision': mu_runtimeTag,
                                    'release_tag': releaseTag,
                                    'release_config': releaseConfigFile},
                 })
@@ -1486,6 +1489,18 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     branches=[builderPrefix('post_signing')],
                     messageFormatter=createReleaseChangeMessage,
                 ))
+        if releaseConfig['productName'] == 'fennec':
+            #send a message when android signing is complete
+            status.append(ChangeNotifier(
+                    fromaddr="release@mozilla.com",
+                    relayhost="mail.build.mozilla.org",
+                    sendToInterestedUsers=False,
+                    extraRecipients=[recipient],
+                    branches=[builderPrefix('android_post_signing')],
+                    messageFormatter=createReleaseChangeMessage,
+                    changeIsImportant=lambda c: \
+                    changeContainsProperties(c, dict(who=enUS_signed_apk_url))
+                ))
 
     #send the nice(passing) release messages
     status.append(MailNotifier(
@@ -1554,6 +1569,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             ],
         builders=[b['name'] for b in builders + test_builders],
     ))
+
+    # Don't merge release builder requests
+    nomergeBuilders.extend([b['name'] for b in builders + test_builders])
 
     return {
             "builders": builders,

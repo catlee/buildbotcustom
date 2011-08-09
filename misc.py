@@ -129,10 +129,16 @@ def isImportantL10nFile(change, l10nModules):
 
 def changeContainsProduct(change, productName):
     products = change.properties.getProperty("products")
-    if products:
-        if productName in products.split(','):
+    if isinstance(products, basestring) and \
+        productName in products.split(','):
             return True
     return False
+
+def changeContainsProperties(change, props={}):
+    for prop, value in props.iteritems():
+        if change.properties.getProperty(prop) != value:
+            return False
+    return True
 
 def generateTestBuilderNames(name_prefix, suites_name, suites):
     test_builders = []
@@ -896,11 +902,17 @@ def generateBranchObjects(config, name):
     # Now, setup the nightly en-US schedulers and maybe,
     # their downstream l10n ones
     if nightlyBuilders or xulrunnerNightlyBuilders:
+        goodFunc = lastGoodFunc(
+                branch=config['repo_path'],
+                builderNames=builders,
+                triggerBuildIfNoChanges=False,
+                l10nBranch=config.get('l10n_repo_path')
+                )
+
         nightly_scheduler = makePropertiesScheduler(
                 SpecificNightly,
                 [buildIDSchedFunc, buildUIDSchedFunc])(
-                    ssFunc=lastGoodFunc(config['repo_path'],
-                        builderNames=builders),
+                    ssFunc=goodFunc,
                     name="%s nightly" % name,
                     branch=config['repo_path'],
                     # bug 482123 - keep the minute to avoid problems with DST
@@ -2536,8 +2548,6 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
             all_test_builders[tinderboxTree] = []
 
         branchProperty = branch
-        if platform_config.get('branch_extra', None):
-            branchProperty += '-%s' % platform_config['branch_extra']
 
         stage_platform = platform_config.get('stage_platform', platform)
         stage_product = platform_config['stage_product']
