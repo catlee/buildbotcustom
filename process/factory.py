@@ -6429,19 +6429,27 @@ class UnittestPackagedBuildFactory(MozillaTestFactory):
     def __init__(self, platform, test_suites, env, productName='firefox',
                  mochitest_leak_threshold=None,
                  crashtest_leak_threshold=None, totalChunks=None,
-                 thisChunk=None, chunkByDir=None, **kwargs):
+                 thisChunk=None, chunkByDir=None, stackwalk_cgi=None,
+                 **kwargs):
         platform = platform.split('-')[0]
         self.test_suites = test_suites
         self.totalChunks = totalChunks
         self.thisChunk = thisChunk
         self.chunkByDir = chunkByDir
+
         self.env = MozillaEnvironments['%s-unittest' % platform].copy()
-        self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(platform)
+        if stackwalk_cgi:
+            self.env['MINIDUMP_STACKWALK_CGI'] = stackwalk_cgi
+        else:
+            self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(platform)
         self.env.update(env)
+
         self.leak_thresholds = {'mochitest-plain': mochitest_leak_threshold,
                                 'crashtest': crashtest_leak_threshold,}
+
         MozillaTestFactory.__init__(self, platform, productName,
-                                    downloadTests=True, **kwargs)
+                                    downloadTests=True, stackwalk_cgi=stackwalk_cgi,
+                                    **kwargs)
 
     def addSetupSteps(self):
         if 'linux' in self.platform:
