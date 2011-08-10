@@ -30,13 +30,10 @@ class QueuedCommandHandler(base.StatusReceiverMultiService):
         self.master_status = self.parent.getStatus()
         self.master_status.subscribe(self)
 
-    def disownServiceParent(self):
+    def stopService(self):
         self.master_status.unsubscribe(self)
         for w in self.watched:
             w.unsubscribe(self)
-        return base.StatusReceiverMultiService.disownServiceParent(self)
-
-    def stopService(self):
         base.StatusReceiverMultiService.stopService(self)
 
     def builderAdded(self, name, builder):

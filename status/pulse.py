@@ -98,11 +98,12 @@ class PulseStatus(StatusPush):
 
     def pushEvents(self):
         """Trigger a push"""
-        self.delayed_push = reactor.callLater(self.push_delay, self._do_push)
+        if not self.delayed_push:
+            self.delayed_push = reactor.callLater(self.push_delay, self._do_push)
 
     def _do_push(self):
         """Push some events to pulse"""
-        self._delayed_push = None
+        self.delayed_push = None
 
         # Get the events
         events = self.queue.popChunk()
