@@ -59,7 +59,7 @@ from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
 from buildbotcustom.status.queued_command import QueuedCommandHandler
 from buildbotcustom.status.log_handlers import SubprocessLogHandler
 from build.paths import getRealpath
-from queuedir import QueueDir
+from buildtoos.queuedir import QueueDir
 
 # This file contains misc. helper function that don't make sense to put in
 # other files. For example, functions that are called in a master.cfg
