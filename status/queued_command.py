@@ -25,8 +25,8 @@ class QueuedCommandHandler(base.StatusReceiverMultiService):
 
         self.watched = []
 
-    def setServiceParent(self, parent):
-        base.StatusReceiverMultiService.setServiceParent(self, parent)
+    def startService(self):
+        base.StatusReceiverMultiService.startService(self)
         self.master_status = self.parent.getStatus()
         self.master_status.subscribe(self)
 
