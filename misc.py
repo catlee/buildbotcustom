@@ -423,6 +423,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                     env=pf.get('unittest-env', {}),
                     downloadSymbols=pf.get('download_symbols', True),
                     resetHwClock=resetHwClock,
+                    stackwalk_cgi=config.get('stackwalk_cgi'),
                 )
                 builder = {
                     'name': '%s %s-%i/%i' % (name_prefix, suites_name, i+1, totalChunks),
@@ -452,6 +453,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                 downloadSymbols=pf.get('download_symbols', True),
                 env=pf.get('unittest-env', {}),
                 resetHwClock=resetHwClock,
+                stackwalk_cgi=config.get('stackwalk_cgi'),
             )
             builder = {
                 'name': '%s %s' % (name_prefix, suites_name),
