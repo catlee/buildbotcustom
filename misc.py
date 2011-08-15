@@ -1,13 +1,13 @@
 from urlparse import urljoin
 try:
     import json
+    assert json
 except:
     import simplejson as json
 import collections
 import random
 import re
 import sys, os, time
-from copy import deepcopy
 
 from twisted.python import log
 
@@ -50,7 +50,6 @@ from buildbotcustom.scheduler import MultiScheduler, BuilderChooserScheduler, \
     PersistentScheduler, makePropertiesScheduler, SpecificNightly
 from buildbotcustom.l10n import TriggerableL10n
 from buildbotcustom.status.mail import MercurialEmailLookup, ChangeNotifier
-from buildbot.status.mail import MailNotifier
 from buildbotcustom.status.generators import buildTryChangeMessage
 from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
@@ -134,6 +133,12 @@ def changeContainsProduct(change, productName):
         productName in products.split(','):
             return True
     return False
+
+def changeContainsProperties(change, props={}):
+    for prop, value in props.iteritems():
+        if change.properties.getProperty(prop) != value:
+            return False
+    return True
 
 def generateTestBuilderNames(name_prefix, suites_name, suites):
     test_builders = []
@@ -414,6 +419,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                     env=pf.get('unittest-env', {}),
                     downloadSymbols=pf.get('download_symbols', True),
                     resetHwClock=resetHwClock,
+                    stackwalk_cgi=config.get('stackwalk_cgi'),
                 )
                 builder = {
                     'name': '%s %s-%i/%i' % (name_prefix, suites_name, i+1, totalChunks),
@@ -443,6 +449,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                 downloadSymbols=pf.get('download_symbols', True),
                 env=pf.get('unittest-env', {}),
                 resetHwClock=resetHwClock,
+                stackwalk_cgi=config.get('stackwalk_cgi'),
             )
             builder = {
                 'name': '%s %s' % (name_prefix, suites_name),
@@ -2550,8 +2557,6 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
             all_test_builders[tinderboxTree] = []
 
         branchProperty = branch
-        if platform_config.get('branch_extra', None):
-            branchProperty += '-%s' % platform_config['branch_extra']
 
         stage_platform = platform_config.get('stage_platform', platform)
         stage_product = platform_config['stage_product']
