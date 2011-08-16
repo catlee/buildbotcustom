@@ -28,6 +28,7 @@ import buildbotcustom.status.queued_command
 import buildbotcustom.status.log_handlers
 import buildbotcustom.misc_scheduler
 import build.paths
+import buildtools.queuedir
 reload(buildbotcustom.changes.hgpoller)
 reload(buildbotcustom.process.factory)
 reload(buildbotcustom.log)
@@ -39,6 +40,7 @@ reload(buildbotcustom.status.queued_command)
 reload(buildbotcustom.status.log_handlers)
 reload(buildbotcustom.misc_scheduler)
 reload(build.paths)
+reload(buildtools.queuedir)
 
 from buildbotcustom.common import reallyShort
 from buildbotcustom.changes.hgpoller import HgPoller, HgAllLocalesPoller
