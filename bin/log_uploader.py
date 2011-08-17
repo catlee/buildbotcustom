@@ -217,7 +217,7 @@ if __name__ == "__main__":
             if options.release:
                 # Create the logs directory
                 ssh(user=options.user, identity=options.identity, host=host,
-                        remote_cmd="mkdir %s/logs" % remote_tmpdir)
+                        remote_cmd="mkdir -p %s/logs" % remote_tmpdir)
                 scp(user=options.user, identity=options.identity, host=host,
                         files=[logfile], remote_dir='%s/logs' % remote_tmpdir)
                 remote_files = [os.path.join(remote_tmpdir, 'logs', os.path.basename(f)) for f in [logfile]]
