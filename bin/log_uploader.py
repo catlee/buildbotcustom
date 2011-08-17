@@ -10,30 +10,23 @@ from buildbot.status.builder import Results
 
 from buildbotcustom.process.factory import postUploadCmdPrefix
 
+from util.retry import retry
+
 retries = 5
 retry_sleep = 30
 
 def do_cmd(cmd):
     "Runs the command, and returns output"
     devnull = open(os.devnull)
-    for i in range(retries):
-        proc = subprocess.Popen(cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=devnull,)
+    proc = subprocess.Popen(cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=devnull,)
 
-        retcode = proc.wait()
-        output = proc.stdout.read().strip()
-        if retcode == 0:
-            return output
-        print "Failed attempt %i/%i; sleeping for %s" % (i+1, retries, retry_sleep)
-
-        # Don't need to sleep on our last iteration
-        if i+1 < retries:
-            time.sleep(retry_sleep)
-
-    # If we got to here, we never succeeded. raise an exception with the result
-    # of the last failing command
+    retcode = proc.wait()
+    output = proc.stdout.read().strip()
+    if retcode == 0:
+        return output
     raise Exception("Command %s returned non-zero exit code %i:\n%s" % (
         cmd, retcode, output))
 
@@ -43,7 +36,7 @@ def ssh(user, identity, host, remote_cmd, port=22):
         cmd.extend(['-i', identity])
     cmd.extend(['-p', str(port), host, remote_cmd])
 
-    return do_cmd(cmd)
+    return retry(do_cmd, attempts=retries, sleeptime=retry_sleep, args=(cmd,))
 
 def scp(user, identity, host, files, remote_dir, port=22):
     cmd = ['scp']
@@ -53,7 +46,7 @@ def scp(user, identity, host, files, remote_dir, port=22):
     cmd.extend(files)
     cmd.append("%s@%s:%s" % (user, host, remote_dir))
 
-    return do_cmd(cmd)
+    return retry(do_cmd, attempts=retries, sleeptime=retry_sleep, args=(cmd,))
 
 def getBuild(builder_path, build_number):
     build_path = os.path.join(builder_path, build_number)
