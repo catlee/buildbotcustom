@@ -10,27 +10,42 @@ from buildbot.status.builder import Results
 
 from buildbotcustom.process.factory import postUploadCmdPrefix
 
-def ssh(user, identity, host, remote_cmd, port=22):
+retries = 5
+retry_sleep = 30
+
+def do_cmd(cmd):
+    "Runs the command, and returns output"
     devnull = open(os.devnull)
+    for i in range(retries):
+        proc = subprocess.Popen(cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=devnull,)
+
+        retcode = proc.wait()
+        output = proc.stdout.read().strip()
+        if retcode == 0:
+            return output
+        print "Failed attempt %i/%i; sleeping for %s" % (i+1, retries, retry_sleep)
+
+        # Don't need to sleep on our last iteration
+        if i+1 < retries:
+            time.sleep(retry_sleep)
+
+    # If we got to here, we never succeeded. raise an exception with the result
+    # of the last failing command
+    raise Exception("Command %s returned non-zero exit code %i:\n%s" % (
+        cmd, retcode, output))
+
+def ssh(user, identity, host, remote_cmd, port=22):
     cmd = ['ssh', '-l', user]
     if identity:
         cmd.extend(['-i', identity])
     cmd.extend(['-p', str(port), host, remote_cmd])
 
-    proc = subprocess.Popen(cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=devnull,)
-
-    retcode = proc.wait()
-    output = proc.stdout.read().strip()
-    if retcode != 0:
-        raise Exception("Command %s returned non-zero exit code %i:\n%s" % (
-            cmd, retcode, output))
-    return output
+    return do_cmd(cmd)
 
 def scp(user, identity, host, files, remote_dir, port=22):
-    devnull = open(os.devnull)
     cmd = ['scp']
     if identity:
         cmd.extend(['-i', identity])
@@ -38,17 +53,7 @@ def scp(user, identity, host, files, remote_dir, port=22):
     cmd.extend(files)
     cmd.append("%s@%s:%s" % (user, host, remote_dir))
 
-    proc = subprocess.Popen(cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=devnull,)
-
-    retcode = proc.wait()
-    output = proc.stdout.read().strip()
-    if retcode != 0:
-        raise Exception("Command %s returned non-zero exit code %i:\n%s" % (
-            cmd, retcode, output))
-    return output
+    return do_cmd(cmd)
 
 def getBuild(builder_path, build_number):
     build_path = os.path.join(builder_path, build_number)
