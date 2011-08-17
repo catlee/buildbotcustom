@@ -168,11 +168,15 @@ if __name__ == "__main__":
             l10n=False,
             user=os.environ.get("USER"),
             product="firefox",
+            retries=retries,
+            retry_sleep=retry_sleep,
             )
     parser.add_option("-u", "--user", dest="user", help="upload user name")
     parser.add_option("-i", "--identity", dest="identity", help="ssh identity")
     parser.add_option("-b", "--branch", dest="branch", help="branch")
     parser.add_option("-p", "--platform", dest="platform", help="platform")
+    parser.add_option("-r", "--retries", dest="retries", help="number of times to try", type="int")
+    parser.add_option("-t", "--retrytime", dest="retry_sleep", help="time to sleep between tries", type="int")
     parser.add_option("--product", dest="product", help="product directory")
     parser.add_option("--nightly", dest="nightly", action="store_true",
             help="upload to nightly dir")
@@ -192,6 +196,9 @@ if __name__ == "__main__":
 
     if not options.platform and not options.release:
         parser.error("platform required")
+
+    retries = options.retries
+    retry_sleep = options.retry_sleep
 
     if len(args) != 3:
         parser.error("Need to specify host, builder_path and build number")
