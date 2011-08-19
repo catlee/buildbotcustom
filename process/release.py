@@ -867,7 +867,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 enableUpdatePackaging=enableUpdatePackaging,
                 mozconfigBranch=releaseTag,
                 signingServer=signingServer,
-                signingFormats=releaseConfig['signingFormats'][platform],
+                signingFormats=releaseConfig.get('signingFormats', {}).get(platform),
             )
 
             builders.append({
