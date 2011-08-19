@@ -2597,7 +2597,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
                 env['MOZ_INTERNAL_SIGNING_FORMAT'] = signingFormats[0]
             if signingFormats[1]:
                 env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
-            env['MOZ_SIGN_CMD'] = 'python /home/catlee/mozilla/tools/release/signing/signtool.py -s ~/.ssh/id_dsa -c /home/catlee/mozilla/tools/release/signing/host.cert -H localhost:8080 -v'
             env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
                 "python", "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
