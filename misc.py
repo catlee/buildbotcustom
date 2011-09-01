@@ -1019,7 +1019,7 @@ def generateBranchObjects(config, name):
             uploadSymbols = False
 
         if pf.get('enable_pymake'):
-            extra_args['makeCmd'] = "python -OO build/pymake/make.py"
+            extra_args['makeCmd'] = WithProperties("python -OO %(basedir)s/build/pymake/make.py")
 
         stageBasePath = '%s/%s' % (config['stage_base_path'],
                                        pf['stage_product'])
