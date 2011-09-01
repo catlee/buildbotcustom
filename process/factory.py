@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 from datetime import datetime
 import os.path, re
-from time import strftime
 import urllib
 import random
 
@@ -62,7 +61,6 @@ from buildbotcustom.steps.release import UpdateVerify, L10nVerifyMetaDiff, \
 from buildbotcustom.steps.source import MercurialCloneCommand
 from buildbotcustom.steps.test import AliveTest, \
   CompareLeakLogs, Codesighs, GraphServerPost
-from buildbotcustom.steps.transfer import MozillaStageUpload
 from buildbotcustom.steps.updates import CreateCompleteUpdateSnippet, \
   CreatePartialUpdateSnippet
 from buildbotcustom.env import MozillaEnvironments
@@ -347,7 +345,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
 
     def __init__(self, hgHost, repoPath, buildToolsRepoPath, buildSpace=0,
             clobberURL=None, clobberTime=None, buildsBeforeReboot=None,
-            branchName=None, baseWorkDir='build', hashType='sha512', **kwargs):
+            branchName=None, baseWorkDir='build', hashType='sha512', makeCmd='make',
+            **kwargs):
         BuildFactory.__init__(self, **kwargs)
 
         if hgHost.endswith('/'):
@@ -362,6 +361,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         self.buildsBeforeReboot = buildsBeforeReboot
         self.baseWorkDir = baseWorkDir
         self.hashType = hashType
+        self.makeCmd = makeCmd
 
         self.repository = self.getRepository(repoPath)
         if branchName:
@@ -1038,7 +1038,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             workdir="build"
         self.addStep(ScratchboxCommand(
          name='compile',
-         command=['make', '-f', 'client.mk', buildcmd, WithProperties('MOZ_BUILD_DATE=%(buildid:-)s')],
+         command=[self.makeCmd, '-f', 'client.mk', buildcmd, WithProperties('MOZ_BUILD_DATE=%(buildid:-)s')],
          description=['compile'],
          env=self.env,
          haltOnFailure=True,
@@ -1261,7 +1261,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addL10nCheckTestSteps(self):
         self.addStep(ShellCommand(
          name='make l10n check',
-         command=['make', 'l10n-check'],
+         command=[self.makeCmd, 'l10n-check'],
          workdir='build/%s' % self.objdir,
          env=self.env,
          haltOnFailure=False,
@@ -1283,7 +1283,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addCreateUpdateSteps(self):
         self.addStep(ShellCommand(
             name='make_complete_mar',
-            command=['make', '-C',
+            command=[self.makeCmd, '-C',
                      '%s/tools/update-packaging' % self.mozillaObjdir],
             env=self.env,
             haltOnFailure=True,
@@ -1301,7 +1301,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             # fail.
             self.addStep(ShellCommand(
              name='postflight_all',
-             command=['make', '-f', 'client.mk', 'postflight_all'],
+             command=[self.makeCmd, '-f', 'client.mk', 'postflight_all'],
              env=self.env,
              haltOnFailure=False,
              flunkOnFailure=False,
@@ -1313,7 +1313,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         for t in pkg_targets:
             self.addStep(ShellCommand(
              name='make %s pretty' % t,
-             command=['make', t, 'MOZ_PKG_PRETTYNAMES=1'],
+             command=[self.makeCmd, t, 'MOZ_PKG_PRETTYNAMES=1'],
              env=self.env,
              workdir='build/%s' % self.objdir,
              haltOnFailure=False,
@@ -1322,7 +1322,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             ))
         self.addStep(ShellCommand(
              name='make update pretty',
-             command=['make', '-C',
+             command=[self.makeCmd, '-C',
                       '%s/tools/update-packaging' % self.mozillaObjdir,
                       'MOZ_PKG_PRETTYNAMES=1'],
              env=self.env,
@@ -1333,7 +1333,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if self.l10nCheckTest:
             self.addStep(ShellCommand(
                  name='make l10n check pretty',
-                command=['make', 'l10n-check', 'MOZ_PKG_PRETTYNAMES=1'],
+                command=[self.makeCmd, 'l10n-check', 'MOZ_PKG_PRETTYNAMES=1'],
                 workdir='build/%s' % self.objdir,
                 env=self.env,
                 haltOnFailure=False,
@@ -1363,7 +1363,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if self.packageSDK:
             self.addStep(ScratchboxCommand(
              name='make_sdk',
-             command=['make', '-f', 'client.mk', 'sdk'],
+             command=[self.makeCmd, '-f', 'client.mk', 'sdk'],
              env=pkg_env,
              workdir=workdir,
              sb=self.use_scratchbox,
@@ -1372,7 +1372,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if self.packageTests:
             self.addStep(ScratchboxCommand(
              name='make_pkg_tests',
-             command=['make', 'package-tests'] + pkgTestArgs,
+             command=[self.makeCmd, 'package-tests'] + pkgTestArgs,
              env=pkg_env,
              workdir=objdir,
              sb=self.use_scratchbox,
@@ -1380,7 +1380,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             ))
         self.addStep(ScratchboxCommand(
             name='make_pkg',
-            command=['make', 'package'] + pkgArgs,
+            command=[self.makeCmd, 'package'] + pkgArgs,
             env=pkg_env,
             workdir=objdir,
             sb=self.use_scratchbox,
@@ -1398,7 +1398,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if 'maemo' in self.complete_platform:
             self.addStep(ScratchboxCommand(
                 name='make_deb',
-                command=['make','deb'] + pkgArgs,
+                command=[self.makeCmd,'deb'] + pkgArgs,
                 env=pkg_env,
                 workdir=WithProperties('%(basedir)s/build/' + self.objdir),
                 sb=self.use_scratchbox,
@@ -1410,7 +1410,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
            self.productName != 'xulrunner':
             self.addStep(ShellCommand(
                 name='make_installer',
-                command=['make', 'installer'] + pkgArgs,
+                command=[self.makeCmd, 'installer'] + pkgArgs,
                 env=pkg_env,
                 workdir='build/%s' % self.objdir,
                 haltOnFailure=True
@@ -1482,7 +1482,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             codesighs_dir = 'build/%s/tools/codesighs' % self.mozillaObjdir
         self.addStep(ScratchboxCommand(
          name='make_codesighs',
-         command=['make'],
+         command=[self.makeCmd],
          workdir=codesighs_dir,
          sb=self.use_scratchbox,
         ))
@@ -1597,7 +1597,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             objdir = 'build/%s' % self.objdir
         self.addStep(ScratchboxCommand(
          name='make_buildsymbols',
-         command=['make', 'buildsymbols'],
+         command=[self.makeCmd, 'buildsymbols'],
          env=self.env,
          workdir=objdir,
          sb=self.use_scratchbox,
@@ -1611,7 +1611,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
             objdir = 'build/%s' % self.objdir
         self.addStep(ScratchboxCommand(
          name='make_uploadsymbols',
-         command=['make', 'uploadsymbols'],
+         command=[self.makeCmd, 'uploadsymbols'],
          env=self.env,
          workdir=objdir,
          sb=self.use_scratchbox,
@@ -1842,7 +1842,7 @@ class TryBuildFactory(MercurialBuildFactory):
     def addCodesighsSteps(self):
         self.addStep(ShellCommand(
          name='make_codesighs',
-         command=['make'],
+         command=[self.makeCmd],
          workdir='build/%s/tools/codesighs' % self.mozillaObjdir
         ))
         self.addStep(RetryingShellCommand(
@@ -1910,7 +1910,7 @@ class TryBuildFactory(MercurialBuildFactory):
         if self.platform.startswith('win'):
             objdir = 'build/%s' % self.objdir
         self.addStep(RetryingScratchboxProperty(
-             command=['make', 'upload'],
+             command=[self.makeCmd, 'upload'],
              env=uploadEnv,
              workdir=objdir,
              sb=self.use_scratchbox,
@@ -2089,7 +2089,7 @@ class CCMercurialBuildFactory(MercurialBuildFactory):
     def addUploadSteps(self, pkgArgs=None):
         MercurialBuildFactory.addUploadSteps(self, pkgArgs)
         self.addStep(ShellCommand(
-         command=['make', 'package-compare'],
+         command=[self.makeCmd, 'package-compare'],
          workdir='build/%s' % self.objdir,
          haltOnFailure=False
         ))
@@ -2253,7 +2253,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
             haltOnFailure=True,
         ))
         # Generate the partial patch from the two unpacked complete mars.
-        partialMarCommand=['make', '-C',
+        partialMarCommand=[self.makeCmd, '-C',
                            'tools/update-packaging', 'partial-patch',
                            'STAGE_DIR=../../dist/update',
                            'SRC_BUILD=../../previous',
@@ -2264,7 +2264,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
             partialMarCommand.extend(extraArgs)
         self.addStep(ShellCommand(
             name='make_partial_mar',
-            description=['make', 'partial', 'mar'],
+            description=[self.makeCmd, 'partial', 'mar'],
             doStepIf = self.previousMarExists,
             command=partialMarCommand,
             env=updateEnv,
@@ -2466,7 +2466,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
 
         if self.productName == 'xulrunner':
             self.addStep(RetryingSetProperty(
-             command=['make', '-f', 'client.mk', 'upload'],
+             command=[self.makeCmd, '-f', 'client.mk', 'upload'],
              env=uploadEnv,
              workdir='build',
              extract_fn = parse_make_upload,
@@ -2481,12 +2481,12 @@ class NightlyBuildFactory(MercurialBuildFactory):
                 objdir = '%s/%s' % (self.baseWorkDir, self.objdir)
             self.addStep(RetryingScratchboxProperty(
                 name='make_upload',
-                command=['make', 'upload'] + upload_vars,
+                command=[self.makeCmd, 'upload'] + upload_vars,
                 env=uploadEnv,
                 workdir=objdir,
                 extract_fn = parse_make_upload,
                 haltOnFailure=True,
-                description=['make', 'upload'],
+                description=[self.makeCmd, 'upload'],
                 sb=self.use_scratchbox,
                 timeout=40*60, # 40 minutes
                 log_eval_func=lambda c,s: regex_log_evaluator(c, s, upload_errors),
@@ -2597,7 +2597,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         if self.enableUpdatePackaging:
             self.addStep(ShellCommand(
                 name='make_update_pkg',
-                command=['make', '-C',
+                command=[self.makeCmd, '-C',
                          '%s/tools/update-packaging' % self.mozillaObjdir],
                 env=self.env,
                 haltOnFailure=True
@@ -2645,7 +2645,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
             objdir = 'build/%s' % self.objdir
         self.addStep(RetryingScratchboxProperty(
          name='make_upload',
-         command=['make', 'upload'] + upload_vars,
+         command=[self.makeCmd, 'upload'] + upload_vars,
          env=uploadEnv,
          workdir=objdir,
          extract_fn=parse_make_upload,
@@ -2729,7 +2729,7 @@ class XulrunnerReleaseBuildFactory(ReleaseBuildFactory):
             return {'packageUrl': ''}
 
         self.addStep(RetryingSetProperty(
-         command=['make', '-f', 'client.mk', 'upload'],
+         command=[self.makeCmd, '-f', 'client.mk', 'upload'],
          env=uploadEnv,
          workdir='build',
          extract_fn = get_url,

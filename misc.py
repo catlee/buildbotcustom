@@ -1018,6 +1018,9 @@ def generateBranchObjects(config, name):
             factory_class = NightlyBuildFactory
             uploadSymbols = False
 
+        if pf.get('enable_pymake'):
+            extra_args['makeCmd'] = "python -OO build/pymake/make.py"
+
         stageBasePath = '%s/%s' % (config['stage_base_path'],
                                        pf['stage_product'])
 
