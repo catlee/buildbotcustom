@@ -979,6 +979,11 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 haltOnFailure=True,
                 flunkOnFailure=True,
             ))
+            self.addStep(SetProperty(
+                name = 'set_got_revision',
+                command=['hg', 'parent', '--template={node}'],
+                extract_fn = short_hash
+            ))
         else:
             self.addStep(Mercurial(
              name='hg_update',
