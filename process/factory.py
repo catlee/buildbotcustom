@@ -389,12 +389,20 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         self.addInitialSteps()
 
     def addInitialSteps(self):
-        self.addStep(SetProperty(
-            name='set_basedir',
-            command=['bash', '-c', 'pwd'],
-            property='basedir',
-            workdir='.',
-        ))
+        if self.platform.startswith('win'):
+            self.addStep(SetProperty(
+                name='set_basedir',
+                command=['bash', '-c', 'pwd -W'],
+                property='basedir',
+                workdir='.',
+            ))
+        else:
+            self.addStep(SetProperty(
+                name='set_basedir',
+                command=['bash', '-c', 'pwd'],
+                property='basedir',
+                workdir='.',
+            ))
         # We need the basename of the current working dir so we can
         # ignore that dir when purging builds later.
         self.addStep(SetProperty(
