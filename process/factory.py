@@ -389,20 +389,12 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         self.addInitialSteps()
 
     def addInitialSteps(self):
-        if self.platform.startswith('win'):
-            self.addStep(SetProperty(
-                name='set_basedir',
-                command=['bash', '-c', 'pwd -W'],
-                property='basedir',
-                workdir='.',
-            ))
-        else:
-            self.addStep(SetProperty(
-                name='set_basedir',
-                command=['bash', '-c', 'pwd'],
-                property='basedir',
-                workdir='.',
-            ))
+        self.addStep(SetProperty(
+            name='set_basedir',
+            command=['bash', '-c', 'pwd'],
+            property='basedir',
+            workdir='.',
+        ))
         # We need the basename of the current working dir so we can
         # ignore that dir when purging builds later.
         self.addStep(SetProperty(
@@ -796,13 +788,19 @@ class MercurialBuildFactory(MozillaBuildFactory):
             self.logBaseUrl = 'http://%s/pub/mozilla.org/%s/%s' % \
                         ( self.stageServer, self.stageProduct, self.logUploadDir)
 
-        # Need to override toolsdir as set by MozillaBuildFactory because
+        # Need to override toolsdir, basedir as set by MozillaBuildFactory because
         # we need Windows-style paths.
         if self.platform.startswith('win'):
             self.addStep(SetProperty(
                 command=['bash', '-c', 'pwd -W'],
                 property='toolsdir',
                 workdir='tools'
+            ))
+            self.addStep(SetProperty(
+                name='set_basedir',
+                command=['bash', '-c', 'pwd -W'],
+                property='basedir',
+                workdir='.',
             ))
         if self.use_scratchbox:
             self.addStep(ScratchboxCommand(
