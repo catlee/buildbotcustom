@@ -1108,11 +1108,6 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 description=['getting', 'sourcestamp'],
                 descriptionDone=['got', 'sourcestamp']
             ))
-            self.addStep(SetBuildProperty(
-                name='set_comments',
-                property_name="comments",
-                value=lambda build:(build.source.changes[-1].comments),
-            ))
             self._gotBuildInfo = True
 
     def addBuildAnalysisSteps(self):
@@ -1152,6 +1147,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addLeakTestSteps(self):
         leakEnv = self.env.copy()
         leakEnv['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        leakEnv['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.addStep(AliveTest(
           env=leakEnv,
           workdir='build/%s/_leaktest' % self.mozillaObjdir,
@@ -1291,6 +1287,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addCheckTestSteps(self):
         env = self.env.copy()
         env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.addStep(unittest_steps.MozillaCheck,
          test_name="check",
          warnOnWarnings=True,
@@ -1313,6 +1310,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addValgrindCheckSteps(self):
         env = self.env.copy()
         env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.addStep(unittest_steps.MozillaCheck,
          test_name="check-valgrind",
          warnOnWarnings=True,
@@ -1764,6 +1762,7 @@ class TryBuildFactory(MercurialBuildFactory):
         # extraArgs
         leakEnv = self.env.copy()
         leakEnv['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        leakEnv['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         for args in [['-register'], ['-CreateProfile', 'default'],
                      ['-P', 'default']]:
             self.addStep(AliveTest(
@@ -1978,7 +1977,6 @@ class TryBuildFactory(MercurialBuildFactory):
              revision=WithProperties('%(got_revision)s'),
              files=[WithProperties('%(packageUrl)s')],
              user=WithProperties('%(who)s'),
-             comments=WithProperties('%(comments)s'),
              sendchange_props=sendchange_props,
             ))
         for master, warn, retries in self.unittestMasters:
@@ -1992,7 +1990,6 @@ class TryBuildFactory(MercurialBuildFactory):
              files=[WithProperties('%(packageUrl)s'),
                      WithProperties('%(testsUrl)s')],
              user=WithProperties('%(who)s'),
-             comments=WithProperties('%(comments)s'),
              sendchange_props=sendchange_props,
             ))
 
@@ -2554,7 +2551,6 @@ class NightlyBuildFactory(MercurialBuildFactory):
                  revision=WithProperties("%(got_revision)s"),
                  files=[WithProperties('%(packageUrl)s')],
                  user="sendchange",
-                 comments=WithProperties('%(comments)s'),
                  sendchange_props=sendchange_props,
                 ))
 
@@ -2572,7 +2568,6 @@ class NightlyBuildFactory(MercurialBuildFactory):
                  revision=WithProperties("%(got_revision)s"),
                  files=files,
                  user="sendchange-unittest",
-                 comments=WithProperties('%(comments)s'),
                  sendchange_props=sendchange_props,
                 ))
 
@@ -2733,7 +2728,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
              revision=WithProperties("%(got_revision)s"),
              files=[WithProperties('%(packageUrl)s')],
              user="sendchange",
-             comments=WithProperties('%(comments)s'),
              sendchange_props=sendchange_props,
             ))
 
@@ -2748,7 +2742,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
              files=[WithProperties('%(packageUrl)s'),
                     WithProperties('%(testsUrl)s')],
              user="sendchange-unittest",
-             comments=WithProperties('%(comments)s'),
              sendchange_props=sendchange_props,
             ))
 
@@ -5388,6 +5381,7 @@ class UnittestBuildFactory(MozillaBuildFactory):
         self.doUpload()
 
         self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
 
         self.addPreTestSteps()
 
@@ -5574,7 +5568,7 @@ class TryUnittestBuildFactory(UnittestBuildFactory):
                  revision=WithProperties('%(got_revision)s'),
                  branch=self.unittestBranch,
                  files=[WithProperties('%(packageUrl)s')],
-                 user=WithProperties('%(who)s')),
+                 user=WithProperties('%(who)s'))
                 )
 
 class CCUnittestBuildFactory(MozillaBuildFactory):
@@ -5744,6 +5738,7 @@ class CCUnittestBuildFactory(MozillaBuildFactory):
         self.doUpload()
 
         self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
 
         self.addPreTestSteps()
 
@@ -6509,6 +6504,7 @@ class UnittestPackagedBuildFactory(MozillaTestFactory):
             self.env['MINIDUMP_STACKWALK_CGI'] = stackwalk_cgi
         else:
             self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.env.update(env)
 
         self.leak_thresholds = {'mochitest-plain': mochitest_leak_threshold,
