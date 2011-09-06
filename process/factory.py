@@ -957,6 +957,35 @@ class MercurialBuildFactory(MozillaBuildFactory):
              defaultBranch=self.repoPath,
              timeout=60*60, # 1 hour
             ))
+        elif self.useSharedCheckouts:
+            self.addStep(JSONPropertiesDownload(
+                name="download_props",
+                slavedest="buildprops.json",
+                workdir='.'
+            ))
+
+            env = self.env.copy()
+            env['PROPERTIES_FILE'] = 'buildprops.json'
+            cmd = [
+                    'python',
+                    WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
+                    'http://%s/%s' % (self.hgHost, self.repoPath),
+                    'build',
+                  ]
+            self.addStep(ShellCommand(
+                name='hg_update',
+                command=cmd,
+                timeout=60*60,
+                env=env,
+                workdir='.',
+                haltOnFailure=True,
+                flunkOnFailure=True,
+            ))
+            self.addStep(SetProperty(
+                name = 'set_got_revision',
+                command=['hg', 'parent', '--template={node}'],
+                extract_fn = short_hash
+            ))
         else:
             self.addStep(Mercurial(
              name='hg_update',
@@ -965,6 +994,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
              defaultBranch=self.repoPath,
              timeout=60*60, # 1 hour
             ))
+
         if self.buildRevision:
             self.addStep(ShellCommand(
              name='hg_update',
@@ -1103,6 +1133,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addLeakTestSteps(self):
         leakEnv = self.env.copy()
         leakEnv['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        leakEnv['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.addStep(AliveTest(
           env=leakEnv,
           workdir='build/%s/_leaktest' % self.mozillaObjdir,
@@ -1242,6 +1273,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addCheckTestSteps(self):
         env = self.env.copy()
         env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.addStep(unittest_steps.MozillaCheck,
          test_name="check",
          warnOnWarnings=True,
@@ -1264,6 +1296,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
     def addValgrindCheckSteps(self):
         env = self.env.copy()
         env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.addStep(unittest_steps.MozillaCheck,
          test_name="check-valgrind",
          warnOnWarnings=True,
@@ -1715,6 +1748,7 @@ class TryBuildFactory(MercurialBuildFactory):
         # extraArgs
         leakEnv = self.env.copy()
         leakEnv['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        leakEnv['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         for args in [['-register'], ['-CreateProfile', 'default'],
                      ['-P', 'default']]:
             self.addStep(AliveTest(
@@ -2185,8 +2219,8 @@ class NightlyBuildFactory(MercurialBuildFactory):
                      WithProperties('ssh -l %s -i ~/.ssh/%s %s ' % (self.stageUsername,
                                                                     self.stageSshKey,
                                                                     self.stageServer) +
-                                    'ls -1t %s | grep %s' % (self.latestDir,
-                                                             marPattern))
+                                    'ls -1t %s | grep %s | head -n 1' % (self.latestDir,
+                                                                        marPattern))
                      ],
             extract_fn=marFilenameToProperty(prop_name='previousMarFilename'),
             flunkOnFailure=False,
@@ -5004,7 +5038,8 @@ class ReleaseUpdatesFactory(ReleaseFactory):
                 '--long-version=%s' % self.longVersion,
                 '-n', str(self.buildNumber), '-a', self.ausServerUrl,
                 '-s', self.stagingServer, '-c', verifyConfigPath,
-                '-d', oldCandidatesDir, '-l', 'old-shipped-locales',
+                '-d', oldCandidatesDir, '-l', 'shipped-locales',
+                '--old-shipped-locales', 'old-shipped-locales',
                 '--pretty-candidates-dir']
         if self.binaryName:
             bcmd.extend(['--binary-name', self.binaryName])
@@ -5332,6 +5367,7 @@ class UnittestBuildFactory(MozillaBuildFactory):
         self.doUpload()
 
         self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
 
         self.addPreTestSteps()
 
@@ -5688,6 +5724,7 @@ class CCUnittestBuildFactory(MozillaBuildFactory):
         self.doUpload()
 
         self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(self.platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
 
         self.addPreTestSteps()
 
@@ -6453,6 +6490,7 @@ class UnittestPackagedBuildFactory(MozillaTestFactory):
             self.env['MINIDUMP_STACKWALK_CGI'] = stackwalk_cgi
         else:
             self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
         self.env.update(env)
 
         self.leak_thresholds = {'mochitest-plain': mochitest_leak_threshold,
@@ -6821,6 +6859,7 @@ class RemoteUnittestFactory(MozillaTestFactory):
         self.addCleanupSteps()
         self.addStep(DisconnectStep(
             name='reboot device',
+            workdir='.',
             alwaysRun=True,
             force_disconnect=True,
             warnOnFailure=False,
@@ -7308,11 +7347,13 @@ class TalosFactory(RequestSortingBuildFactory):
     def addDownloadExtensionStep(self):
         def get_addon_url(build):
             import urlparse
+            import urllib
             base_url = 'https://addons.mozilla.org/'
             addon_url = build.getProperty('addonUrl')
-            parsed_url = urlparse.urlsplit(addon_url)
+            #addon_url may be encoded, also we want to ensure that http%3A// becomes http://
+            parsed_url = urlparse.urlsplit(urllib.unquote_plus(addon_url).replace('%3A', ':'))
             if parsed_url[1]: #there is a netloc, this is already a full path to a given addon
-              return addon_url
+              return urlparse.urlunsplit(parsed_url)
             else:
               return urlparse.urljoin(base_url, addon_url)
 
