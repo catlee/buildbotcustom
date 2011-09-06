@@ -1025,7 +1025,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         assert self.mozconfig is not None
 
         configRepo = self.getRepository(self.configRepoPath)
-        hg_mozconfig = '%s/raw-file/%s/%s/%s' % (
+        hg_mozconfig = '%s/raw-file/%s/%s/%s/mozconfig' % (
                 configRepo, self.mozconfigBranch, self.configSubDir, self.mozconfig)
         if self.srcMozconfig:
             cmd = ['bash', '-c',
