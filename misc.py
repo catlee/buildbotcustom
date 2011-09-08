@@ -842,9 +842,7 @@ def generateBranchObjects(config, name):
 
     if not config.get('enable_merging', True):
         nomergeBuilders.extend(builders + unittestBuilders + debugBuilders)
-        extra_args['treeStableTimer'] = None
-    else:
-        extra_args['treeStableTimer'] = 3*60
+    extra_args['treeStableTimer'] = None
 
     branchObjects['schedulers'].append(scheduler_class(
         name=name,
@@ -1035,7 +1033,8 @@ def generateBranchObjects(config, name):
 
         # Some platforms shouldn't do dep builds (i.e. RPM)
         if pf.get('enable_dep', True):
-            mozilla2_dep_factory = factory_class(env=pf['env'],
+            mozilla2_dep_factory = factory_class(
+                env=pf['env'],
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1046,6 +1045,7 @@ def generateBranchObjects(config, name):
                 profiledBuild=pf['profiled_build'],
                 productName=config['product_name'],
                 mozconfig=pf['mozconfig'],
+                srcMozconfig=pf.get('src_mozconfig'),
                 use_scratchbox=pf.get('use_scratchbox'),
                 stageServer=config['stage_server'],
                 stageUsername=config['stage_username'],
@@ -1133,10 +1133,14 @@ def generateBranchObjects(config, name):
         if do_nightly:
             nightly_builder = '%s nightly' % pf['base_name']
 
+            platform_env = pf['env'].copy()
+            if 'update_channel' in config and config.get('create_snippet'):
+                platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
+
             triggeredSchedulers=None
             if config['enable_l10n'] and pf.get('is_mobile_l10n') and pf.get('l10n_chunks'):
                 mobile_l10n_scheduler_name = '%s-%s-l10n' % (name, platform)
-                builder_env = pf['env'].copy()
+                builder_env = platform_env.copy()
                 builder_env.update({
                     'BUILDBOT_CONFIGS': '%s%s' % (config['hgurl'],
                                                   config['config_repo_path']),
@@ -1225,7 +1229,7 @@ def generateBranchObjects(config, name):
             nightly_kwargs.update(ausargs)
 
             mozilla2_nightly_factory = NightlyBuildFactory(
-                env=pf['env'],
+                env=platform_env,
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1236,6 +1240,7 @@ def generateBranchObjects(config, name):
                 profiledBuild=pf['profiled_build'],
                 productName=config['product_name'],
                 mozconfig=pf['mozconfig'],
+                srcMozconfig=pf.get('src_mozconfig'),
                 use_scratchbox=pf.get('use_scratchbox'),
                 stageServer=config['stage_server'],
                 stageUsername=config['stage_username'],
@@ -1359,7 +1364,7 @@ def generateBranchObjects(config, name):
                 else:
                     shark_objdir = pf['platform_objdir']
                 mozilla2_shark_factory = NightlyBuildFactory(
-                    env= pf['env'],
+                    env=platform_env,
                     objdir=shark_objdir,
                     platform=platform,
                     hgHost=config['hghost'],
@@ -1370,6 +1375,7 @@ def generateBranchObjects(config, name):
                     profiledBuild=False,
                     productName=config['product_name'],
                     mozconfig='%s/%s/shark' % (platform, name),
+                    srcMozconfig=pf.get('src_shark_mozconfig'),
                     stageServer=config['stage_server'],
                     stageUsername=config['stage_username'],
                     stageGroup=config['stage_group'],
@@ -1592,6 +1598,7 @@ def generateBranchObjects(config, name):
                  profiledBuild=False,
                  productName='xulrunner',
                  mozconfig=mozconfig,
+                 srcMozconfig=pf.get('src_xulrunner_mozconfig'),
                  stageServer=config['stage_server'],
                  stageUsername=config['stage_username_xulrunner'],
                  stageGroup=config['stage_group'],
@@ -2942,7 +2949,7 @@ def generateValgrindObjects(config, slaves):
                    'slavenames': slaves[platform],
                    'nextSlave': _nextSlowSlave,
                    'factory': f,
-                   'category': 'idle',
+                   'category': branch,
                    'env': env,
                    'properties': {'branch': branch},
                   }
@@ -3008,7 +3015,7 @@ def generateSpiderMonkeyObjects(config, SLAVES):
                     'slavenames': slaves,
                     'nextSlave': _nextSlowIdleSlave(config['idle_slaves']),
                     'factory': f,
-                    'category': 'idle',
+                    'category': branch,
                     'env': config['env'][platform],
                     'properties': {'branch': branch},
                     }
