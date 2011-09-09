@@ -874,6 +874,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 mozconfigBranch=releaseTag,
                 signingServer=signingServer,
                 signingFormats=releaseConfig.get('signingFormats', {}).get(platform),
+                useSharedCheckouts=pf.get('enable_shared_checkouts', False),
             )
 
             builders.append({
