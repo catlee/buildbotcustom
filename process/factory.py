@@ -2642,6 +2642,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
                 env['MOZ_INTERNAL_SIGNING_FORMAT'] = signingFormats[0]
             if signingFormats[1]:
                 env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
+            env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
             env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
