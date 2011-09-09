@@ -2643,7 +2643,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
             if signingFormats[1]:
                 env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
             env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
-                "$PYTHON26", "%(toolsdir)s/release/signing/signtool.py",
+                env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
                 "-s", "~/.ssh/%s" % kwargs['stageSshKey'],
                 "-c", "%(toolsdir)s/release/signing/server.cert"
