@@ -2645,7 +2645,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
             env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
                 "python", "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
-                "-s", kwargs['stageSshKey'],
+                "-s", "~/.ssh/%s" % kwargs['stageSshKey'],
                 "-c", "%(toolsdir)s/release/signing/server.cert"
                 ]))
         kwargs['mozharnessMultiOptions'] = ['--only-pull-build-source',
