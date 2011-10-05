@@ -1,7 +1,7 @@
 from urlparse import urljoin
 try:
     import json
-    assert json
+    assert json # pyflakes
 except:
     import simplejson as json
 import collections
@@ -24,9 +24,11 @@ import buildbotcustom.l10n
 import buildbotcustom.scheduler
 import buildbotcustom.status.mail
 import buildbotcustom.status.generators
+import buildbotcustom.status.queued_command
 import buildbotcustom.status.log_handlers
 import buildbotcustom.misc_scheduler
 import build.paths
+import buildtools.queuedir
 reload(buildbotcustom.changes.hgpoller)
 reload(buildbotcustom.process.factory)
 reload(buildbotcustom.log)
@@ -34,9 +36,11 @@ reload(buildbotcustom.l10n)
 reload(buildbotcustom.scheduler)
 reload(buildbotcustom.status.mail)
 reload(buildbotcustom.status.generators)
+reload(buildbotcustom.status.queued_command)
 reload(buildbotcustom.status.log_handlers)
 reload(buildbotcustom.misc_scheduler)
 reload(build.paths)
+reload(buildtools.queuedir)
 
 from buildbotcustom.common import reallyShort
 from buildbotcustom.changes.hgpoller import HgPoller, HgAllLocalesPoller
@@ -54,8 +58,10 @@ from buildbotcustom.status.generators import buildTryChangeMessage
 from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
     buildUIDSchedFunc, lastGoodFunc
+from buildbotcustom.status.queued_command import QueuedCommandHandler
 from buildbotcustom.status.log_handlers import SubprocessLogHandler
 from build.paths import getRealpath
+from buildtools.queuedir import QueueDir
 
 # This file contains misc. helper function that don't make sense to put in
 # other files. For example, functions that are called in a master.cfg
@@ -673,14 +679,16 @@ def generateBranchObjects(config, name):
     logUploadCmd = makeLogUploadCommand(name, config, is_try=config.get('enable_try'),
             is_shadow=bool(name=='shadow-central'), platform_prop='stage_platform',product_prop='product')
 
-    branchObjects['status'].append(SubprocessLogHandler(
+    branchObjects['status'].append(QueuedCommandHandler(
         logUploadCmd,
+        QueueDir.getQueue('commands'),
         builders=builders + unittestBuilders + debugBuilders,
     ))
 
     if nightlyBuilders:
-        branchObjects['status'].append(SubprocessLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd + ['--nightly'],
+            QueueDir.getQueue('commands'),
             builders=nightlyBuilders,
         ))
 
@@ -754,38 +762,38 @@ def generateBranchObjects(config, name):
         l10n_binaryURL += "-l10n"
         nomergeBuilders.extend(l10n_builders)
 
-        # This notifies all l10n related build objects to Mozilla-l10n
-        if not config.get('disable_tinderbox_mail'):
-            branchObjects['status'].append(TinderboxMailNotifier(
-                fromaddr="bootstrap@mozilla.com",
-                tree=config['l10n_tinderbox_tree'],
-                extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
-                relayhost="mail.build.mozilla.org",
-                logCompression="gzip",
-                builders=l10n_builders,
-                binaryURL=l10n_binaryURL
-            ))
+        branchObjects['status'].append(TinderboxMailNotifier(
+            fromaddr="bootstrap@mozilla.com",
+            tree=config['l10n_tinderbox_tree'],
+            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
+            relayhost="mail.build.mozilla.org",
+            logCompression="gzip",
+            builders=l10n_builders,
+            binaryURL=l10n_binaryURL
+        ))
 
-            # We only want the builds from the specified builders
-            # since their builds have a build property called "locale"
-            branchObjects['status'].append(TinderboxMailNotifier(
-                fromaddr="bootstrap@mozilla.com",
-                tree=WithProperties(config['l10n_tinderbox_tree'] + "-%(locale)s"),
-                extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
-                relayhost="mail.build.mozilla.org",
-                logCompression="gzip",
-                builders=l10n_builders,
-                binaryURL=l10n_binaryURL
-            ))
+        # We only want the builds from the specified builders
+        # since their builds have a build property called "locale"
+        branchObjects['status'].append(TinderboxMailNotifier(
+            fromaddr="bootstrap@mozilla.com",
+            tree=WithProperties(config['l10n_tinderbox_tree'] + "-%(locale)s"),
+            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
+            relayhost="mail.build.mozilla.org",
+            logCompression="gzip",
+            builders=l10n_builders,
+            binaryURL=l10n_binaryURL
+        ))
 
         # Log uploads for dep l10n repacks
-        branchObjects['status'].append(SubprocessLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd + ['--l10n'],
+            QueueDir.getQueue('commands'),
             builders=[l10nBuilders[b]['l10n_builder'] for b in l10nBuilders],
         ))
         # and for nightly repacks
-        branchObjects['status'].append(SubprocessLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd + ['--l10n', '--nightly'],
+            QueueDir.getQueue('commands'),
             builders=[l10nNightlyBuilders['%s nightly' % b]['l10n_builder'] for b in l10nBuilders]
         ))
 
@@ -832,9 +840,7 @@ def generateBranchObjects(config, name):
 
     if not config.get('enable_merging', True):
         nomergeBuilders.extend(builders + unittestBuilders + debugBuilders)
-        extra_args['treeStableTimer'] = None
-    else:
-        extra_args['treeStableTimer'] = 3*60
+    extra_args['treeStableTimer'] = None
 
     branchObjects['schedulers'].append(scheduler_class(
         name=name,
@@ -897,8 +903,9 @@ def generateBranchObjects(config, name):
                 errorparser="unittest"
             ))
 
-        branchObjects['status'].append(SubprocessLogHandler(
+        branchObjects['status'].append(QueuedCommandHandler(
             logUploadCmd,
+            QueueDir.getQueue('commands'),
             builders=test_builders,
         ))
 
@@ -1027,7 +1034,8 @@ def generateBranchObjects(config, name):
 
         # Some platforms shouldn't do dep builds (i.e. RPM)
         if pf.get('enable_dep', True):
-            mozilla2_dep_factory = factory_class(env=pf['env'],
+            mozilla2_dep_factory = factory_class(
+                env=pf['env'],
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1038,6 +1046,7 @@ def generateBranchObjects(config, name):
                 profiledBuild=pf['profiled_build'],
                 productName=config['product_name'],
                 mozconfig=pf['mozconfig'],
+                srcMozconfig=pf.get('src_mozconfig'),
                 use_scratchbox=pf.get('use_scratchbox'),
                 stageServer=config['stage_server'],
                 stageUsername=config['stage_username'],
@@ -1125,10 +1134,14 @@ def generateBranchObjects(config, name):
         if do_nightly:
             nightly_builder = '%s nightly' % pf['base_name']
 
+            platform_env = pf['env'].copy()
+            if 'update_channel' in config and config.get('create_snippet'):
+                platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
+
             triggeredSchedulers=None
             if config['enable_l10n'] and pf.get('is_mobile_l10n') and pf.get('l10n_chunks'):
                 mobile_l10n_scheduler_name = '%s-%s-l10n' % (name, platform)
-                builder_env = pf['env'].copy()
+                builder_env = platform_env.copy()
                 builder_env.update({
                     'BUILDBOT_CONFIGS': '%s%s' % (config['hgurl'],
                                                   config['config_repo_path']),
@@ -1217,7 +1230,7 @@ def generateBranchObjects(config, name):
             nightly_kwargs.update(ausargs)
 
             mozilla2_nightly_factory = NightlyBuildFactory(
-                env=pf['env'],
+                env=platform_env,
                 objdir=pf['platform_objdir'],
                 platform=platform,
                 hgHost=config['hghost'],
@@ -1228,6 +1241,7 @@ def generateBranchObjects(config, name):
                 profiledBuild=pf['profiled_build'],
                 productName=config['product_name'],
                 mozconfig=pf['mozconfig'],
+                srcMozconfig=pf.get('src_mozconfig'),
                 use_scratchbox=pf.get('use_scratchbox'),
                 stageServer=config['stage_server'],
                 stageUsername=config['stage_username'],
@@ -1351,7 +1365,7 @@ def generateBranchObjects(config, name):
                 else:
                     shark_objdir = pf['platform_objdir']
                 mozilla2_shark_factory = NightlyBuildFactory(
-                    env= pf['env'],
+                    env=platform_env,
                     objdir=shark_objdir,
                     platform=platform,
                     hgHost=config['hghost'],
@@ -1362,6 +1376,7 @@ def generateBranchObjects(config, name):
                     profiledBuild=False,
                     productName=config['product_name'],
                     mozconfig='%s/%s/shark' % (platform, name),
+                    srcMozconfig=pf.get('src_shark_mozconfig'),
                     stageServer=config['stage_server'],
                     stageUsername=config['stage_username'],
                     stageGroup=config['stage_group'],
@@ -1584,6 +1599,7 @@ def generateBranchObjects(config, name):
                  profiledBuild=False,
                  productName='xulrunner',
                  mozconfig=mozconfig,
+                 srcMozconfig=pf.get('src_xulrunner_mozconfig'),
                  stageServer=config['stage_server'],
                  stageUsername=config['stage_username_xulrunner'],
                  stageGroup=config['stage_group'],
@@ -2594,9 +2610,10 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                     )
                     builddir = "%s_%s_test-%s" % (branch, slave_platform, suite)
                     slavebuilddir= 'test'
+                    slave_key = branch_config.get('slave_key', 'slaves')
                     builder = {
                         'name': "%s %s talos %s" % (platform_name, branch, suite),
-                        'slavenames': platform_config[slave_platform]['slaves'],
+                        'slavenames': platform_config[slave_platform][slave_key],
                         'builddir': builddir,
                         'slavebuilddir': slavebuilddir,
                         'factory': factory,
@@ -2654,12 +2671,14 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
 
                         for suites_name, suites in branch_config['platforms'][platform][slave_platform][unittest_suites]:
                             # create the builders
+                            slave_key = branch_config.get('slave_key', 'slaves')
+                            slavenames = platform_config[slave_platform][slave_key]
                             branchObjects['builders'].extend(generateTestBuilder(
                                     branch_config, branch, platform, "%s %s %s test" % (platform_name, branch, test_type),
                                     "%s_%s_test" % (branch, slave_platform_name),
                                     suites_name, suites, branch_config.get('mochitest_leak_threshold', None),
                                     branch_config.get('crashtest_leak_threshold', None),
-                                    platform_config[slave_platform]['slaves'],
+                                    slavenames,
                                     resetHwClock=branch_config['platforms'][platform][slave_platform].get('reset_hw_clock', False),
                                     stagePlatform=stage_platform,
                                     stageProduct=stage_product))
@@ -2744,8 +2763,9 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
             platform_prop='stage_platform',
             product_prop='product')
 
-    branchObjects['status'].append(SubprocessLogHandler(
+    branchObjects['status'].append(QueuedCommandHandler(
         logUploadCmd,
+        QueueDir.getQueue('commands'),
         builders=all_builders,
     ))
 
@@ -2933,7 +2953,7 @@ def generateValgrindObjects(config, slaves):
                    'slavenames': slaves[platform],
                    'nextSlave': _nextSlowSlave,
                    'factory': f,
-                   'category': 'idle',
+                   'category': branch,
                    'env': env,
                    'properties': {'branch': branch},
                   }
@@ -2999,7 +3019,7 @@ def generateSpiderMonkeyObjects(config, SLAVES):
                     'slavenames': slaves,
                     'nextSlave': _nextSlowIdleSlave(config['idle_slaves']),
                     'factory': f,
-                    'category': 'idle',
+                    'category': branch,
                     'env': config['env'][platform],
                     'properties': {'branch': branch},
                     }
