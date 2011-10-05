@@ -1081,6 +1081,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 command.append('MOZ_PGO=1')
         self.addStep(ScratchboxCommand(
          name='compile',
+         command=command,
          description=['compile'],
          env=self.env,
          haltOnFailure=True,
