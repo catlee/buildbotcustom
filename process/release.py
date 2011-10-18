@@ -43,7 +43,7 @@ from buildbotcustom.status.errors import update_verify_error
 from buildbotcustom.status.queued_command import QueuedCommandHandler
 from build.paths import getRealpath
 from release.info import getRuntimeTag, getReleaseTag
-from buildtools.queuedir import QueueDir
+from mozilla_buildtools.queuedir import QueueDir
 import BuildSlaves
 
 DEFAULT_PARALLELIZATION = 10
@@ -822,7 +822,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             else:
                 triggeredSchedulers = None
             multiLocaleConfig = releaseConfig.get(
-                'mozharness_config', {}).get(platform)
+                'mozharness_config', {}).get('platforms', {}).get(platform)
+            mozharnessMultiOptions = releaseConfig.get(
+                'mozharness_config', {}).get('multilocaleOptions')
             enableUpdatePackaging = bool(releaseConfig.get('verifyConfigs',
                                                       {}).get(platform))
             build_factory = ReleaseBuildFactory(
@@ -866,9 +868,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 multiLocaleMerge=releaseConfig.get('mergeLocales', False),
                 compareLocalesRepoPath=branchConfig['compare_locales_repo_path'],
                 mozharnessRepoPath=branchConfig['mozharness_repo_path'],
-                mozharnessTag=branchConfig['mozharness_tag'],
+                mozharnessTag=releaseTag,
                 multiLocaleScript=pf.get('multi_locale_script'),
                 multiLocaleConfig=multiLocaleConfig,
+                mozharnessMultiOptions=mozharnessMultiOptions,
                 usePrettyNames=releaseConfig.get('usePrettyNames', True),
                 enableUpdatePackaging=enableUpdatePackaging,
                 mozconfigBranch=releaseTag,
