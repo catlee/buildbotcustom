@@ -125,7 +125,15 @@ def sendchange(master, branch, change):
             '--user', change['author'].encode('ascii', 'replace'),
             '--when', str(change['updated']),
             ])
-    cmd.extend(change['files'])
+
+    # Buildbot sendchange requires actual files to have changed. Normally we
+    # have those, but sometimes no files change on a revision (e.g. try
+    # pushes). In those cases we use a dummy filename.
+    if change['files']:
+        cmd.extend(change['files'])
+    else:
+        cmd.append('dummy')
+
     try:
         subprocess.check_call(cmd)
     except:
@@ -169,7 +177,7 @@ def processBranch(branch, state, config, force=False):
             # Change the comments to include the url to the revision
             c['comments'] += ' %s/rev/%s' % (url, c['changeset'])
             #sendchange(master, branch, c)
-            print branch, c['changeset']
+            print branch, c['changeset'], c['files']
 
     except urllib2.HTTPError, e:
         msg = e.fp.read()
