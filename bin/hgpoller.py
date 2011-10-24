@@ -126,6 +126,9 @@ def sendchange(master, branch, change):
             '--when', str(change['updated']),
             ])
 
+    if change.get('revlink'):
+        cmd.extend(['--revlink', change['revlink']])
+
     # Buildbot sendchange requires actual files to have changed. Normally we
     # have those, but sometimes no files change on a revision (e.g. try
     # pushes). In those cases we use a dummy filename.
@@ -174,10 +177,15 @@ def processBranch(branch, state, config, force=False):
             if c['branch'] != 'default' and config.getboolean(branch, 'default_branch_only'):
                 log.info("Skipping %s on branch %s", c['changeset'], c['branch'])
                 continue
+
+            # Update revlink with our mirror url if appropriate
+            if c.get('revlink') and mirror_url:
+                c['revlink'] = c['revlink'].replace(url, mirror_url)
+
             # Change the comments to include the url to the revision
-            c['comments'] += ' %s/rev/%s' % (url, c['changeset'])
-            #sendchange(master, branch, c)
+            c['comments'] += ' %s/rev/%s' % (mirror_url or url, c['changeset'])
             print branch, c['changeset'], c['files']
+            sendchange(master, branch, c)
 
     except urllib2.HTTPError, e:
         msg = e.fp.read()
