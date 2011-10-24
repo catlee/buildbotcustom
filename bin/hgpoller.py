@@ -184,7 +184,7 @@ def processBranch(branch, state, config, force=False):
 
             # Change the comments to include the url to the revision
             c['comments'] += ' %s/rev/%s' % (mirror_url or url, c['changeset'])
-            print branch, c['changeset'], c['files']
+            log.info("%s %s %s", branch, c['changeset'], c['files'])
             sendchange(master, branch, c)
 
     except urllib2.HTTPError, e:
@@ -225,7 +225,7 @@ if __name__ == '__main__':
     if not os.path.exists(options.config_file):
         parser.error("%s doesn't exist" % options.config_file)
 
-    log.basicConfig(format="%(message)s", level=options.verbosity)
+    log.basicConfig(format="%(asctime)s %(message)s", level=options.verbosity)
 
     config = RawConfigParser({
         'tips_only': 'yes',
