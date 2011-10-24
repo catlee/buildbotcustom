@@ -1,15 +1,25 @@
 #!/usr/bin/env python
+"""hgpoller.py [-f|--config-file configfile] [-v|--verbose] [branch ...]"""
 import urlparse, urllib, time
 try:
     import json
 except:
     import simplejson as json
 
+import xml.etree.ElementTree as etree
 import httplib, urllib2, socket, ssl
 
 import subprocess
 from buildbotcustom.changes.hgpoller import _parse_changes
 import logging as log
+
+import os, fcntl
+
+def lockfile(filename):
+    fd = os.open(filename, os.O_CREAT)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    # Touch the file
+    os.utime(filename, None)
 
 def buildValidatingOpener(ca_certs):
     class VerifiedHTTPSConnection(httplib.HTTPSConnection):
@@ -56,14 +66,38 @@ def validating_https_open(url, ca_certs, username=None, password=None):
     return url_opener.open(req)
 
 def getChanges(base_url, last_changeset=None, tips_only=False, ca_certs=None,
-        username=None, password=None):
+        username=None, password=None, mirror_url=None):
     bits = urlparse.urlparse(base_url)
     if bits.scheme == 'https':
         assert ca_certs, "you must specify ca_certs"
 
+    # TODO: Handle the repo being reset
+
+    to_changeset = None
+
+    # If we have a mirror_url, we first need to check the mirror's atom feed
+    if mirror_url:
+        mirror_url += "/atom-log"
+        u = urllib2.urlopen(mirror_url)
+        log.debug("Fetching %s", mirror_url)
+        tree = etree.parse(u)
+        latest_entry = tree.find("{http://www.w3.org/2005/Atom}entry")
+        if not latest_entry:
+            return []
+        latest_rev = latest_entry.find("{http://www.w3.org/2005/Atom}id").text.split("-")[-1]
+        to_changeset = latest_rev
+        log.debug("Mirror has up to %s", to_changeset)
+
+    if last_changeset and to_changeset:
+        if last_changeset == to_changeset:
+            log.debug("Mirror has our latest changeset, nothing else to do")
+            return []
+
     params = [('full', '1')]
     if last_changeset:
         params.append( ('fromchange', last_changeset) )
+    if to_changeset:
+        params.append( ('tochange', to_changeset) )
     if tips_only:
         params.append( ('tipsonly', '1') )
     url = "%s/json-pushes?%s" % (base_url, urllib.urlencode(params))
@@ -92,22 +126,30 @@ def sendchange(master, branch, change):
             '--when', str(change['updated']),
             ])
     cmd.extend(change['files'])
-    subprocess.check_call(cmd)
+    try:
+        subprocess.check_call(cmd)
+    except:
+        log.error("Couldn't run %s", cmd)
+        raise
 
-def processBranch(branch, state, config):
-    log.debug("Processing %s", branch)
+def processBranch(branch, state, config, force=False):
     master = config.get('main', 'master')
     if branch not in state:
         state[branch] = {'last_run': 0, 'last_changeset': None}
+    log.debug("Processing %s (last changeset: %s)", branch, state[branch]['last_changeset'])
     branch_state = state[branch]
     interval = config.getint(branch, 'interval')
-    if time.time() < (branch_state['last_run'] + interval):
+    if not force and time.time() < (branch_state['last_run'] + interval):
         log.debug("Skipping %s, too soon since last run", branch)
         return
 
     branch_state['last_run'] = time.time()
 
     url = config.get(branch, 'url')
+    if config.has_option(branch, 'mirror_url'):
+        mirror_url = config.get(branch, 'mirror_url')
+    else:
+        mirror_url = None
     ca_certs = config.get(branch, 'ca_certs')
     tips_only = config.getboolean(branch, 'tips_only')
     username = config.get(branch, 'username')
@@ -117,7 +159,7 @@ def processBranch(branch, state, config):
     try:
         changes = getChanges(url, tips_only=tips_only,
                 last_changeset=last_changeset, ca_certs=ca_certs,
-                username=username, password=password)
+                username=username, password=password, mirror_url=mirror_url)
         # Do sendchanges!
         for c in changes:
             # Ignore off-default branches
@@ -126,7 +168,8 @@ def processBranch(branch, state, config):
                 continue
             # Change the comments to include the url to the revision
             c['comments'] += ' %s/rev/%s' % (url, c['changeset'])
-            sendchange(master, branch, c)
+            #sendchange(master, branch, c)
+            print branch, c['changeset']
 
     except urllib2.HTTPError, e:
         msg = e.fp.read()
@@ -147,29 +190,40 @@ def processBranch(branch, state, config):
 if __name__ == '__main__':
     from ConfigParser import RawConfigParser
     from optparse import OptionParser
+    import os
 
-    parser = OptionParser()
+    parser = OptionParser(__doc__)
     parser.set_defaults(
             config_file="hgpoller.ini",
             verbosity=log.INFO,
+            force=False,
             )
     parser.add_option("-f", "--config-file", dest="config_file")
-    parser.add_option("-v", "--verbose", dest="verbosity", action="store_const", const=log.DEBUG)
+    parser.add_option("-v", "--verbose", dest="verbosity",
+            action="store_const", const=log.DEBUG)
+    parser.add_option("--force", dest="force", action="store_true",
+            help="force to run even if it's too early")
 
     options, args = parser.parse_args()
+
+    if not os.path.exists(options.config_file):
+        parser.error("%s doesn't exist" % options.config_file)
 
     log.basicConfig(format="%(message)s", level=options.verbosity)
 
     config = RawConfigParser({
-        'tips_only': 'no',
+        'tips_only': 'yes',
         'username': None,
         'password': None,
         'ca_certs': None,
+        'lockfile': 'hgpoller.lock',
         'interval': 300,
         'state_file': 'state.json',
         'default_branch_only': "yes",
         })
     config.read(options.config_file)
+
+    lockfile(config.get('main', 'lockfile'))
 
     try:
         state = json.load(open(config.get('main', 'state_file')))
@@ -177,8 +231,22 @@ if __name__ == '__main__':
         state = {}
 
     branches = [s for s in config.sections() if s != 'main']
+    for a in args:
+        if a not in branches:
+            parser.error("Invalid branch name: %s" % a)
+
+    errors = False
     for branch in branches:
-        processBranch(branch, state, config)
+        if args and branch not in args:
+            continue
+        try:
+            processBranch(branch, state, config, force=options.force)
+        except:
+            log.exception("Couldn't handle branch %s", branch)
+            errors = True
 
     # Save state
     json.dump(state, open(config.get('main', 'state_file'), 'w'))
+
+    if errors:
+        raise SystemExit(1)

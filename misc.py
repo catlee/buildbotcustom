@@ -810,8 +810,9 @@ def generateBranchObjects(config, name):
             builders=[l10nNightlyBuilders['%s nightly' % b]['l10n_builder'] for b in l10nBuilders]
         ))
 
-    # Skip https repos until bug 592060 is fixed and we have a https-capable HgPoller
-    if config['hgurl'].startswith('https:'):
+    # Skip https repos until bug 592060 is fixed and we have a https-capable
+    # HgPoller
+    if config['hgurl'].startswith('https:') or config.get('disable_hgpoller'):
         pass
     else:
         if config.get('enable_try', False):
