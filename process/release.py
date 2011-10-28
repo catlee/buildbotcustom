@@ -39,11 +39,12 @@ from release.platforms import buildbot2ftp, sl_platform_map
 from release.paths import makeCandidatesDir
 from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler
 from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
-from buildbotcustom.status.errors import update_verify_error
+from buildbotcustom.status.errors import update_verify_error, \
+     permission_check_error
 from buildbotcustom.status.queued_command import QueuedCommandHandler
 from build.paths import getRealpath
 from release.info import getRuntimeTag, getReleaseTag
-from buildtools.queuedir import QueueDir
+from mozilla_buildtools.queuedir import QueueDir
 import BuildSlaves
 
 DEFAULT_PARALLELIZATION = 10
@@ -482,6 +483,18 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             builderNames=[builderPrefix('antivirus')]
         )
         schedulers.append(antivirus_scheduler)
+    if releaseConfig.get('enableAutomaticPushToMirrors') and \
+        releaseConfig.get('verifyConfigs'):
+        if releaseConfig.get('disableVirusCheck'):
+            upstream_scheduler = updates_scheduler
+        else:
+            upstream_scheduler = antivirus_scheduler
+        push_to_mirrors_scheduler = Dependent(
+            name=builderPrefix('push_to_mirrors'),
+            upstream=upstream_scheduler,
+            builderNames=[builderPrefix('push_to_mirrors')],
+        )
+        schedulers.append(push_to_mirrors_scheduler)
 
     if releaseConfig.get('majorUpdateRepoPath'):
         majorUpdateBuilderNames = []
@@ -831,7 +844,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 multiLocaleMerge=releaseConfig.get('mergeLocales', False),
                 compareLocalesRepoPath=branchConfig['compare_locales_repo_path'],
                 mozharnessRepoPath=branchConfig['mozharness_repo_path'],
-                mozharnessTag=branchConfig['mozharness_tag'],
+                mozharnessTag=releaseTag,
                 multiLocaleScript=pf.get('multi_locale_script'),
                 multiLocaleConfig=multiLocaleConfig,
                 mozharnessMultiOptions=mozharnessMultiOptions,
@@ -1122,7 +1135,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             oldBinaryName=releaseConfig['oldBinaryName'],
             testOlderPartials=releaseConfig['testOlderPartials'],
             longVersion=releaseConfig.get('longVersion', None),
-            oldLongVersion=releaseConfig.get('oldLongVersion', None)
+            oldLongVersion=releaseConfig.get('oldLongVersion', None),
+            schema=releaseConfig.get('snippetSchema', None),
         )
 
         builders.append({
@@ -1182,6 +1196,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             extra_args=[branchConfigFile, 'permissions'],
             script_timeout=3*60*60,
             scriptName='scripts/release/push-to-mirrors.sh',
+            log_eval_func=lambda c, s: regex_log_evaluator(
+                c, s, permission_check_error),
         )
 
         builders.append({
@@ -1243,7 +1259,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'env': builder_env,
             'properties': {
                 'slavebuilddir': reallyShort(builderPrefix('psh_mrrrs')),
-                'release_config': releaseConfigFile
+                'release_config': releaseConfigFile,
+                'script_repo_revision': releaseTag,
                 },
         })
         notify_builders.append(builderPrefix('push_to_mirrors'))
@@ -1325,7 +1342,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             oldRepoPath=sourceRepoInfo['path'],
             triggerSchedulers=[builderPrefix('major_update_verify')],
             releaseNotesUrl=releaseConfig['majorUpdateReleaseNotesUrl'],
-            fakeMacInfoTxt=releaseConfig['majorFakeMacInfoTxt']
+            fakeMacInfoTxt=releaseConfig['majorFakeMacInfoTxt'],
+            schema=releaseConfig.get('majorSnippetSchema', None),
         )
 
         builders.append({
