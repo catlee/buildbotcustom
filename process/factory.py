@@ -600,7 +600,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         ))
 
     def makeHgtoolStep(self, repo_url=None, wc='build', mirror_urls=None,
-            bundle_urls=None, env=None):
+            bundle_urls=None, env=None, clone_by_revision=False):
 
         if not env:
             env = self.env
@@ -608,14 +608,17 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         env['PROPERTIES_FILE'] = 'buildprops.json'
         cmd = ['python', WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py")]
 
-        if not mirror_urls and self.baseMirrorUrls:
+        if clone_by_revision:
+            cmd.append('--clone-by-revision')
+
+        if mirror_urls is None and self.baseMirrorUrls:
             mirror_urls = ["%s/%s" % (url, self.repoPath) for url in self.baseMirrorUrls]
 
         if mirror_urls:
             for url in mirror_urls:
                 cmd.extend(["--mirror", url])
 
-        if not bundle_urls and self.baseBundleUrls:
+        if bundle_urls is None and self.baseBundleUrls:
             bundle_urls = ["%s/%s.hg" % (url, self.getRepoName(self.repository)) for url in self.baseBundleUrls]
 
         if bundle_urls:
@@ -1745,24 +1748,10 @@ class TryBuildFactory(MercurialBuildFactory):
                 workdir='.'
             ))
 
-            env = self.env.copy()
-            env['PROPERTIES_FILE'] = 'buildprops.json'
-            cmd = [
-                    'python',
-                    WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
-                    'http://%s/%s' % (self.hgHost, self.repoPath),
-                    'build',
-                  ]
-            self.addStep(ShellCommand(
-                name='hg_update',
-                command=cmd,
-                timeout=60*60,
-                locks=[hg_try_lock.access('counting')],
-                env=env,
-                workdir='.',
-                haltOnFailure=True,
-                flunkOnFailure=True,
-            ))
+            step = self.makeHgtoolStep(clone_by_revision=True, bundle_urls=[])
+            step.locks = [hg_try_lock.access('counting')]
+            self.addStep(step)
+
         else:
             self.addStep(Mercurial(
             name='hg_update',
