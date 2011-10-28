@@ -622,6 +622,9 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             for url in bundle_urls:
                 cmd.extend(["--bundle", url])
 
+        if not repo_url:
+            repo_url = self.repository
+
         cmd.extend([repo_url, wc])
 
         return ShellCommand(
