@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 from datetime import datetime
 import os.path, re
-from time import strftime
 import urllib
 import random
 
@@ -347,7 +346,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
 
     def __init__(self, hgHost, repoPath, buildToolsRepoPath, buildSpace=0,
             clobberURL=None, clobberTime=None, buildsBeforeReboot=None,
-            branchName=None, baseWorkDir='build', hashType='sha512', **kwargs):
+            branchName=None, baseWorkDir='build', hashType='sha512',
+            baseMirrorUrls=None, baseBundleUrls=None, **kwargs):
         BuildFactory.__init__(self, **kwargs)
 
         if hgHost.endswith('/'):
@@ -362,6 +362,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         self.buildsBeforeReboot = buildsBeforeReboot
         self.baseWorkDir = baseWorkDir
         self.hashType = hashType
+        self.baseMirrorUrls = baseMirrorUrls
+        self.baseBundleUrls = baseBundleUrls
 
         self.repository = self.getRepository(repoPath)
         if branchName:
@@ -596,6 +598,41 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             workdir=directory,
             extract_fn = self.unsetFilepath,
         ))
+
+    def makeHgtoolStep(self, repo_url=None, wc='build', mirror_urls=None,
+            bundle_urls=None, env=None):
+
+        if not env:
+            env = self.env
+        env = env.copy()
+        env['PROPERTIES_FILE'] = 'buildprops.json'
+        cmd = ['python', WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py")]
+
+        if not mirror_urls and self.baseMirrorUrls:
+            mirror_urls = ["%s/%s" % (url, self.repoPath) for url in self.baseMirrorUrls]
+
+        if mirror_urls:
+            for url in mirror_urls:
+                cmd.extend(["--mirror", url])
+
+        if not bundle_urls and self.baseBundleUrls:
+            bundle_urls = ["%s/%s.hg" % (url, self.getRepoName(self.repository)) for url in self.baseBundleUrls]
+
+        if bundle_urls:
+            for url in bundle_urls:
+                cmd.extend(["--bundle", url])
+
+        cmd.extend([repo_url, wc])
+
+        return ShellCommand(
+            name='hg_update',
+            command=cmd,
+            timeout=60*60,
+            env=env,
+            workdir='.',
+            haltOnFailure=True,
+            flunkOnFailure=True,
+        )
 
 
 class MercurialBuildFactory(MozillaBuildFactory):
@@ -958,23 +995,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 workdir='.'
             ))
 
-            env = self.env.copy()
-            env['PROPERTIES_FILE'] = 'buildprops.json'
-            cmd = [
-                    'python',
-                    WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
-                    'http://%s/%s' % (self.hgHost, self.repoPath),
-                    'build',
-                  ]
-            self.addStep(ShellCommand(
-                name='hg_update',
-                command=cmd,
-                timeout=60*60,
-                env=env,
-                workdir='.',
-                haltOnFailure=True,
-                flunkOnFailure=True,
-            ))
+            self.addStep(self.makeHgtoolStep())
+
             self.addStep(SetProperty(
                 name = 'set_got_revision',
                 command=['hg', 'parent', '--template={node}'],
