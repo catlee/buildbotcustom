@@ -600,7 +600,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         ))
 
     def makeHgtoolStep(self, name='hg_update', repo_url=None, wc=None,
-            mirror_urls=None, bundle_urls=None, env=None,
+            mirrors=None, bundles=None, env=None,
             clone_by_revision=False, rev=None, workdir='build',
             use_properties=True, locks=None):
 
@@ -614,19 +614,19 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         if clone_by_revision:
             cmd.append('--clone-by-revision')
 
-        if mirror_urls is None and self.baseMirrorUrls:
-            mirror_urls = ["%s/%s" % (url, self.repoPath) for url in self.baseMirrorUrls]
+        if mirrors is None and self.baseMirrorUrls:
+            mirrors = ["%s/%s" % (url, self.repoPath) for url in self.baseMirrorUrls]
 
-        if mirror_urls:
-            for url in mirror_urls:
-                cmd.extend(["--mirror", url])
+        if mirrors:
+            for mirror in mirrors:
+                cmd.extend(["--mirror", mirror])
 
-        if bundle_urls is None and self.baseBundleUrls:
-            bundle_urls = ["%s/%s.hg" % (url, self.getRepoName(self.repository)) for url in self.baseBundleUrls]
+        if bundles is None and self.baseBundleUrls:
+            bundles = ["%s/%s.hg" % (url, self.getRepoName(self.repository)) for url in self.baseBundleUrls]
 
-        if bundle_urls:
-            for url in bundle_urls:
-                cmd.extend(["--bundle", url])
+        if bundles:
+            for bundle in bundles:
+                cmd.extend(["--bundle", bundle])
 
         if not repo_url:
             repo_url = self.repository
@@ -1763,7 +1763,7 @@ class TryBuildFactory(MercurialBuildFactory):
 
             step = self.makeHgtoolStep(
                     clone_by_revision=True,
-                    bundle_urls=[],
+                    bundles=[],
                     wc='build',
                     workdir='.',
                     locks=[hg_try_lock.access('counting')],
@@ -3049,6 +3049,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                 workdir='%s/%s' % (self.baseWorkDir, self.l10nRepoPath),
                 locks=[hg_l10n_lock.access('counting')],
                 use_properties=False,
+                mirrors=[],
                 )
         self.addStep(step)
 

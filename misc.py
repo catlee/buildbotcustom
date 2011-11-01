@@ -1418,6 +1418,7 @@ def generateBranchObjects(config, name):
                         buildSpace=l10nSpace,
                         clobberURL=config['base_clobber_url'],
                         clobberTime=clobberTime,
+                        baseMirrorUrls=config.get('base_mirror_urls'),
                     )
                     mozilla2_l10n_nightly_builder = {
                         'name': l10nNightlyBuilders[nightly_builder]['l10n_builder'],
@@ -1533,6 +1534,7 @@ def generateBranchObjects(config, name):
                 buildSpace=l10nSpace,
                 clobberURL=config['base_clobber_url'],
                 clobberTime=clobberTime,
+                baseMirrorUrls=config.get('base_mirror_urls'),
             )
             mozilla2_l10n_dep_builder = {
                 'name': l10nBuilders[pf['base_name']]['l10n_builder'],
