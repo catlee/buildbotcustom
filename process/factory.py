@@ -599,9 +599,10 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             extract_fn = self.unsetFilepath,
         ))
 
-    def makeHgtoolStep(self, repo_url=None, wc=None, mirror_urls=None,
-            bundle_urls=None, env=None, clone_by_revision=False, rev=None,
-            workdir='build', use_properties=True, locks=None):
+    def makeHgtoolStep(self, name='hg_update', repo_url=None, wc=None,
+            mirror_urls=None, bundle_urls=None, env=None,
+            clone_by_revision=False, rev=None, workdir='build',
+            use_properties=True, locks=None):
 
         if not env:
             env = self.env
@@ -638,8 +639,11 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         if wc:
             cmd.append(wc)
 
+        if locks is None:
+            locks = []
+
         return ShellCommand(
-            name='hg_update',
+            name=name,
             command=cmd,
             timeout=60*60,
             env=env,
@@ -3028,16 +3032,17 @@ class BaseRepackFactory(MozillaBuildFactory):
 
     def getSources(self):
         step = self.makeHgtoolStep(
+                name='get_enUS_src',
                 wc=self.origSrcDir,
                 rev=WithProperties("%(en_revision)s"),
                 locks=[hg_l10n_lock.access('counting')],
                 workdir=self.baseWorkDir,
                 use_properties=False,
                 )
-        step.name = 'get_enUS_src'
         self.addStep(step)
 
         step = self.makeHgtoolStep(
+                name='get_locale_src',
                 rev=WithProperties("%(l10n_revision)s"),
                 repo_url=WithProperties("http://" + self.hgHost + "/" + \
                                  self.l10nRepoPath + "/%(locale)s"),
@@ -3045,7 +3050,6 @@ class BaseRepackFactory(MozillaBuildFactory):
                 locks=[hg_l10n_lock.access('counting')],
                 use_properties=False,
                 )
-        step.name = 'get_locale_src'
         self.addStep(step)
 
     def updateEnUS(self):
