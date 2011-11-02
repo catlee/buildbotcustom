@@ -1356,6 +1356,8 @@ def generateBranchObjects(config, name):
                 l10nCheckTest=pf.get('l10n_check_test', False),
                 android_signing=pf.get('android_signing', False),
                 post_upload_include_platform=pf.get('post_upload_include_platform', False),
+                baseMirrorUrls=config.get('base_mirror_urls'),
+                baseBundleUrls=config.get('base_bundle_urls'),
                 **nightly_kwargs
             )
 
