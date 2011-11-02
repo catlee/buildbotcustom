@@ -1383,6 +1383,8 @@ def generateBranchObjects(config, name):
                     # TODO Linux and mac are not working with mozconfig at this point
                     # and this will disable it for now. We will fix this in bug 518359.
                     env = {}
+                    if 'HG_SHARE_BASE_DIR' in platform_env:
+                        env['HG_SHARE_BASE_DIR'] = platform_env['HG_SHARE_BASE_DIR']
                     objdir = ''
                     mozconfig = None
 
@@ -1516,7 +1518,11 @@ def generateBranchObjects(config, name):
         # We still want l10n_dep builds if nightlies are off
         if config['enable_l10n'] and platform in config['l10n_platforms'] and \
            config['enable_l10n_onchange']:
+            env = {}
+            if 'HG_SHARE_BASE_DIR' in platform_env:
+                env['HG_SHARE_BASE_DIR'] = platform_env['HG_SHARE_BASE_DIR']
             mozilla2_l10n_dep_factory = NightlyRepackFactory(
+                env=env,
                 platform=platform,
                 hgHost=config['hghost'],
                 tree=config['l10n_tree'],
