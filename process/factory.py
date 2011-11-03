@@ -6447,6 +6447,17 @@ class MozillaTestFactory(MozillaBuildFactory):
 
     def addTearDownSteps(self):
         self.addCleanupSteps()
+        if 'macosx64' in self.platform:
+            # This will fail cleanly and silently on 10.6
+            # but is important on 10.7
+            self.addStep(ShellCommand(
+                name="clear_saved_state",
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'rm -rf Library/Saved\ Application\ State/*.savedState']
+            ))
         if self.buildsBeforeReboot and self.buildsBeforeReboot > 0:
             #This step is to deal with minis running linux that don't reboot properly
             #see bug561442
@@ -6497,6 +6508,15 @@ class UnittestPackagedBuildFactory(MozillaTestFactory):
             ))
 
     def addRunTestSteps(self):
+        if self.platform.startswith('mac'):
+            self.addStep(ShellCommand(
+                name='show_resolution',
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'screenresolution get && screenresolution list']
+            ))
         # Run them!
         if self.stackwalk_cgi and self.downloadSymbols:
             symbols_path = '%(symbols_url)s'
@@ -7032,7 +7052,7 @@ class TalosFactory(RequestSortingBuildFactory):
             )
 
     def addDmgInstaller(self):
-        if self.OS in ('leopard', 'tiger', 'snowleopard'):
+        if self.OS in ('leopard', 'tiger', 'snowleopard', 'lion'):
             self.addStep(DownloadFile(
              url=WithProperties("%s/tools/buildfarm/utils/installdmg.sh" % self.supportUrlBase),
              workdir=self.workdirBase,
@@ -7094,7 +7114,7 @@ class TalosFactory(RequestSortingBuildFactory):
              command=["chmod", "-v", "-R", "a+x", "."],
              env=self.env)
             )
-        if self.OS in ('tiger', 'leopard', 'snowleopard'):
+        if self.OS in ('tiger', 'leopard', 'snowleopard', 'lion'):
             self.addStep(FindFile(
              workdir=os.path.join(self.workdirBase, "talos"),
              filename="%s-bin" % self.productName,
@@ -7284,7 +7304,7 @@ class TalosFactory(RequestSortingBuildFactory):
     def addPluginInstallSteps(self):
         if self.plugins:
             #32 bit (includes mac browsers)
-            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', 'leopard', 'snowleopard', 'leopard-o'):
+            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', 'leopard', 'snowleopard', 'leopard-o', 'lion'):
                 self.addStep(DownloadFile(
                  url=WithProperties("%s/%s" % (self.supportUrlBase, self.plugins['32'])),
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
@@ -7407,6 +7427,15 @@ class TalosFactory(RequestSortingBuildFactory):
         )
 
     def addRunTestStep(self):
+        if self.OS in ('lion', 'snowleopard'):
+            self.addStep(ShellCommand(
+                name='show_resolution',
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'screenresolution get && screenresolution list']
+            ))
         self.addStep(talos_steps.MozillaRunPerfTests(
          warnOnWarnings=True,
          workdir=os.path.join(self.workdirBase, "talos/"),
@@ -7417,6 +7446,15 @@ class TalosFactory(RequestSortingBuildFactory):
         )
 
     def addRebootStep(self):
+        if self.OS in ('lion',):
+            self.addStep(ShellCommand(
+                name="clear_saved_state",
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'rm -rf Library/Saved\ Application\ State/*.savedState']
+            ))
         def do_disconnect(cmd):
             try:
                 if 'SCHEDULED REBOOT' in cmd.logs['stdio'].getText():
