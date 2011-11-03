@@ -606,9 +606,11 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
 
         if not env:
             env = self.env
-        env = env.copy()
+
         if use_properties:
+            env = env.copy()
             env['PROPERTIES_FILE'] = 'buildprops.json'
+
         cmd = ['python', WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py")]
 
         if clone_by_revision:
