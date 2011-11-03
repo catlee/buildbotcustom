@@ -644,7 +644,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         if locks is None:
             locks = []
 
-        return ShellCommand(
+        return RetryingShellCommand(
             name=name,
             command=cmd,
             timeout=60*60,
