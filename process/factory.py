@@ -629,6 +629,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  multiLocaleScript=None,
                  multiLocaleConfig=None,
                  mozharnessMultiOptions=None,
+                 signingServers=None,
                  **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
@@ -777,6 +778,17 @@ class MercurialBuildFactory(MozillaBuildFactory):
                                                              self.stagePlatform)
             self.logBaseUrl = 'http://%s/pub/mozilla.org/%s/%s' % \
                         ( self.stageServer, self.stageProduct, self.logUploadDir)
+
+        if signingServers:
+            cmd = WithProperties(" ".join([
+                env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
+                "-s", "~/.ssh/%s" % kwargs['stageSshKey'],
+                "-c", "%(toolsdir)s/release/signing/server.cert"
+                ]))
+            for ss in signingServers:
+                cmd.extend(['-H', ss])
+            self.env['MOZ_SIGN_CMD'] = cmd
+            self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
 
         # Need to override toolsdir as set by MozillaBuildFactory because
         # we need Windows-style paths.
