@@ -780,14 +780,14 @@ class MercurialBuildFactory(MozillaBuildFactory):
                         ( self.stageServer, self.stageProduct, self.logUploadDir)
 
         if signingServers:
-            cmd = WithProperties(" ".join([
+            cmd = " ".join([
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
                 "-s", "~/.ssh/%s" % self.stageSshKey,
                 "-c", "%(toolsdir)s/release/signing/server.cert"
-                ]))
+                ])
             for ss in signingServers:
                 cmd.extend(['-H', ss])
-            self.env['MOZ_SIGN_CMD'] = cmd
+            self.env['MOZ_SIGN_CMD'] = WithProperties(cmd)
             self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
 
         # Need to override toolsdir as set by MozillaBuildFactory because
