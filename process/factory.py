@@ -782,7 +782,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if signingServers:
             cmd = WithProperties(" ".join([
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
-                "-s", "~/.ssh/%s" % kwargs['stageSshKey'],
+                "-s", "~/.ssh/%s" % self.stageSshKey,
                 "-c", "%(toolsdir)s/release/signing/server.cert"
                 ]))
             for ss in signingServers:
