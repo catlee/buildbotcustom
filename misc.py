@@ -1123,7 +1123,7 @@ def generateBranchObjects(config, name):
                 'l10nCheckTest': pf.get('l10n_check_test', False),
                 'android_signing': pf.get('android_signing', False),
                 'post_upload_include_platform': pf.get('post_upload_include_platform', False),
-                'signingServers': config.get('signingServers', None),
+                'signingServers': config.get('signing_servers', None),
             }
             factory_kwargs.update(extra_args)
 
