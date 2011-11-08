@@ -1407,7 +1407,7 @@ def generateBranchObjects(config, name):
                     mozconfig = None
 
                     mozilla2_l10n_nightly_factory = NightlyRepackFactory(
-                        env=env,
+                        env=platform_env,
                         objdir=objdir,
                         platform=platform,
                         hgHost=config['hghost'],
