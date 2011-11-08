@@ -1440,6 +1440,7 @@ def generateBranchObjects(config, name):
                         buildSpace=l10nSpace,
                         clobberURL=config['base_clobber_url'],
                         clobberTime=clobberTime,
+                        signingServers=config.get('signing_servers'),
                     )
                     mozilla2_l10n_nightly_builder = {
                         'name': l10nNightlyBuilders[nightly_builder]['l10n_builder'],
@@ -1490,7 +1491,7 @@ def generateBranchObjects(config, name):
                     buildSpace=buildSpace,
                     clobberURL=config['base_clobber_url'],
                     clobberTime=clobberTime,
-                    buildsBeforeReboot=pf['builds_before_reboot']
+                    buildsBeforeReboot=pf['builds_before_reboot'],
                 )
                 mozilla2_shark_builder = {
                     'name': '%s shark' % pf['base_name'],
@@ -1536,6 +1537,7 @@ def generateBranchObjects(config, name):
         if config['enable_l10n'] and platform in config['l10n_platforms'] and \
            config['enable_l10n_onchange']:
             mozilla2_l10n_dep_factory = NightlyRepackFactory(
+                env=platform_env,
                 platform=platform,
                 hgHost=config['hghost'],
                 tree=config['l10n_tree'],
@@ -1555,6 +1557,7 @@ def generateBranchObjects(config, name):
                 buildSpace=l10nSpace,
                 clobberURL=config['base_clobber_url'],
                 clobberTime=clobberTime,
+                signingServers=config.get('signing_servers'),
             )
             mozilla2_l10n_dep_builder = {
                 'name': l10nBuilders[pf['base_name']]['l10n_builder'],
