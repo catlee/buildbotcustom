@@ -789,9 +789,9 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 cmd.extend(['-H', ss])
             self.env['MOZ_SIGN_CMD'] = WithProperties(" ".join(cmd))
             if platform.startswith('win32'):
-                self.env['PYTHONPATH'] = WithProperties('%(win32_basedir)s/build/build/poster.zip')
+                self.env['PYTHONPATH'] = WithProperties('%(win32_basedir)s/build/%(branch)s/build/poster.zip')
             else:
-                self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
+                self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/%(branch)s/build/poster.zip')
 
         # Need to override toolsdir as set by MozillaBuildFactory because
         # we need Windows-style paths.
