@@ -2781,7 +2781,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                  mozconfig=None, configRepoPath=None, configSubDir=None,
                  tree="notset", mozillaDir=None, l10nTag='default',
                  mergeLocales=True, mozconfigBranch="production", 
-                 testPrettyNames=False, signingServer=None, **kwargs):
+                 testPrettyNames=False, signingServers=None, **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
         self.env = env.copy()
