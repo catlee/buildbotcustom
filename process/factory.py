@@ -2821,9 +2821,9 @@ class BaseRepackFactory(MozillaBuildFactory):
                 cmd.extend(['-H', ss])
             self.env['MOZ_SIGN_CMD'] = WithProperties(" ".join(cmd))
             if platform.startswith('win32'):
-                self.env['PYTHONPATH'] = WithProperties('%(win32_basedir)s/build/build/poster.zip')
+                self.env['PYTHONPATH'] = WithProperties('%(win32_basedir)s/build/%(branch)s/build/poster.zip')
             else:
-                self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
+                self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/%(branch)s/build/poster.zip')
 
         self.addStep(SetBuildProperty(
          property_name='tree',
