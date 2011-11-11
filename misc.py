@@ -1124,6 +1124,8 @@ def generateBranchObjects(config, name):
                 'android_signing': pf.get('android_signing', False),
                 'post_upload_include_platform': pf.get('post_upload_include_platform', False),
                 'signingServers': config.get('dep_signing_servers', None),
+                'baseMirrorUrls': config.get('base_mirror_urls'),
+                'baseBundleUrls': config.get('base_bundle_urls'),
             }
             factory_kwargs.update(extra_args)
 
@@ -1379,6 +1381,8 @@ def generateBranchObjects(config, name):
                 android_signing=pf.get('android_signing', False),
                 post_upload_include_platform=pf.get('post_upload_include_platform', False),
                 signingServers=pf.get('nightly_signing_servers'),
+                baseMirrorUrls=config.get('base_mirror_urls'),
+                baseBundleUrls=config.get('base_bundle_urls'),
                 **nightly_kwargs
             )
 
@@ -1403,7 +1407,6 @@ def generateBranchObjects(config, name):
                 if platform in config['l10n_platforms']:
                     # TODO Linux and mac are not working with mozconfig at this point
                     # and this will disable it for now. We will fix this in bug 518359.
-                    env = {}
                     objdir = ''
                     mozconfig = None
 
@@ -1442,6 +1445,7 @@ def generateBranchObjects(config, name):
                         clobberURL=config['base_clobber_url'],
                         clobberTime=clobberTime,
                         signingServers=config.get('signing_servers'),
+                        baseMirrorUrls=config.get('base_mirror_urls'),
                     )
                     mozilla2_l10n_nightly_builder = {
                         'name': l10nNightlyBuilders[nightly_builder]['l10n_builder'],
@@ -1560,6 +1564,7 @@ def generateBranchObjects(config, name):
                 clobberURL=config['base_clobber_url'],
                 clobberTime=clobberTime,
                 signingServers=config.get('signing_servers'),
+                baseMirrorUrls=config.get('base_mirror_urls'),
             )
             mozilla2_l10n_dep_builder = {
                 'name': l10nBuilders[pf['base_name']]['l10n_builder'],
