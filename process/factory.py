@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 from datetime import datetime
 import os.path, re
-from time import strftime
 import urllib
 import random
 
@@ -347,7 +346,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
 
     def __init__(self, hgHost, repoPath, buildToolsRepoPath, buildSpace=0,
             clobberURL=None, clobberTime=None, buildsBeforeReboot=None,
-            branchName=None, baseWorkDir='build', hashType='sha512', **kwargs):
+            branchName=None, baseWorkDir='build', hashType='sha512',
+            baseMirrorUrls=None, baseBundleUrls=None, **kwargs):
         BuildFactory.__init__(self, **kwargs)
 
         if hgHost.endswith('/'):
@@ -362,6 +362,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
         self.buildsBeforeReboot = buildsBeforeReboot
         self.baseWorkDir = baseWorkDir
         self.hashType = hashType
+        self.baseMirrorUrls = baseMirrorUrls
+        self.baseBundleUrls = baseBundleUrls
 
         self.repository = self.getRepository(repoPath)
         if branchName:
@@ -596,6 +598,62 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
             workdir=directory,
             extract_fn = self.unsetFilepath,
         ))
+
+    def makeHgtoolStep(self, name='hg_update', repo_url=None, wc=None,
+            mirrors=None, bundles=None, env=None,
+            clone_by_revision=False, rev=None, workdir='build',
+            use_properties=True, locks=None):
+
+        if not env:
+            env = self.env
+
+        if use_properties:
+            env = env.copy()
+            env['PROPERTIES_FILE'] = 'buildprops.json'
+
+        cmd = ['python', WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py")]
+
+        if clone_by_revision:
+            cmd.append('--clone-by-revision')
+
+        if mirrors is None and self.baseMirrorUrls:
+            mirrors = ["%s/%s" % (url, self.repoPath) for url in self.baseMirrorUrls]
+
+        if mirrors:
+            for mirror in mirrors:
+                cmd.extend(["--mirror", mirror])
+
+        if bundles is None and self.baseBundleUrls:
+            bundles = ["%s/%s.hg" % (url, self.getRepoName(self.repository)) for url in self.baseBundleUrls]
+
+        if bundles:
+            for bundle in bundles:
+                cmd.extend(["--bundle", bundle])
+
+        if not repo_url:
+            repo_url = self.repository
+
+        if rev:
+            cmd.extend(["--rev", rev])
+
+        cmd.append(repo_url)
+
+        if wc:
+            cmd.append(wc)
+
+        if locks is None:
+            locks = []
+
+        return RetryingShellCommand(
+            name=name,
+            command=cmd,
+            timeout=60*60,
+            env=env,
+            workdir=workdir,
+            haltOnFailure=True,
+            flunkOnFailure=True,
+            locks=locks,
+        )
 
 
 class MercurialBuildFactory(MozillaBuildFactory):
@@ -958,23 +1016,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 workdir='.'
             ))
 
-            env = self.env.copy()
-            env['PROPERTIES_FILE'] = 'buildprops.json'
-            cmd = [
-                    'python',
-                    WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
-                    'http://%s/%s' % (self.hgHost, self.repoPath),
-                    'build',
-                  ]
-            self.addStep(ShellCommand(
-                name='hg_update',
-                command=cmd,
-                timeout=60*60,
-                env=env,
-                workdir='.',
-                haltOnFailure=True,
-                flunkOnFailure=True,
-            ))
+            self.addStep(self.makeHgtoolStep(wc='build', workdir='.'))
+
             self.addStep(SetProperty(
                 name = 'set_got_revision',
                 command=['hg', 'parent', '--template={node}'],
@@ -1151,9 +1194,6 @@ class MercurialBuildFactory(MozillaBuildFactory):
         * leakEnv Environment used for running firefox.
         * graphAndUpload Used to prevent the try jobs from doing talos graph
           posts and uploading logs."""
-        if self.platform == 'macosx64':
-            return
-
         self.addStep(AliveTest(
           env=leakEnv,
           workdir='build/%s/_leaktest' % self.mozillaObjdir,
@@ -1237,7 +1277,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
               workdir='.',
               command=['mv', 'sdleak.tree', 'sdleak.tree.raw']
               ))
-                # Bug 571443 - disable fix-macosx-stack.pl
+            # Bug 571443 - disable fix-macosx-stack.pl
             if self.platform == 'macosx64':
                 self.addStep(ShellCommand(
                   workdir='.',
@@ -1720,24 +1760,15 @@ class TryBuildFactory(MercurialBuildFactory):
                 workdir='.'
             ))
 
-            env = self.env.copy()
-            env['PROPERTIES_FILE'] = 'buildprops.json'
-            cmd = [
-                    'python',
-                    WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
-                    'http://%s/%s' % (self.hgHost, self.repoPath),
-                    'build',
-                  ]
-            self.addStep(ShellCommand(
-                name='hg_update',
-                command=cmd,
-                timeout=60*60,
-                locks=[hg_try_lock.access('counting')],
-                env=env,
-                workdir='.',
-                haltOnFailure=True,
-                flunkOnFailure=True,
-            ))
+            step = self.makeHgtoolStep(
+                    clone_by_revision=True,
+                    bundles=[],
+                    wc='build',
+                    workdir='.',
+                    locks=[hg_try_lock.access('counting')],
+                    )
+            self.addStep(step)
+
         else:
             self.addStep(Mercurial(
             name='hg_update',
@@ -2999,40 +3030,27 @@ class BaseRepackFactory(MozillaBuildFactory):
         ))
 
     def getSources(self):
-        self.addStep(ShellCommand(
-         name='get_enUS_src',
-         command=[
-                  'python',
-                  WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
-                  WithProperties("--rev=%(en_revision)s"),
-                  'http://%s/%s' % (self.hgHost, self.repoPath),
-                  self.origSrcDir,
-                 ],
-         env=self.env,
-         descriptionDone="en-US source",
-         workdir=self.baseWorkDir,
-         locks=[hg_l10n_lock.access('counting')],
-         haltOnFailure=True,
-         flunkOnFailure=True,
-         timeout=30*60 # 30 minutes
-        ))
-        self.addStep(ShellCommand(
-         name='get_locale_src',
-         command=[
-                  'python',
-                  WithProperties("%(toolsdir)s/buildfarm/utils/hgtool.py"),
-                  WithProperties("--rev=%(l10n_revision)s"),
-                  WithProperties("http://" + self.hgHost + "/" + \
-                                 self.l10nRepoPath + "/%(locale)s")
-                 ],
-         env=self.env,
-         descriptionDone="locale source",
-         workdir='%s/%s' % (self.baseWorkDir, self.l10nRepoPath),
-         locks=[hg_l10n_lock.access('counting')],
-         haltOnFailure=True,
-         flunkOnFailure=True,
-         timeout=5*60, # 5 minutes
-        ))
+        step = self.makeHgtoolStep(
+                name='get_enUS_src',
+                wc=self.origSrcDir,
+                rev=WithProperties("%(en_revision)s"),
+                locks=[hg_l10n_lock.access('counting')],
+                workdir=self.baseWorkDir,
+                use_properties=False,
+                )
+        self.addStep(step)
+
+        step = self.makeHgtoolStep(
+                name='get_locale_src',
+                rev=WithProperties("%(l10n_revision)s"),
+                repo_url=WithProperties("http://" + self.hgHost + "/" + \
+                                 self.l10nRepoPath + "/%(locale)s"),
+                workdir='%s/%s' % (self.baseWorkDir, self.l10nRepoPath),
+                locks=[hg_l10n_lock.access('counting')],
+                use_properties=False,
+                mirrors=[],
+                )
+        self.addStep(step)
 
     def updateEnUS(self):
         '''Update the en-US source files to the revision used by
@@ -6431,6 +6449,17 @@ class MozillaTestFactory(MozillaBuildFactory):
 
     def addTearDownSteps(self):
         self.addCleanupSteps()
+        if 'macosx64' in self.platform:
+            # This will fail cleanly and silently on 10.6
+            # but is important on 10.7
+            self.addStep(ShellCommand(
+                name="clear_saved_state",
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'rm -rf Library/Saved\ Application\ State/*.savedState']
+            ))
         if self.buildsBeforeReboot and self.buildsBeforeReboot > 0:
             #This step is to deal with minis running linux that don't reboot properly
             #see bug561442
@@ -6481,6 +6510,15 @@ class UnittestPackagedBuildFactory(MozillaTestFactory):
             ))
 
     def addRunTestSteps(self):
+        if self.platform.startswith('mac'):
+            self.addStep(ShellCommand(
+                name='show_resolution',
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'screenresolution get && screenresolution list']
+            ))
         # Run them!
         if self.stackwalk_cgi and self.downloadSymbols:
             symbols_path = '%(symbols_url)s'
@@ -6908,11 +6946,17 @@ class TalosFactory(RequestSortingBuildFactory):
         if self.addonTester:
             self.addDownloadExtensionStep()
         self.addSetupSteps()
+        self.addPluginInstallSteps()
+        self.addPagesetInstallSteps()
+        self.addAddOnInstallSteps()
         if self.remoteTests:
             self.addPrepareDeviceStep()
         self.addUpdateConfigStep()
         self.addRunTestStep()
         self.addRebootStep()
+
+    def _propertyIsSet(self, step, prop):
+        return step.build.getProperties().has_key(prop)
 
     def addInfoSteps(self):
         self.addStep(OutputStep(
@@ -7010,9 +7054,9 @@ class TalosFactory(RequestSortingBuildFactory):
             )
 
     def addDmgInstaller(self):
-        if self.OS in ('leopard', 'tiger', 'snowleopard'):
+        if self.OS in ('leopard', 'tiger', 'snowleopard', 'lion'):
             self.addStep(DownloadFile(
-             url="%s/tools/buildfarm/utils/installdmg.sh" % self.supportUrlBase,
+             url=WithProperties("%s/tools/buildfarm/utils/installdmg.sh" % self.supportUrlBase),
              workdir=self.workdirBase,
             ))
 
@@ -7034,7 +7078,7 @@ class TalosFactory(RequestSortingBuildFactory):
         if (self.releaseTester and (self.OS in ('xp', 'vista', 'win7', 'w764'))): 
             #build is packaged in a windows installer 
             self.addStep(DownloadFile( 
-             url="%s/tools/buildfarm/utils/firefoxInstallConfig.ini" % self.supportUrlBase,
+             url=WithProperties("%s/tools/buildfarm/utils/firefoxInstallConfig.ini" % self.supportUrlBase),
              workdir=self.workdirBase,
             ))
             self.addStep(SetProperty(
@@ -7072,7 +7116,7 @@ class TalosFactory(RequestSortingBuildFactory):
              command=["chmod", "-v", "-R", "a+x", "."],
              env=self.env)
             )
-        if self.OS in ('tiger', 'leopard', 'snowleopard'):
+        if self.OS in ('tiger', 'leopard', 'snowleopard', 'lion'):
             self.addStep(FindFile(
              workdir=os.path.join(self.workdirBase, "talos"),
              filename="%s-bin" % self.productName,
@@ -7193,7 +7237,7 @@ class TalosFactory(RequestSortingBuildFactory):
     def addSetupSteps(self):
         if not self.remoteTests:
             self.addStep(DownloadFile(
-             url="%s/tools/buildfarm/maintenance/count_and_reboot.py" % self.supportUrlBase,
+             url=WithProperties("%s/tools/buildfarm/maintenance/count_and_reboot.py" % self.supportUrlBase),
              workdir=self.workdirBase,
             ))
 
@@ -7206,7 +7250,7 @@ class TalosFactory(RequestSortingBuildFactory):
 
         if self.customTalos is None and not self.remoteTests:
             self.addStep(DownloadFile(
-              url="%s/zips/talos.zip" % self.supportUrlBase,
+              url=WithProperties("%s/zips/talos.zip" % self.supportUrlBase),
               workdir=self.workdirBase,
             ))
             self.addStep(UnpackFile(
@@ -7214,7 +7258,7 @@ class TalosFactory(RequestSortingBuildFactory):
              workdir=self.workdirBase,
             ))
             self.addStep(DownloadFile(
-             url="%s/xpis/pageloader.xpi" % self.supportUrlBase,
+             url=WithProperties("%s/xpis/pageloader.xpi" % self.supportUrlBase),
              workdir=os.path.join(self.workdirBase, "talos/page_load_test"))
             )
         elif self.remoteTests:
@@ -7259,11 +7303,12 @@ class TalosFactory(RequestSortingBuildFactory):
              workdir=self.workdirBase,
             ))
 
+    def addPluginInstallSteps(self):
         if self.plugins:
             #32 bit (includes mac browsers)
-            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', 'leopard', 'snowleopard', 'leopard-o'):
+            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', 'leopard', 'snowleopard', 'leopard-o', 'lion'):
                 self.addStep(DownloadFile(
-                 url="%s/%s" % (self.supportUrlBase, self.plugins['32']),
+                 url=WithProperties("%s/%s" % (self.supportUrlBase, self.plugins['32'])),
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
                 ))
                 self.addStep(UnpackFile(
@@ -7273,7 +7318,7 @@ class TalosFactory(RequestSortingBuildFactory):
             #64 bit
             if self.OS in ('w764', 'fedora64'):
                 self.addStep(DownloadFile(
-                 url="%s/%s" % (self.supportUrlBase, self.plugins['64']),
+                 url=WithProperties("%s/%s" % (self.supportUrlBase, self.plugins['64'])),
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
                 ))
                 self.addStep(UnpackFile(
@@ -7281,9 +7326,10 @@ class TalosFactory(RequestSortingBuildFactory):
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
                 ))
 
+    def addPagesetInstallSteps(self):
         for pageset in self.pagesets:
             self.addStep(DownloadFile(
-             url="%s/%s" % (self.supportUrlBase, pageset),
+             url=WithProperties("%s/%s" % (self.supportUrlBase, pageset)),
              workdir=os.path.join(self.workdirBase, "talos/page_load_test"),
             ))
             self.addStep(UnpackFile(
@@ -7291,9 +7337,10 @@ class TalosFactory(RequestSortingBuildFactory):
              workdir=os.path.join(self.workdirBase, "talos/page_load_test"),
             ))
 
+    def addAddOnInstallSteps(self):
         for addOn in self.talosAddOns:
             self.addStep(DownloadFile(
-             url="%s/%s" % (self.supportUrlBase, addOn),
+             url=WithProperties("%s/%s" % (self.supportUrlBase, addOn)),
              workdir=os.path.join(self.workdirBase, "talos"),
             ))
             self.addStep(UnpackFile(
@@ -7347,6 +7394,7 @@ class TalosFactory(RequestSortingBuildFactory):
          name="Download extension",
          ignore_certs=True,
          wget_args=['-O', TalosFactory.extName],
+         doStepIf=lambda step: self._propertyIsSet(step, 'addonUrl')
         ))
 
     def addPrepareDeviceStep(self):
@@ -7381,6 +7429,15 @@ class TalosFactory(RequestSortingBuildFactory):
         )
 
     def addRunTestStep(self):
+        if self.OS in ('lion', 'snowleopard'):
+            self.addStep(ShellCommand(
+                name='show_resolution',
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'screenresolution get && screenresolution list']
+            ))
         self.addStep(talos_steps.MozillaRunPerfTests(
          warnOnWarnings=True,
          workdir=os.path.join(self.workdirBase, "talos/"),
@@ -7391,6 +7448,15 @@ class TalosFactory(RequestSortingBuildFactory):
         )
 
     def addRebootStep(self):
+        if self.OS in ('lion',):
+            self.addStep(ShellCommand(
+                name="clear_saved_state",
+                flunkOnFailure=False,
+                warnOnFailure=False,
+                haltOnFailure=False,
+                workdir='/Users/cltbld',
+                command=['bash', '-c', 'rm -rf Library/Saved\ Application\ State/*.savedState']
+            ))
         def do_disconnect(cmd):
             try:
                 if 'SCHEDULED REBOOT' in cmd.logs['stdio'].getText():
@@ -7435,6 +7501,81 @@ class TalosFactory(RequestSortingBuildFactory):
              force_disconnect=do_disconnect,
              env=self.env,
             ))
+
+class RuntimeTalosFactory(TalosFactory):
+    def __init__(self, configOptions=None, plugins=None, pagesets=None,
+                 supportUrlBase=None, talosAddOns=None, addonTester=True,
+                 *args, **kwargs):
+        if not configOptions:
+            # TalosFactory/MozillaUpdateConfig require this format for this variable
+            # MozillaUpdateConfig allows for adding additional options at runtime,
+            # which is how this factory is intended to be used.
+            configOptions = {'suites': []}
+        # For the rest of these, make them overridable with WithProperties
+        if not plugins:
+            plugins = {'32': '%(plugin)s', '64': '%(plugin)s'}
+        if not pagesets:
+            pagesets = ['%(pageset1)s', '%(pageset2)s']
+        if not supportUrlBase:
+            supportUrlBase = '%(supportUrlBase)s'
+        if not talosAddOns:
+            talosAddOns = ['%(talosAddon1)s', '%(talosAddon2)s']
+        TalosFactory.__init__(self, *args, configOptions=configOptions,
+                              plugins=plugins, pagesets=pagesets,
+                              supportUrlBase=supportUrlBase,
+                              talosAddOns=talosAddOns, addonTester=addonTester,
+                              **kwargs)
+
+    def addInfoSteps(self):
+        pass
+
+    def addPluginInstallSteps(self):
+        if self.plugins:
+            self.addStep(DownloadFile(
+                url=WithProperties("%s/%s" % (self.supportUrlBase, '%(plugin)s')),
+                workdir=os.path.join(self.workdirBase, "talos/base_profile"),
+                doStepIf=lambda step: self._propertyIsSet(step, 'plugin'),
+                filename_property='plugin_base'
+            ))
+            self.addStep(UnpackFile(
+                filename=WithProperties('%(plugin_base)s'),
+                workdir=os.path.join(self.workdirBase, "talos/base_profile"),
+                doStepIf=lambda step: self._propertyIsSet(step, 'plugin')
+            ))
+
+    def addPagesetInstallSteps(self):
+        # XXX: This is really hacky, it would be better to extract the property
+        # name from the format string.
+        n = 1
+        for pageset in self.pagesets:
+            self.addStep(DownloadFile(
+             url=WithProperties("%s/%s" % (self.supportUrlBase, pageset)),
+             workdir=os.path.join(self.workdirBase, "talos/page_load_test"),
+             doStepIf=lambda step, n=n: self._propertyIsSet(step, 'pageset%d' % n),
+             filename_property='pageset%d_base' % n
+            ))
+            self.addStep(UnpackFile(
+             filename=WithProperties('%(pageset' + str(n) + '_base)s'),
+             workdir=os.path.join(self.workdirBase, "talos/page_load_test"),
+             doStepIf=lambda step, n=n: self._propertyIsSet(step, 'pageset%d' % n)
+            ))
+            n += 1
+
+    def addAddOnInstallSteps(self):
+        n = 1
+        for addOn in self.talosAddOns:
+            self.addStep(DownloadFile(
+             url=WithProperties("%s/%s" % (self.supportUrlBase, addOn)),
+             workdir=os.path.join(self.workdirBase, "talos"),
+             doStepIf=lambda step, n=n: self._propertyIsSet(step, 'talosAddon%d' % n),
+             filename_property='talosAddon%d_base' % n
+            ))
+            self.addStep(UnpackFile(
+             filename=WithProperties('%(talosAddon' + str(n) + '_base)s'),
+             workdir=os.path.join(self.workdirBase, "talos"),
+             doStepIf=lambda step, n=n: self._propertyIsSet(step, 'talosAddon%d' % n)
+            ))
+            n += 1
 
 class TryTalosFactory(TalosFactory):
     def addDownloadBuildStep(self):
