@@ -1123,7 +1123,7 @@ def generateBranchObjects(config, name):
                 'l10nCheckTest': pf.get('l10n_check_test', False),
                 'android_signing': pf.get('android_signing', False),
                 'post_upload_include_platform': pf.get('post_upload_include_platform', False),
-                'signingServers': config.get('dep_signing_servers', None),
+                'signingServers': config.get('dep_signing_servers'),
                 'baseMirrorUrls': config.get('base_mirror_urls'),
                 'baseBundleUrls': config.get('base_bundle_urls'),
             }
@@ -1380,7 +1380,7 @@ def generateBranchObjects(config, name):
                 l10nCheckTest=pf.get('l10n_check_test', False),
                 android_signing=pf.get('android_signing', False),
                 post_upload_include_platform=pf.get('post_upload_include_platform', False),
-                signingServers=pf.get('nightly_signing_servers'),
+                signingServers=config.get('nightly_signing_servers'),
                 baseMirrorUrls=config.get('base_mirror_urls'),
                 baseBundleUrls=config.get('base_bundle_urls'),
                 **nightly_kwargs
@@ -1497,7 +1497,7 @@ def generateBranchObjects(config, name):
                     clobberURL=config['base_clobber_url'],
                     clobberTime=clobberTime,
                     buildsBeforeReboot=pf['builds_before_reboot'],
-                    signingServers=pf.get('dep_signing_servers'),
+                    signingServers=config.get('dep_signing_servers'),
                 )
                 mozilla2_shark_builder = {
                     'name': '%s shark' % pf['base_name'],
@@ -1747,7 +1747,7 @@ def generateBranchObjects(config, name):
                  clobberTime=clobberTime,
                  buildsBeforeReboot=pf['builds_before_reboot'],
                  packageSDK=True,
-                 signingServers=pf.get('nightly_signing_servers'),
+                 signingServers=config.get('nightly_signing_servers'),
              )
              mozilla2_xulrunner_builder = {
                  'name': '%s xulrunner' % pf['base_name'],
