@@ -1444,7 +1444,7 @@ def generateBranchObjects(config, name):
                         buildSpace=l10nSpace,
                         clobberURL=config['base_clobber_url'],
                         clobberTime=clobberTime,
-                        signingServers=config.get('signing_servers'),
+                        signingServers=config.get('nightly_signing_servers'),
                         baseMirrorUrls=config.get('base_mirror_urls'),
                     )
                     mozilla2_l10n_nightly_builder = {
@@ -1563,7 +1563,7 @@ def generateBranchObjects(config, name):
                 buildSpace=l10nSpace,
                 clobberURL=config['base_clobber_url'],
                 clobberTime=clobberTime,
-                signingServers=config.get('signing_servers'),
+                signingServers=config.get('dep_signing_servers'),
                 baseMirrorUrls=config.get('base_mirror_urls'),
             )
             mozilla2_l10n_dep_builder = {
