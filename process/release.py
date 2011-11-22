@@ -152,8 +152,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         if 'xulrunner' in platform:
             ftpURL = ftpURL.replace(releaseConfig['productName'], 'xulrunner')
         if platform:
-            platformDir = branchConfig['platforms'].get(bare_platform, {}).get(
-                'stage_platform', buildbot2ftp(bare_platform))
+            platformDir = buildbot2ftp(bare_platform)
             if 'xulrunner' in platform:
                 platformDir = ''
             if bare_platform in signedPlatforms and not signingServer:
@@ -289,8 +288,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
     if releaseConfig['doPartnerRepacks'] and \
        releaseConfig['productName'] == 'firefox':
         for p in releaseConfig['l10nPlatforms']:
-            ftpPlatform = branchConfig['platforms'].get(p, {}).get(
-                'stage_platform', buildbot2ftp(p))
+            ftpPlatform =  buildbot2ftp(p)
 
             candidatesDir = makeCandidatesDir(
                 releaseConfig['productName'],
@@ -356,7 +354,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             server=releaseConfig['ftpServer'])
         enUS_signed_apk_url = '%s%s/%s/%s-%s.%s.eabi-arm.apk' % \
             (candidatesDir,
-             branchConfig['platforms']['linux-android']['stage_platform'],
+             buildbot2ftp('linux-android'),
              locale, releaseConfig['productName'], releaseConfig['version'],
              locale)
         change_source.append(UrlPoller(
@@ -368,8 +366,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             locale = 'multi'
             signed_apk_url = '%s%s/%s/%s-%s.%s.eabi-arm.apk' % \
                            (candidatesDir,
-                            branchConfig['platforms']['linux-android'].get(
-                                'stage_platform'),
+                            buildbot2ftp('linux-android'),
                             locale,
                             releaseConfig['productName'],
                             releaseConfig['version'],
@@ -874,7 +871,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 clobberURL=branchConfig['base_clobber_url'],
                 triggerBuilds=True,
                 triggeredSchedulers=triggeredSchedulers,
-                stagePlatform=pf.get('stage_platform'),
+                stagePlatform=buildbot2ftp(platform),
                 use_scratchbox=pf.get('use_scratchbox'),
                 android_signing=pf.get('android_signing', False),
                 multiLocale=pf.get('multi_locale', False),
@@ -1070,7 +1067,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 stageUsername=branchConfig['stage_username'],
                 stageSshKey=branchConfig['stage_ssh_key'],
             )
-  
+
             if 'macosx64' in branchConfig['platforms']:
                 slaves = branchConfig['platforms']['macosx64']['slaves']
             else:
@@ -1078,7 +1075,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
 
             if releaseConfig['productName'] == 'fennec':
                 repack_params['productName'] = 'mobile'
-                repack_params['platformList'] = [branchConfig['platforms'][platform].get('stage_platform')]
+                repack_params['platformList'] = [buildbot2ftp(platform)]
                 repack_params['nightlyDir'] = 'candidates'
                 repack_params['packageDmg'] = False
                 slaves = branchConfig['platforms']['linux']['slaves']
