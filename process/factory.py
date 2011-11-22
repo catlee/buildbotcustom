@@ -692,6 +692,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  multiLocaleScript=None,
                  multiLocaleConfig=None,
                  mozharnessMultiOptions=None,
+                 signingServers=None,
                  **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
@@ -841,6 +842,20 @@ class MercurialBuildFactory(MozillaBuildFactory):
             self.logBaseUrl = 'http://%s/pub/mozilla.org/%s/%s' % \
                         ( self.stageServer, self.stageProduct, self.logUploadDir)
 
+        if signingServers:
+            cmd = [
+                env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
+                "-s", "~/.ssh/%s" % self.stageSshKey,
+                "-c", "%(toolsdir)s/release/signing/server.cert",
+                ]
+            for ss in signingServers:
+                cmd.extend(['-H', ss])
+            self.env['MOZ_SIGN_CMD'] = WithProperties(" ".join(cmd))
+            if platform.startswith('win32'):
+                self.env['PYTHONPATH'] = WithProperties('%(win32_basedir)s/build/build/poster.zip')
+            else:
+                self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
+
         # Need to override toolsdir as set by MozillaBuildFactory because
         # we need Windows-style paths.
         if self.platform.startswith('win'):
@@ -848,6 +863,12 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 command=['bash', '-c', 'pwd -W'],
                 property='toolsdir',
                 workdir='tools'
+            ))
+            self.addStep(SetProperty(
+                name='set_basedir',
+                command=['bash', '-c', 'pwd -W'],
+                property='win32_basedir',
+                workdir='.',
             ))
         if self.use_scratchbox:
             self.addStep(ScratchboxCommand(
@@ -1354,9 +1375,10 @@ class MercurialBuildFactory(MozillaBuildFactory):
         )
 
     def addL10nCheckTestSteps(self):
+        # We override MOZ_SIGN_CMD here because it's not necessary
         self.addStep(ShellCommand(
          name='make l10n check',
-         command=['make', 'l10n-check'],
+         command=['make', 'l10n-check', 'MOZ_SIGN_CMD='],
          workdir='build/%s' % self.objdir,
          env=self.env,
          haltOnFailure=False,
@@ -2813,7 +2835,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                  mozconfig=None, configRepoPath=None, configSubDir=None,
                  tree="notset", mozillaDir=None, l10nTag='default',
                  mergeLocales=True, mozconfigBranch="production", 
-                 testPrettyNames=False, **kwargs):
+                 testPrettyNames=False, signingServers=None, **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
         self.env = env.copy()
@@ -2842,6 +2864,20 @@ class BaseRepackFactory(MozillaBuildFactory):
             self.configRepoPath = configRepoPath
             self.configRepo = self.getRepository(self.configRepoPath,
                                              kwargs['hgHost'])
+
+        if signingServers:
+            cmd = [
+                env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
+                "-s", "~/.ssh/%s" % self.stageSshKey,
+                "-c", "%(toolsdir)s/release/signing/server.cert",
+                ]
+            for ss in signingServers:
+                cmd.extend(['-H', ss])
+            self.env['MOZ_SIGN_CMD'] = WithProperties(" ".join(cmd))
+            if platform.startswith('win32'):
+                self.env['PYTHONPATH'] = WithProperties('%(win32_basedir)s/build/%(branch)s/build/poster.zip')
+            else:
+                self.env['PYTHONPATH'] = WithProperties('%(basedir)s/build/%(branch)s/build/poster.zip')
 
         self.addStep(SetBuildProperty(
          property_name='tree',
@@ -2908,6 +2944,12 @@ class BaseRepackFactory(MozillaBuildFactory):
                 command=['bash', '-c', 'pwd -W'],
                 property='toolsdir',
                 workdir='tools'
+            ))
+            self.addStep(SetProperty(
+                name='set_basedir',
+                command=['bash', '-c', 'pwd -W'],
+                property='win32_basedir',
+                workdir='.',
             ))
 
         self.addStep(ShellCommand(
