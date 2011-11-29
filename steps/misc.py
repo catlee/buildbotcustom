@@ -850,3 +850,11 @@ def setBuildIDProps(step, build):
         build.setProperty("builduid", genBuildUID(), "setBuildProps")
 
     return SUCCESS
+
+def makeSigningServerTokenFunction(signing_servers):
+    def getSigningToken(step, build):
+        """
+        """
+        # Do the thing
+
+    return getSigningToken

@@ -845,7 +845,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if signingServers:
             cmd = [
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
-                "-s", "~/.ssh/%s" % self.stageSshKey,
+                "-t", "%(basedir)s/build/token",
+                "-n", "%(basedir)s/build/nonce",
                 "-c", "%(toolsdir)s/release/signing/server.cert",
                 ]
             for ss in signingServers:
@@ -2622,7 +2623,8 @@ class ReleaseBuildFactory(MercurialBuildFactory):
             env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
                 "-H", signingServer,
-                "-s", "~/.ssh/%s" % kwargs['stageSshKey'],
+                "-t", "%(basedir)s/build/token",
+                "-n", "%(basedir)s/build/nonce",
                 "-c", "%(toolsdir)s/release/signing/server.cert"
                 ]))
         MercurialBuildFactory.__init__(self, env=env, **kwargs)
@@ -2868,7 +2870,8 @@ class BaseRepackFactory(MozillaBuildFactory):
         if signingServers:
             cmd = [
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
-                "-s", "~/.ssh/%s" % self.stageSshKey,
+                "-t", "%(basedir)s/build/token",
+                "-n", "%(basedir)s/build/nonce",
                 "-c", "%(toolsdir)s/release/signing/server.cert",
                 ]
             for ss in signingServers:
