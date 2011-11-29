@@ -37,7 +37,7 @@ from buildbotcustom.process.factory import StagingRepositorySetupFactory, \
 from buildbotcustom.changes.ftppoller import UrlPoller, LocalesFtpPoller
 from release.platforms import buildbot2ftp, sl_platform_map
 from release.paths import makeCandidatesDir
-from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler, AggregatingScheduler
+from buildbotcustom.scheduler import TriggerBouncerCheck, makePropertiesScheduler
 from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
 from buildbotcustom.status.errors import update_verify_error, \
      permission_check_error
@@ -78,7 +78,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
     all_slaves = [x for x in set(all_slaves)]
 
     signedPlatforms = releaseConfig.get('signedPlatforms', ('win32',))
-    signingServer   = releaseConfig.get('signingServer')
 
     def builderPrefix(s, platform=None):
         if platform:
@@ -155,7 +154,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             platformDir = buildbot2ftp(bare_platform)
             if 'xulrunner' in platform:
                 platformDir = ''
-            if bare_platform in signedPlatforms and not signingServer:
+            if bare_platform in signedPlatforms:
                 platformDir = 'unsigned/%s' % platformDir
             ftpURL = '/'.join([
                 ftpURL.strip('/'),
@@ -260,23 +259,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         return parallelizeBuilders("major_update_verify", platform,
                                    updateVerifyChunks)
 
-    def maybeDummify(key, builder, delay=0, triggers=None):
-        """Replaces builder with a dummy version if `key` is set in the releaseConfig"""
-        if not releaseConfig.get(key) and not releaseConfig.get('skip_all'):
-            return builder
-
-        allSlaves = []
-        for p in branchConfig['platforms']:
-            allSlaves.extend(branchConfig['platforms'][p]['slaves'])
-
-        return makeDummyBuilder(
-            name=builder['name'],
-            slaves=allSlaves,
-            category=builder['category'],
-            delay=delay,
-            triggers=triggers,
-            )
-
     builders = []
     test_builders = []
     schedulers = []
@@ -297,7 +279,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 protocol='http',
                 server=releaseConfig['ftpServer'])
             ftpURL = '%s%s' % (candidatesDir, ftpPlatform)
-            if p in signedPlatforms and not signingServer:
+            if p in signedPlatforms:
                 ftpURL = '%sunsigned/%s' % (candidatesDir, ftpPlatform)
 
             shippedLocalesFile = "%s/%s/raw-file/%s/%s" % (
@@ -313,36 +295,18 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             ))
 
     if releaseConfig['productName'] == 'firefox':
-        if not signingServer:
-            change_source.append(UrlPoller(
-                branch=builderPrefix("post_signing"),
-                url='%s/win32_signing_build%s.log' % (
-                    makeCandidatesDir(
-                        releaseConfig['productName'],
-                        releaseConfig['version'],
-                        releaseConfig['buildNumber'],
-                        protocol='http',
-                        server=releaseConfig['ftpServer']),
-                    releaseConfig['buildNumber']),
-                pollInterval=60*10,
-            ))
-        else:
-            upstreamBuilders = [builderPrefix('repack_complete', p) for p in releaseConfig['enUSPlatforms']]
-            if releaseConfig['doPartnerRepacks']:
-                upstreamBuilders.extend(
-                        builderPrefix('partner_repack', p) for p in releaseConfig['l10nPlatforms'])
-
-            builderNames = [builderPrefix('updates')]
-            # TODO: run this after repacks are done
-            builderNames.extend(builderPrefix('l10n_verification', p) for p in releaseConfig['l10nPlatforms'])
-
-            updates_scheduler = AggregatingScheduler(
-                name=builderPrefix('updates'),
-                branch=builderPrefix('post_signing'),
-                builderNames=builderNames,
-                upstreamBuilders=upstreamBuilders,
-                )
-            schedulers.append(updates_scheduler)
+        change_source.append(UrlPoller(
+            branch=builderPrefix("post_signing"),
+            url='%s/win32_signing_build%s.log' % (
+                makeCandidatesDir(
+                    releaseConfig['productName'],
+                    releaseConfig['version'],
+                    releaseConfig['buildNumber'],
+                    protocol='http',
+                    server=releaseConfig['ftpServer']),
+                releaseConfig['buildNumber']),
+            pollInterval=60*10,
+        ))
 
     if releaseConfig['productName'] == 'fennec':
         locale = 'en-US'
@@ -482,15 +446,14 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             )
             schedulers.append(l10n_verify_scheduler)
 
-        if not signingServer:
-            updates_scheduler = Scheduler(
-                name=builderPrefix('updates'),
-                treeStableTimer=0,
-                branch=builderPrefix('post_signing'),
-                builderNames=[builderPrefix('updates')]
-            )
-            schedulers.append(updates_scheduler)
-            notify_builders.append(builderPrefix('updates'))
+        updates_scheduler = Scheduler(
+            name=builderPrefix('updates'),
+            treeStableTimer=0,
+            branch=builderPrefix('post_signing'),
+            builderNames=[builderPrefix('updates')]
+        )
+        schedulers.append(updates_scheduler)
+        notify_builders.append(builderPrefix('updates'))
 
         updateBuilderNames = []
         for platform in sorted(releaseConfig.get('verifyConfigs', {}).keys()):
@@ -885,9 +848,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 usePrettyNames=releaseConfig.get('usePrettyNames', True),
                 enableUpdatePackaging=enableUpdatePackaging,
                 mozconfigBranch=releaseTag,
-                signingServer=signingServer,
-                signingFormats=releaseConfig.get('signingFormats', {}).get(platform),
-                useSharedCheckouts=pf.get('enable_shared_checkouts', False),
             )
 
             builders.append({
