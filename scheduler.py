@@ -14,7 +14,6 @@ from buildbot.schedulers.timed import Nightly
 from buildbot.schedulers.triggerable import Triggerable
 from buildbot.sourcestamp import SourceStamp
 from buildbot.process.properties import Properties
-from buildbot.status.builder import SUCCESS
 
 from buildbot.util import now
 
@@ -340,7 +339,6 @@ class TriggerBouncerCheck(Triggerable):
         assert self.working
         self.working = False
         return None # eat the failure
-
 
 def makePropertiesScheduler(base_class, propfuncs, *args, **kw):
     """Return a subclass of `base_class` that will call each of `propfuncs` to
