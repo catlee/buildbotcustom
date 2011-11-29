@@ -849,7 +849,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 "-n", "%(basedir)s/build/nonce",
                 "-c", "%(toolsdir)s/release/signing/server.cert",
                 ]
-            for ss in signingServers:
+            for ss, user, passwd in signingServers:
                 cmd.extend(['-H', ss])
             self.env['MOZ_SIGN_CMD'] = WithProperties(" ".join(cmd))
             if platform.startswith('win32'):
@@ -2860,7 +2860,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                 "-n", "%(basedir)s/build/nonce",
                 "-c", "%(toolsdir)s/release/signing/server.cert",
                 ]
-            for ss in signingServers:
+            for ss, user, passwd in signingServers:
                 cmd.extend(['-H', ss])
             self.env['MOZ_SIGN_CMD'] = WithProperties(" ".join(cmd))
             if platform.startswith('win32'):
