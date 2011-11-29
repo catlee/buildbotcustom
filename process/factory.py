@@ -2589,7 +2589,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
     def __init__(self, env, version, buildNumber, brandName=None,
             unittestMasters=None, unittestBranch=None, talosMasters=None,
             usePrettyNames=True, enableUpdatePackaging=True,
-            signingServer=None, signingFormats=None, **kwargs):
+            signingFormats=None, **kwargs):
         self.version = version
         self.buildNumber = buildNumber
 
@@ -2597,7 +2597,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         self.unittestMasters = unittestMasters or []
         self.unittestBranch = unittestBranch
         self.enableUpdatePackaging = enableUpdatePackaging
-        self.signingServer = signingServer
 
         if self.unittestMasters:
             assert self.unittestBranch
@@ -2614,19 +2613,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         if usePrettyNames:
             env['MOZ_PKG_PRETTYNAMES'] = '1'
         env['MOZ_PKG_VERSION'] = version
-        if signingServer:
-            if signingFormats[0]:
-                env['MOZ_INTERNAL_SIGNING_FORMAT'] = signingFormats[0]
-            if signingFormats[1]:
-                env['MOZ_EXTERNAL_SIGNING_FORMAT'] = signingFormats[1]
-            env['PYTHONPATH'] = WithProperties('%(basedir)s/build/build/poster.zip')
-            env['MOZ_SIGN_CMD'] = WithProperties(" ".join([
-                env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
-                "-H", signingServer,
-                "-t", "%(basedir)s/build/token",
-                "-n", "%(basedir)s/build/nonce",
-                "-c", "%(toolsdir)s/release/signing/server.cert"
-                ]))
         MercurialBuildFactory.__init__(self, env=env, **kwargs)
 
     def addFilePropertiesSteps(self, filename=None, directory=None,
