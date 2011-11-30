@@ -847,7 +847,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
                 "-t", "%(basedir)s/build/token",
                 "-n", "%(basedir)s/build/nonce",
-                "-c", "%(toolsdir)s/release/signing/server.cert",
+                "-c", "%(toolsdir)s/release/signing/host.cert",
                 ]
             for ss, user, passwd in signingServers:
                 cmd.extend(['-H', ss])
@@ -2858,7 +2858,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                 env.get('PYTHON26', 'python'), "%(toolsdir)s/release/signing/signtool.py",
                 "-t", "%(basedir)s/build/token",
                 "-n", "%(basedir)s/build/nonce",
-                "-c", "%(toolsdir)s/release/signing/server.cert",
+                "-c", "%(toolsdir)s/release/signing/host.cert",
                 ]
             for ss, user, passwd in signingServers:
                 cmd.extend(['-H', ss])
