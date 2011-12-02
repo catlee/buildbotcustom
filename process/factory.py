@@ -863,12 +863,6 @@ class MercurialBuildFactory(MozillaBuildFactory):
                 property='toolsdir',
                 workdir='tools'
             ))
-            self.addStep(SetProperty(
-                name='set_basedir',
-                command=['bash', '-c', 'pwd -W'],
-                property='win32_basedir',
-                workdir='.',
-            ))
         if self.use_scratchbox:
             self.addStep(ScratchboxCommand(
                 command=["sb-conf", "select", self.scratchbox_target],
@@ -2595,7 +2589,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         self.unittestMasters = unittestMasters or []
         self.unittestBranch = unittestBranch
         self.enableUpdatePackaging = enableUpdatePackaging
-
         if self.unittestMasters:
             assert self.unittestBranch
 
@@ -2927,12 +2920,6 @@ class BaseRepackFactory(MozillaBuildFactory):
                 command=['bash', '-c', 'pwd -W'],
                 property='toolsdir',
                 workdir='tools'
-            ))
-            self.addStep(SetProperty(
-                name='set_basedir',
-                command=['bash', '-c', 'pwd -W'],
-                property='win32_basedir',
-                workdir='.',
             ))
 
         self.addStep(ShellCommand(
@@ -3736,8 +3723,7 @@ class ReleaseRepackFactory(BaseRepackFactory, ReleaseFactory):
                                               longVersion)
             self.env['ZIP_IN'] = WithProperties('%(srcdir)s/' + filename)
         elif self.platform.startswith('win32'):
-            if not self.signingServer:
-                platformDir = 'unsigned/' + platformDir
+            platformDir = 'unsigned/' + platformDir
             filename = '%s.zip' % self.project
             instname = '%s.exe' % self.project
             builds[filename] = '%s-%s.zip' % (self.project, self.version)
@@ -7725,8 +7711,7 @@ class PartnerRepackFactory(ReleaseFactory):
                  buildNumber=1, partnersRepoRevision='default',
                  nightlyDir="nightly", platformList=None, packageDmg=True,
                  partnerUploadDir='unsigned/partner-repacks',
-                 baseWorkDir='.', python='python', signingServer=None,
-                 **kwargs):
+                 baseWorkDir='.', python='python', **kwargs):
         ReleaseFactory.__init__(self, baseWorkDir=baseWorkDir, **kwargs)
         self.productName = productName
         self.version = version
@@ -7741,7 +7726,6 @@ class PartnerRepackFactory(ReleaseFactory):
         self.packageDmg = packageDmg
         self.python = python
         self.platformList = platformList
-        self.signingServer = signingServer
         self.candidatesDir = self.getCandidatesDir(productName,
                                                    version,
                                                    buildNumber,
