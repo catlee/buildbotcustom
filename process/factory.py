@@ -292,7 +292,9 @@ def getPlatformMinidumpPath(platform):
         'win64': WithProperties('%(toolsdir:-)s/breakpad/win64/minidump_stackwalk.exe'),
         'macosx': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         'macosx64': WithProperties('%(toolsdir:-)s/breakpad/osx64/minidump_stackwalk'),
-        'android': None,
+        'linux-android': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
+        'android': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
+        'android-xul': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         }
     return platform_minidump_path[platform]
 
@@ -6425,7 +6427,7 @@ class MozillaTestFactory(MozillaBuildFactory):
             out which is the real file'''
             if len(build.source.changes[-1].files) < 3:
                 build_url = build.getProperty('build_url')
-                for suffix in ('.tar.bz2', '.zip', '.dmg', '.exe'):
+                for suffix in ('.tar.bz2', '.zip', '.dmg', '.exe', '.apk'):
                     if build_url.endswith(suffix):
                         return build_url[:-len(suffix)] + '.crashreporter-symbols.zip'
             else:
@@ -6736,9 +6738,17 @@ class RemoteUnittestFactory(MozillaTestFactory):
     def __init__(self, platform, suites, hostUtils, productName='fennec',
                  downloadSymbols=False, downloadTests=True,
                  posixBinarySuffix='', remoteExtras=None,
-                 branchName=None, **kwargs):
+                 branchName=None, stackwalk_cgi=None, **kwargs):
         self.suites = suites
         self.hostUtils = hostUtils
+        self.stackwalk_cgi = stackwalk_cgi
+        self.env = {}
+
+        if stackwalk_cgi and kwargs.get('downloadSymbols'):
+            self.env['MINIDUMP_STACKWALK_CGI'] = stackwalk_cgi
+        else:
+            self.env['MINIDUMP_STACKWALK'] = getPlatformMinidumpPath(platform)
+        self.env['MINIDUMP_SAVE_PATH'] = WithProperties('%(basedir:-)s/minidumps')
 
         if remoteExtras is not None:
             self.remoteExtras = remoteExtras
@@ -6758,6 +6768,7 @@ class RemoteUnittestFactory(MozillaTestFactory):
                                     downloadSymbols=downloadSymbols,
                                     downloadTests=downloadTests,
                                     posixBinarySuffix=posixBinarySuffix,
+                                    stackwalk_cgi=stackwalk_cgi,
                                     **kwargs)
 
     def addCleanupSteps(self):
@@ -6840,6 +6851,11 @@ class RemoteUnittestFactory(MozillaTestFactory):
         ))
 
     def addRunTestSteps(self):
+        if self.stackwalk_cgi and self.downloadSymbols:
+            symbols_path = '%(symbols_url)s'
+        else:
+            symbols_path = 'symbols'
+
         for suite in self.suites:
             name = suite['suite']
 
@@ -6869,17 +6885,21 @@ class RemoteUnittestFactory(MozillaTestFactory):
                     for tp in suite.get('testPaths', []):
                         self.addStep(stepProc(
                          variant=variant,
+                         symbols_path=symbols_path,
                          testPath=tp,
                          workdir='build/tests',
                          timeout=2400,
                          app=self.remoteProcessName,
+                         env=self.env,
                         ))
                 else:
                     self.addStep(stepProc(
                      variant=variant,
+                     symbols_path=symbols_path,
                      workdir='build/tests',
                      timeout=2400,
                      app=self.remoteProcessName,
+                     env=self.env,
                     ))
             elif name.startswith('reftest') or name == 'crashtest':
                 totalChunks = suite.get('totalChunks', None)
@@ -6893,11 +6913,13 @@ class RemoteUnittestFactory(MozillaTestFactory):
                  ))
                 self.addStep(unittest_steps.RemoteReftestStep(
                  suite=name,
+                 symbols_path=symbols_path,
                  totalChunks=totalChunks,
                  thisChunk=thisChunk,
                  workdir='build/tests',
                  timeout=2400,
                  app=self.remoteProcessName,
+                 env=self.env,
                 ))
             elif name == 'jsreftest':
                 totalChunks = suite.get('totalChunks', None)
@@ -6910,11 +6932,13 @@ class RemoteUnittestFactory(MozillaTestFactory):
                  ))
                 self.addStep(unittest_steps.RemoteReftestStep(
                  suite=name,
+                 symbols_path=symbols_path,
                  totalChunks=totalChunks,
                  thisChunk=thisChunk,
                  workdir='build/tests',
                  timeout=2400,
                  app=self.remoteProcessName,
+                 env=self.env,
                 ))
 
     def addTearDownSteps(self):
@@ -7402,7 +7426,7 @@ class TalosFactory(RequestSortingBuildFactory):
 
     def addDownloadSymbolsStep(self):
         def get_symbols_url(build):
-            suffixes = ('.tar.bz2', '.dmg', '.zip')
+            suffixes = ('.tar.bz2', '.dmg', '.zip', '.apk')
             buildURL = build.getProperty('fileURL')
 
             for suffix in suffixes:
