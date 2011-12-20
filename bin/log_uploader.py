@@ -3,7 +3,7 @@
 
 Uploads logs from build to the given host.
 """
-import sys, os, cPickle, gzip, subprocess, time
+import sys, os, cPickle, gzip, subprocess
 
 from buildbot import util
 from buildbot.status.builder import Results
