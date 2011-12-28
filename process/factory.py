@@ -3348,7 +3348,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
                  ausBaseUploadDir=None, updatePlatform=None,
                  downloadBaseURL=None, ausUser=None, ausSshKey=None,
                  ausHost=None, l10nNightlyUpdate=False, l10nDatedDirs=False,
-                 createPartial=False, **kwargs):
+                 createPartial=False, extraConfigureArgs=[], **kwargs):
         self.nightly = nightly
         self.l10nNightlyUpdate = l10nNightlyUpdate
         self.ausBaseUploadDir = ausBaseUploadDir
@@ -3359,6 +3359,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
         self.ausHost = ausHost
         self.createPartial = createPartial
         self.geriatricMasters = []
+        self.extraConfigureArgs = extraConfigureArgs
 
         # This is required because this __init__ doesn't call the
         # NightlyBuildFactory __init__ where self.complete_platform
@@ -3408,7 +3409,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
         if l10nNightlyUpdate and self.nightly:
             env.update({'MOZ_MAKE_COMPLETE_MAR': '1', 
                         'DOWNLOAD_BASE_URL': '%s/nightly' % self.downloadBaseURL})
-            self.extraConfigureArgs = ['--enable-update-packaging']
+            self.extraConfigureArgs += ['--enable-update-packaging']
 
 
         BaseRepackFactory.__init__(self, env=env, **kwargs)
@@ -4964,6 +4965,21 @@ class ReleaseUpdatesFactory(ReleaseFactory):
          description=['patcher:', 'create patches'],
          haltOnFailure=True
         ))
+        # XXX: For Firefox 10 betas we want the appVersion in the snippets to
+        #      show a version change with each one, so we change them from the
+        #      the appVersion (which is always "10") to the version, which has
+        #      a beta marker, like "10.0b2".
+        #      This is talked about in detail in bug 711275.
+        if self.productName == 'firefox' and self.version.startswith('10.0b'):
+            cmd = ['bash', WithProperties('%(toolsdir)s/release/edit-snippets.sh'),
+                   'appVersion', self.version]
+            cmd.extend(self.dirMap.keys())
+            self.addStep(ShellCommand(
+             name='switch_appv_in_snippets',
+             command=cmd,
+             haltOnFailure=True,
+             workdir=self.updateDir,
+            ))
 
     def createBuildNSnippets(self):
         command = ['python',
@@ -7063,13 +7079,9 @@ class TalosFactory(RequestSortingBuildFactory):
         self.addRunTestStep()
         self.addRebootStep()
 
-    def python25(self, platform):
-        if (platform.startswith('fedora')):
-            return "/home/cltbld/bin/python"
-        elif (platform == "leopard"):
-            return "/usr/bin/python"
-        elif (platform in ("snowleopard", "lion")):
-            return "/Users/cltbld/bin/python"
+    def pythonWithSimpleJson(self, platform):
+        if (platform in ("fedora", "fedora64", "leopard", "snowleopard", "lion")):
+            return "/tools/buildbot/bin/python"
         elif (platform in ('w764', 'win7', 'xp')):
             return "C:\\mozilla-build\\python25\\python.exe"
 
@@ -7376,7 +7388,7 @@ class TalosFactory(RequestSortingBuildFactory):
                 ))
                 self.addStep(ShellCommand(
                     name='retrieve specified talos.zip in talos.json',
-                    command=[self.python25(self.OS), 'talos_from_code.py', \
+                    command=[self.pythonWithSimpleJson(self.OS), 'talos_from_code.py', \
                             '--talos_json_url', \
                             WithProperties('%(repo_path)s/raw-file/%(revision)s/testing/talos/talos.json')],
                     workdir=self.workdirBase,
