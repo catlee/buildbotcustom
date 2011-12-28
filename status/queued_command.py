@@ -55,6 +55,9 @@ class QueuedCommandHandler(base.StatusReceiverMultiService):
                builder.category not in self.categories:
             return # ignore this build
 
+        core_builder = self.master_status.botmaster.builders[builderName]
+        core_build = core_builder.getBuild(build.number)
+
         if isinstance(self.command, str):
             cmd = [self.command]
         else:
@@ -62,6 +65,6 @@ class QueuedCommandHandler(base.StatusReceiverMultiService):
 
         cmd = build.getProperties().render(cmd)
         cmd.extend([
-               os.path.join(self.master_status.basedir, builder.basedir),
-               str(build.number)])
+               os.path.join(self.master_status.basedir, builder.basedir, str(build.number)),
+               ] + [str(r.id) for r in core_build.requests])
         self.queuedir.add(json.dumps(cmd))

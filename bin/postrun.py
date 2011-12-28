@@ -13,6 +13,9 @@ import re
 import cPickle as pickle
 from datetime import datetime
 
+import logging
+log = logging.getLogger(__name__)
+
 import buildbotcustom.status.db.model as model
 
 class PostRunner(object):
@@ -20,17 +23,21 @@ class PostRunner(object):
         self.config = config
 
     def uploadLog(self, build):
+        log.info("Uploading log")
         """Uploads the build log, and returns the URL to it"""
         builder = build.builder
-        branch = build.getProperty('branch')
-        product = build.getProperty('product')
-        platform = build.getProperty('platform')
+
+        info = self.getBuildInfo(build)
+        branch = info['branch']
+        product = info['product']
+        platform = info['platform']
 
         upload_args = []
         if "nightly" in builder.name:
             upload_args.append("--nightly")
         if builder.name.startswith("release-"):
             upload_args.append("--release")
+            # TODO version/buildnumber
 
         if branch == 'try':
             upload_args.append("--try")
@@ -47,11 +54,8 @@ class PostRunner(object):
         if branch:
             upload_args.extend(["--branch", branch])
 
-        # TODO:
-        # --user
-        # --identity
-
-        upload_args.extend([builder.basedir, build.number])
+        upload_args.extend(self.getUploadArgs(build))
+        upload_args.extend([builder.basedir, str(build.number)])
 
         my_dir = os.path.abspath(os.path.dirname(__file__))
         cmd = [sys.executable, "%s/log_uploader.py" % my_dir] + upload_args
@@ -74,12 +78,16 @@ class PostRunner(object):
             return url.group(), retcode
         return None, retcode
 
+    def getUploadArgs(self, build):
+        # TODO
+        return ["--user", "catlee", "localhost"]
+
     def getBuild(self, build_path):
+        log.info("Loading build pickle")
         if not os.path.exists(build_path):
             raise ValueError("Couldn't find %s" % build_path)
 
         builder_path = os.path.dirname(build_path)
-
         class FakeBuilder:
             basedir = builder_path
             name = os.path.basename(builder_path)
@@ -88,28 +96,49 @@ class PostRunner(object):
         build.builder = FakeBuilder()
         return build
 
+    def getBuildInfo(self, build):
+        """
+        Returns a dictionary with
+        'branch', 'platform', 'product'
+        set as appropriate
+        """
+        props = build.getProperties()
+        retval = {}
+        if props.getProperty('stage_platform') is not None:
+            retval['platform'] = props['stage_platform']
+        elif props.getProperty('platform') is not None:
+            retval['platform'] = props['platform']
+        else:
+            retval['platform'] = None
+
+        if props.getProperty('stage_product') is not None:
+            retval['product'] = props['stage_product']
+        elif props.getProperty('product') is not None:
+            retval['product'] = props['product']
+        else:
+            retval['product'] = None
+
+        if props.getProperty('branch') is not None:
+            retval['branch'] = props['branch']
+        else:
+            retval['branch'] = None
+
+        log.debug("Build info: %s", retval)
+        return retval
+
     def writePulseMessage(self, build):
         pass
 
-    def mailUser(self, build):
-        builder = build.builder
-        mailer_args = []
-        mailer_args.extend(["-f", self.config.get('mail', 'from_addr')])
-        mailer_args.extend(["--logurl", build.getProperty('log_url')])
-        # TODO: check config to see if we should mail this user, or somebody else
-        mailer_args.append("--to-author")
-
-        mailer_args.extend([builder.basedir, build.number])
-        my_dir = os.path.abspath(os.path.dirname(__file__))
-        cmd = [sys.executable, "%s/try_mailer.py" % my_dir] + mailer_args
-        devnull = open(os.devnull)
-        proc = subprocess.Popen(cmd, stdin=devnull)
-        proc.wait()
-
     def updateStatusDB(self, build):
+        log.info("Updating statusdb")
         session = model.connect(self.config.get('database', 'url'))()
         master = model.Master.get(session, self.config.get('master', 'url'))
         master.name = unicode(self.config.get('master', 'name'))
+
+        if not master.id:
+            log.debug("added master")
+            session.add(master)
+            session.commit()
 
         builder_name = build.builder.name
         db_builder = model.Builder.get(session, builder_name, master.id)
@@ -119,6 +148,7 @@ class PostRunner(object):
         if build.started:
             starttime = datetime.utcfromtimestamp(build.started)
 
+        log.debug("searching for build")
         q = session.query(model.Build).filter_by(
                 master_id=master.id,
                 builder=db_builder,
@@ -127,40 +157,51 @@ class PostRunner(object):
                 )
         db_build = q.first()
         if not db_build:
+            log.debug("creating new build")
             db_build = model.Build.fromBBBuild(session, build, builder_name, master.id)
         else:
+            log.debug("updating old build")
             db_build.updateFromBBBuild(session, build)
         session.commit()
+        log.debug("committed")
+        return db_build.id
 
-    def shouldEmailUser(self, build):
-        branch = build.getProperty('branch')
-        # TODO: check config to see if we should mail this user at all
-
-    def processBuild(self, f):
-        build = self.getBuild(f)
+    def processBuild(self, build_path, request_ids):
+        build = self.getBuild(build_path)
         log_url, retcode = self.uploadLog(build)
-        build.properties['log_url'] = log_url
+        build.properties.setProperty('log_url', log_url, 'postrun.py')
+        # TODO: save this in a separate table
+        build.properties.setProperty('request_ids', [int(i) for i in request_ids], 'postrun.py')
         if retcode != 0:
             # TODO
-            continue
+            return
 
+        build_id = self.updateStatusDB(build)
+        # TODO: save this in a separate table
+        build.properties.setProperty('statusdb_id', build_id, 'postrun.py')
         self.writePulseMessage(build)
-
-        if self.shouldEmailUser(build):
-            self.mailUser(build)
-
-        self.updateStatusDB(build)
 
 def main():
     from optparse import OptionParser
     parser = OptionParser()
+    parser.set_defaults(
+            loglevel=logging.INFO,
+            )
+    parser.add_option("-v", "--verbose", dest="loglevel", const=logging.DEBUG, action="store_const")
+    parser.add_option("-q", "--quiet", dest="loglevel", const=logging.WARNING, action="store_const")
 
     options, args = parser.parse_args()
 
-    post_runner = PostRunner()
+    logging.basicConfig(level=options.loglevel)
 
-    for f in args:
-        post_runner.processBuild(f)
+    config = {
+            'database': 'mysql://buildbot@localhost/buildbot',
+            }
+
+    post_runner = PostRunner(config)
+
+    build_path, request_ids = args[0], args[1:]
+    post_runner.processBuild(build_path, request_ids)
 
 if __name__ == '__main__':
     main()

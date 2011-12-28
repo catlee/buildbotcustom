@@ -3,7 +3,7 @@
 
 Uploads logs from build to the given host.
 """
-import sys, os, cPickle, gzip, subprocess
+import os, cPickle, gzip, subprocess
 
 from buildbot import util
 from buildbot.status.builder import Results
@@ -90,6 +90,7 @@ def formatLog(tmpdir, build, builder_suffix=''):
     written to it.
     """
     builder_name = build.builder.name
+    # TODO: Make something more unique than buildXX
     build_name = "%s%s-build%s.txt.gz" % (builder_name, builder_suffix, build_number)
 
     logFile = gzip.GzipFile(os.path.join(tmpdir, build_name), "w")
@@ -270,11 +271,6 @@ if __name__ == "__main__":
 
                 else:
                     uploadArgs['upload_dir'] = "%s-%s" % (options.branch, platform)
-                    if buildid is None:
-                        # No build id, so we don't know where to upload this :(
-                        print "No build id for %s/%s, giving up" % (builder_path, build_number)
-                        # Exit cleanly so we don't spam twistd.log with exceptions
-                        sys.exit(0)
 
                     if options.nightly or isNightly(build):
                         uploadArgs['to_dated'] = True
@@ -290,9 +286,12 @@ if __name__ == "__main__":
                     if options.shadowbuild:
                         uploadArgs['to_shadow'] = True
                         uploadArgs['to_tinderbox_dated'] = False
-                    else:
+                    elif buildid:
                         uploadArgs['to_shadow'] = False
                         uploadArgs['to_tinderbox_dated'] = True
+                        uploadArgs['buildid'] = buildid
+                    else:
+                        uploadArgs['to_tinderbox_builds'] = True
 
                 props = build.getProperties()
                 if props.getProperty('got_revision') is not None:
