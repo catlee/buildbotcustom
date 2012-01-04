@@ -316,7 +316,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             releaseConfig['buildNumber'],
             protocol='http',
             server=releaseConfig['ftpServer'])
-        enUS_signed_apk_url = '%s%s/%s/%s-%s.%s.eabi-arm.apk' % \
+        enUS_signed_apk_url = '%s%s/%s/%s-%s.%s.android-arm.apk' % \
             (candidatesDir,
              buildbot2ftp('linux-android'),
              locale, releaseConfig['productName'], releaseConfig['version'],
@@ -328,7 +328,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         ))
         if branchConfig['platforms']['linux-android'].get('multi_locale'):
             locale = 'multi'
-            signed_apk_url = '%s%s/%s/%s-%s.%s.eabi-arm.apk' % \
+            signed_apk_url = '%s%s/%s/%s-%s.%s.android-arm.apk' % \
                            (candidatesDir,
                             buildbot2ftp('linux-android'),
                             locale,
@@ -524,7 +524,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         mirror_scheduler1 = TriggerBouncerCheck(
             name=builderPrefix('ready-for-rel-test'),
             configRepo=config_repo,
-            minUptake=releaseConfig.get('releasetestUptake', 10000),
+            minUptake=releaseConfig.get('releasetestUptake', 3),
             builderNames=[builderPrefix('ready_for_releasetest_testing')] + \
                           [builderPrefix('final_verification', platform)
                            for platform in releaseConfig.get('verifyConfigs', {}).keys()],
@@ -811,6 +811,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 configSubDir=branchConfig['config_subdir'],
                 profiledBuild=pf['profiled_build'],
                 mozconfig=mozconfig,
+                srcMozconfig=releaseConfig.get('mozconfigs', {}).get(platform),
                 buildRevision=releaseTag,
                 stageServer=branchConfig['stage_server'],
                 stageUsername=branchConfig['stage_username'],
@@ -971,6 +972,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 configSubDir=branchConfig['config_subdir'],
                 profiledBuild=None,
                 mozconfig = '%s/%s/xulrunner' % (platform, sourceRepoInfo['name']),
+                srcMozconfig=releaseConfig.get('xulrunner_mozconfigs', {}).get(platform),
                 buildRevision=releaseTag,
                 stageServer=branchConfig['stage_server'],
                 stageUsername=branchConfig['stage_username_xulrunner'],
@@ -1134,6 +1136,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             longVersion=releaseConfig.get('longVersion', None),
             oldLongVersion=releaseConfig.get('oldLongVersion', None),
             schema=releaseConfig.get('snippetSchema', None),
+            useBetaChannelForRelease=releaseConfig.get('useBetaChannelForRelease', False),
         )
 
         builders.append({
@@ -1341,6 +1344,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             releaseNotesUrl=releaseConfig['majorUpdateReleaseNotesUrl'],
             fakeMacInfoTxt=releaseConfig['majorFakeMacInfoTxt'],
             schema=releaseConfig.get('majorSnippetSchema', None),
+            useBetaChannelForRelease=releaseConfig.get('useBetaChannelForRelease', True),
         )
 
         builders.append({
