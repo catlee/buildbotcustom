@@ -537,3 +537,8 @@ class Build(Base):
         b.updateFromBBBuild(session, build)
 
         return b
+
+schedulerdb_requests = Table('schedulerdb_requests', Base.metadata,
+    Column('build_id', Integer, nullable=False, index=True),
+    Column('request_id', Integer, nullable=False, index=True),
+    )

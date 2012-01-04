@@ -128,7 +128,7 @@ def formatLog(tmpdir, build, builder_suffix=''):
         if not times or not times[0]:
             elapsed = "not started"
         elif not times[1]:
-            elapsed = "not started"
+            elapsed = "not finished"
         else:
             elapsed = util.formatInterval(times[1] - times[0])
 
@@ -137,7 +137,11 @@ def formatLog(tmpdir, build, builder_suffix=''):
             results = "not started"
 
         shortText = ' '.join(step.getText()) + ' (results: %s, elapsed: %s)' % (results, elapsed)
-        logFile.write("========= Started %s ==========\n" % shortText)
+        if times and times[0]:
+            logFile.write("========= Started %s (at %s) =========\n" % (shortText, times[0]))
+        else:
+            logFile.write("========= Started %s =========\n" % shortText)
+
 
         for log in step.getLogs():
             data = log.getTextWithHeaders()
@@ -145,7 +149,10 @@ def formatLog(tmpdir, build, builder_suffix=''):
             if not data.endswith("\n"):
                 logFile.write("\n")
 
-        logFile.write("======== Finished %s ========\n\n" % shortText)
+        if times and times[1]:
+            logFile.write("========= Finished %s (at %s) =========\n\n" % (shortText, times[1]))
+        else:
+            logFile.write("========= Finished %s =========\n\n" % shortText)
     logFile.close()
     return os.path.join(tmpdir, build_name)
 
