@@ -14,7 +14,7 @@ from buildbot.schedulers.timed import Nightly
 from buildbot.schedulers.triggerable import Triggerable
 from buildbot.sourcestamp import SourceStamp
 from buildbot.process.properties import Properties
-from buildbot.status.builder import SUCCESS
+from buildbot.status.builder import SUCCESS, WARNINGS
 
 from buildbot.util import now
 
@@ -344,38 +344,27 @@ class TriggerBouncerCheck(Triggerable):
 class AggregatingScheduler(BaseScheduler):
     """This scheduler waits until at least one build of each of
     `upstreamBuilders` completes with a result in `okResults`. Once this
-    happens, it triggers builds on `builderNames` with `properties` set. The
-    sourcestamp for the new builds will be the result of merging all the
-    sourcestamps from `upstreamBuilders`.
+    happens, it triggers builds on `builderNames` with `properties` set.
 
-    `okResults` should be a tuple of acceptable result codes, and defaults to (SUCCESS,)
+    `okResults` should be a tuple of acceptable result codes, and defaults to
+    (SUCCESS,WARNINGS)."""
 
-    `maxTriggers` if set should represent how many times this scheduler will
-    fire. After firing `maxTriggers` times, the scheduler will shut down.
-    """
-    compare_attrs = ('name', 'builderNames', 'properties', 'upstreamBuilders', 'okResults',
-            'maxTriggers')
+    compare_attrs = ('name', 'branch', 'builderNames', 'properties',
+                     'upstreamBuilders', 'okResults')
 
-    def __init__(self, name, branch, builderNames, upstreamBuilders, okResults=(SUCCESS,),
-            maxTriggers=None, properties={}):
+    def __init__(self, name, branch, builderNames, upstreamBuilders,
+                 okResults=(SUCCESS,WARNINGS), properties={}):
         BaseScheduler.__init__(self, name, builderNames, properties)
         self.branch = branch
         self.upstreamBuilders = upstreamBuilders
         self.reason = "AccumulatingScheduler(%s)" % name
         self.okResults = okResults
-        self.maxTriggers = maxTriggers
 
     def get_initial_state(self, max_changeid):
         return {
-                "upstreamBuilders": self.upstreamBuilders,
                 "remainingBuilders": self.upstreamBuilders,
                 "lastCheck": now(),
                 }
-
-    def startService(self):
-        # TODO: Check if list of builders has changed.
-        # if it has...reset?
-        pass
 
     def run(self):
         d = self.parent.db.runInteraction(self._run)
@@ -383,25 +372,24 @@ class AggregatingScheduler(BaseScheduler):
 
     def findNewBuilds(self, db, t, lastCheck):
         q = """SELECT buildername, sourcestampid FROM
-                buildrequests, buildsets WHERE
-                buildrequests.buildsetid = buildsets.id AND
-                buildername IN %s AND
-                buildrequests.complete = 1 AND
-                buildrequests.results IN %s AND
-                buildrequests.complete_at > ?
+               buildrequests, buildsets WHERE
+               buildrequests.buildsetid = buildsets.id AND
+               buildername IN %s AND
+               buildrequests.complete = 1 AND
+               buildrequests.results IN %s AND
+               buildrequests.complete_at > ?
             """ % (
                     db.parmlist(len(self.upstreamBuilders)),
                     db.parmlist(len(self.okResults)),
                     )
-        t.execute(q, tuple(self.upstreamBuilders) + tuple(self.okResults) + (lastCheck,))
+        t.execute(q, tuple(self.upstreamBuilders) + tuple(self.okResults) +
+                  (lastCheck,))
         return t.fetchall()
 
     def _run(self, t):
-        # TODO: Support self.maxTriggers
         db = self.parent.db
-
-        # Check for new builds completed since lastCheck
         state = self.get_state(t)
+        # Check for new builds completed since lastCheck
         lastCheck = state['lastCheck']
         remainingBuilders = state['remainingBuilders']
 
@@ -415,10 +403,7 @@ class AggregatingScheduler(BaseScheduler):
 
         if remainingBuilders:
             state['remainingBuilders'] = remainingBuilders
-            self.set_state(t, state)
-            return
-
-        if not remainingBuilders:
+        else:
             ss = SourceStamp(branch=self.branch)
             ssid = db.get_sourcestampid(ss, t)
 
@@ -427,7 +412,8 @@ class AggregatingScheduler(BaseScheduler):
 
             # Reset the list of builders we're waiting for
             state['remainingBuilders'] = self.upstreamBuilders
-            self.set_state(t, state)
+
+        self.set_state(t, state)
 
 
 def makePropertiesScheduler(base_class, propfuncs, *args, **kw):
