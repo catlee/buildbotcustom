@@ -1149,9 +1149,9 @@ class MercurialBuildFactory(MozillaBuildFactory):
         # more branches that are missing MOZ_PGO.  Once these branches
         # are all EOL'd, lets remove this and just put 'build' in the 
         # command argv
-        if self.complete_platform.startswith('win32') and \
-            self.branchName in ('mozilla-1.9.1', 'mozilla-1.9.2', 'mozilla-2.0') and \
-            self.profiledBuild:
+        if self.complete_platform == 'win32' and \
+           self.branchName in ('mozilla-1.9.1', 'mozilla-1.9.2', 'mozilla-2.0') and \
+           self.productName == 'firefox':
             bldtgt = 'profiledbuild'
         else:
             bldtgt = 'build'
@@ -1160,10 +1160,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                    WithProperties('MOZ_BUILD_DATE=%(buildid:-)s')]
 
         if self.profiledBuild:
-            # when 191,192 and 20 are finished, we can remove this condition
-            # and just append MOZ_PGO=1 to command depending on self.profiledBuild
-            if not self.branchName in ('mozilla-1.9.1', 'mozilla-1.9.2', 'mozilla-2.0'):
-                command.append('MOZ_PGO=1')
+            command.append('MOZ_PGO=1')
         self.addStep(ScratchboxCommand(
          name='compile',
          command=command,
@@ -4967,6 +4964,21 @@ class ReleaseUpdatesFactory(ReleaseFactory):
          description=['patcher:', 'create patches'],
          haltOnFailure=True
         ))
+        # XXX: For Firefox 10 betas we want the appVersion in the snippets to
+        #      show a version change with each one, so we change them from the
+        #      the appVersion (which is always "10.0") to "11.0", which will
+        #      trigger the new behaviour, and allows betas to update to newer
+        #      ones.
+        if self.productName == 'firefox' and self.version.startswith('10.0b'):
+            cmd = ['bash', WithProperties('%(toolsdir)s/release/edit-snippets.sh'),
+                   'appVersion', '11.0']
+            cmd.extend(self.dirMap.keys())
+            self.addStep(ShellCommand(
+             name='switch_appv_in_snippets',
+             command=cmd,
+             haltOnFailure=True,
+             workdir=self.updateDir,
+            ))
 
     def createBuildNSnippets(self):
         command = ['python',
