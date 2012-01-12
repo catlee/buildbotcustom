@@ -8,7 +8,7 @@ post-job tasks
 - send pulse message about log being uploaded
 - update statusdb with job info (including log url)
 """
-import os, sys, subprocess
+import os, sys, subprocess, socket
 import re
 import cPickle as pickle
 from datetime import datetime
@@ -42,7 +42,7 @@ class PostRunner(object):
             upload_args.append("--nightly")
         if builder.name.startswith("release-"):
             upload_args.append("--release")
-            # TODO version/buildnumber
+            upload_args.append("%s/%s" % (info.get['version'], info.get['build_number']))
 
         if branch == 'try':
             upload_args.append("--try")
@@ -143,17 +143,22 @@ class PostRunner(object):
         else:
             retval['branch'] = None
 
+        if props.getProperty('version') is not None:
+            retval['version'] = props['version']
+
+        if props.getProperty('build_number') is not None:
+            retval['build_number'] = props['build_number']
+
         log.debug("Build info: %s", retval)
         return retval
 
     def writePulseMessage(self, build):
+        builder_name = build.builder.name
         msg = {
-                # TODO: Fix routing key to build.$builder.$number.log_uploaded
-                'event': 'build.%s.log_uploaded' % build.getProperty('statusdb_id'),
+                'event': 'build.%s.%s.log_uploaded' % (builder_name, build.number),
                 'payload': {"build": build.asDict()},
-
-                'master_name': self.config['master_name'], # TODO
-                'master_incarnation': None, #TODO
+                'master_name': socket.getfqdn(),
+                'master_incarnation': 'postrun',
                 'id': None, #TODO
             }
         self.config['pulse_queue'].add(json.dumps([msg]))

@@ -604,7 +604,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'release_config': releaseConfigFile,
                     'platform': None,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
-                    'product': releaseConfig['productName'],
                     },
             })
         else:
@@ -642,7 +641,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         releaseConfig['productName'])),
                     'platform': None,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
-                    'product': releaseConfig['productName'],
                 }
             })
 
@@ -676,7 +674,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'release_config': releaseConfigFile,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
             }
         })
         notify_builders.append(builderPrefix('%s_tag' % releaseConfig['productName']))
@@ -727,7 +724,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                    builderPrefix('%s_source' % releaseConfig['productName'])),
                'platform': None,
                'branch': 'release-%s' % sourceRepoInfo['name'],
-               'product': releaseConfig['productName'],
                }
         })
 
@@ -878,7 +874,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'slavebuilddir': reallyShort(builderPrefix('%s_build' % platform)),
                   'platform': platform,
                   'branch': 'release-%s' % sourceRepoInfo['name'],
-                  'product': releaseConfig['productName'],
                 },
             })
         else:
@@ -913,7 +908,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         'builddir': builderPrefix("standalone_repack", platform),
                         'platform': platform,
                         'branch': 'release-%s' % sourceRepoInfo['name'],
-                        'product': releaseConfig['productName'],
                     }
                 })
 
@@ -952,7 +946,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         'release_config': releaseConfigFile,
                         'platform': platform,
                         'branch': 'release-%s' % sourceRepoInfo['name'],
-                        'product': releaseConfig['productName'],
                     }
                 })
 
@@ -963,7 +956,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 properties={
                         'platform': platform,
                         'branch': 'release-%s' % sourceRepoInfo['name'],
-                        'product': releaseConfig['productName'],
                         },
             ))
 
@@ -1034,7 +1026,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'slavebuilddir': reallyShort(builderPrefix('xulrunner_%s_build' % platform)),
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
-                    'product': releaseConfig['productName'],
                 }
             })
             notify_builders.append(
@@ -1092,7 +1083,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'slavebuilddir': reallyShort(builderPrefix( 'partner_repack', platform)),
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
-                    'product': releaseConfig['productName'],
                 }
             })
 
@@ -1129,7 +1119,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'slavebuilddir':reallyShort(builderPrefix('l10n_verification', platform)),
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
-                    'product': releaseConfig['productName'],
                 }
             })
 
@@ -1193,7 +1182,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'slavebuilddir': reallyShort(builderPrefix('updates')),
                 'platform': platform,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
             }
         })
     elif releaseConfig.get('verifyConfigs'):
@@ -1236,7 +1224,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                'release_config': releaseConfigFile,
                                 'platform': platform,
                                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                                'product': releaseConfig['productName'],
                               },
             })
 
@@ -1263,7 +1250,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                            'release_config': releaseConfigFile,
                            'platform': None,
                            'branch': 'release-%s' % sourceRepoInfo['name'],
-                           'product': releaseConfig['productName'],
                            },
         })
 
@@ -1288,7 +1274,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                            'release_config': releaseConfigFile,
                            'platform': None,
                            'branch': 'release-%s' % sourceRepoInfo['name'],
-                           'product': releaseConfig['productName'],
                           }
         })
 
@@ -1321,7 +1306,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'script_repo_revision': releaseTag,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
                 },
         })
         notify_builders.append(builderPrefix('push_to_mirrors'))
@@ -1349,7 +1333,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'slavebuilddir': reallyShort(builderPrefix('fnl_verf', platform)),
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
             },
         })
 
@@ -1361,7 +1344,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             properties={
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
                 },
             ))
         notify_builders.append(builderPrefix('ready_for_releasetest_testing'))
@@ -1373,7 +1355,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             properties={
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
                 },
             ))
         notify_builders.append(builderPrefix('ready_for_release'))
@@ -1435,7 +1416,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'slavebuilddir': reallyShort(builderPrefix('mu')),
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
             }
         })
         notify_builders.append(builderPrefix('major_update'))
@@ -1474,7 +1454,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                    'release_config': releaseConfigFile,
                                    'platform': platform,
                                    'branch': 'release-%s' % sourceRepoInfo['name'],
-                                   'product': releaseConfig['productName'],
                                   },
                 })
 
@@ -1511,7 +1490,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'release_config': releaseConfigFile,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
             }
         })
 
@@ -1548,7 +1526,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'release_config': releaseConfigFile,
                     'platform': None,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
-                    'product': releaseConfig['productName'],
                 }
             })
 
@@ -1580,7 +1557,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                      reallyShort(builderPrefix('android_verify_sig')),
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
-                'product': releaseConfig['productName'],
                 },
         })
 
@@ -1683,6 +1659,16 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
 
     # Don't merge release builder requests
     nomergeBuilders.extend([b['name'] for b in builders + test_builders])
+
+    # Make sure all builders have our build number and version set
+    for b in builders:
+        props = b.setdefault('properties', {})
+        if 'build_number' not in props:
+            props['build_number'] = releaseConfig['buildNumber']
+        if 'version' not in props:
+            props['version'] = releaseConfig['version']
+        if 'product' not in props:
+            props['product'] = releaseConfig['productName']
 
     return {
             "builders": builders,

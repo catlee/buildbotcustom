@@ -36,7 +36,7 @@ def ssh(user, identity, host, remote_cmd, port=22):
         cmd.extend(['-i', identity])
     cmd.extend(['-p', str(port), host, remote_cmd])
 
-    return retry(do_cmd, attempts=retries, sleeptime=retry_sleep, args=(cmd,))
+    return retry(do_cmd, attempts=retries+1, sleeptime=retry_sleep, args=(cmd,))
 
 def scp(user, identity, host, files, remote_dir, port=22):
     cmd = ['scp']
