@@ -8,7 +8,7 @@ post-job tasks
 - send pulse message about log being uploaded
 - update statusdb with job info (including log url)
 """
-import os, sys, subprocess, socket
+import os, sys, subprocess
 import re
 import cPickle as pickle
 from datetime import datetime
@@ -20,6 +20,7 @@ except ImportError:
 import logging
 log = logging.getLogger(__name__)
 
+import sqlalchemy as sa
 import buildbotcustom.status.db.model as model
 from mozilla_buildtools.queuedir import QueueDir
 
@@ -27,8 +28,10 @@ class PostRunner(object):
     def __init__(self, config):
         self.config = config
 
+        self.command_queue = QueueDir('commands', config['command_queue'])
+        self.pulse_queue = QueueDir('pulse', config['pulse_queue'])
+
     def uploadLog(self, build):
-        log.info("Uploading log")
         """Uploads the build log, and returns the URL to it"""
         builder = build.builder
 
@@ -152,22 +155,22 @@ class PostRunner(object):
         log.debug("Build info: %s", retval)
         return retval
 
-    def writePulseMessage(self, build):
+    def writePulseMessage(self, options, build):
         builder_name = build.builder.name
         msg = {
                 'event': 'build.%s.%s.log_uploaded' % (builder_name, build.number),
                 'payload': {"build": build.asDict()},
-                'master_name': socket.getfqdn(),
-                'master_incarnation': 'postrun',
+                'master_name': options.master_name,
+                'master_incarnation': options.master_incarnation,
                 'id': None, #TODO
             }
-        self.config['pulse_queue'].add(json.dumps([msg]))
+        self.pulse_queue.add(json.dumps([msg]))
 
-    def updateStatusDB(self, build):
+    def updateStatusDB(self, build, request_ids):
         log.info("Updating statusdb")
-        session = model.connect(self.config['database'])()
-        master = model.Master.get(session, self.config['master_url'])
-        master.name = unicode(self.config['master_name'])
+        session = model.connect(self.config['statusdb.url'])()
+        master = model.Master.get(session, self.config['statusdb.master_url'])
+        master.name = unicode(self.config['statusdb.master_name'])
 
         if not master.id:
             log.debug("added master")
@@ -198,6 +201,29 @@ class PostRunner(object):
             db_build.updateFromBBBuild(session, build)
         session.commit()
         log.debug("committed")
+
+        log.debug("updating schedulerdb_requests table")
+
+        schedulerdb = sa.create_engine(self.config['schedulerdb.url'])
+
+        for i in request_ids:
+            # See if we already have this row
+            q = model.schedulerdb_requests.select()
+            q = q.where(model.schedulerdb_requests.c.status_build_id==db_build.id)
+            q = q.where(model.schedulerdb_requests.c.scheduler_request_id==i)
+            q = q.limit(1).execute()
+            if not q.fetchone():
+                # Find the schedulerdb build id for this
+                bid = schedulerdb.execute(
+                        sa.text('select id from builds where brid=:brid and number=:number'),
+                        brid=i, number=build.number
+                        ).fetchone()[0]
+                log.debug("bid for %s is %s", i, bid)
+                model.schedulerdb_requests.insert().execute(
+                        status_build_id=db_build.id,
+                        scheduler_request_id=i,
+                        scheduler_build_id=bid,
+                        )
         return db_build.id
 
     def processBuild(self, options, build_path, request_ids):
@@ -209,7 +235,7 @@ class PostRunner(object):
             if log_url is None:
                 log_url = 'null'
             cmd = [sys.executable] + sys.argv + ["--log-url", log_url]
-            self.config['command_queue'].add(json.dumps(cmd))
+            self.command_queue.add(json.dumps(cmd))
         elif not options.statusdb_id:
             log.info("adding to statusdb")
             log_url = options.log_url
@@ -217,51 +243,46 @@ class PostRunner(object):
                 log_url = None
             build.properties.setProperty('log_url', log_url, 'postrun.py')
             build.properties.setProperty('request_ids', [int(i) for i in request_ids], 'postrun.py')
-            build_id = self.updateStatusDB(build)
-            for i in request_ids:
-                if not model.schedulerdb_requests.select().where(model.schedulerdb_requests.c.build_id==build_id).where(model.schedulerdb_requests.c.request_id==i).limit(1).execute().fetchone():
-                    model.schedulerdb_requests.insert().execute(build_id=build_id, request_id=i)
+            build_id = self.updateStatusDB(build, request_ids)
+
             cmd = [sys.executable] + sys.argv + ["--statusdb-id", str(build_id)]
-            self.config['command_queue'].add(json.dumps(cmd))
+            self.command_queue.add(json.dumps(cmd))
         else:
+            log.info("publishing to pulse")
             log_url = options.log_url
             build_id = options.statusdb_id
             build.properties.setProperty('log_url', log_url, 'postrun.py')
             build.properties.setProperty('statusdb_id', build_id, 'postrun.py')
             build.properties.setProperty('request_ids', [int(i) for i in request_ids], 'postrun.py')
-            self.writePulseMessage(build)
+            self.writePulseMessage(options, build)
 
 def main():
     from optparse import OptionParser
     parser = OptionParser()
     parser.set_defaults(
+            config=None,
             loglevel=logging.INFO,
             log_url=None,
             statusdb_id=None,
+            master_name=None,
+            master_incarnation=None,
             )
+    parser.add_option("-c", "--config", dest="config")
     parser.add_option("-v", "--verbose", dest="loglevel", const=logging.DEBUG, action="store_const")
     parser.add_option("-q", "--quiet", dest="loglevel", const=logging.WARNING, action="store_const")
     parser.add_option("--log-url", dest="log_url")
     parser.add_option("--statusdb-id", dest="statusdb_id", type="int")
+    parser.add_option("--master-name", dest="master_name")
+    parser.add_option("--master-incarnation", dest="master_incarnation")
 
     options, args = parser.parse_args()
 
+    if not options.config:
+        parser.error("you must specify a configuration file")
+
     logging.basicConfig(level=options.loglevel)
 
-    config = {
-            'database': 'mysql://buildbot@localhost/buildbot',
-            'master_url': 'http://localhost:9010',
-            'master_name': 'fooie',
-            'upload_host': 'localhost',
-            'upload_user': 'catlee',
-
-            'pvt_upload_host': 'localhost',
-            'pvt_upload_user': 'catlee',
-            'pvt_upload_patterns': ['fuzzer', 'shadow-central'],
-
-            'command_queue': QueueDir('commands', '/dev/shm/queue/commands/'),
-            'pulse_queue': QueueDir('pulse', '/dev/shm/queue/pulse/'),
-            }
+    config = json.load(open(options.config))
 
     post_runner = PostRunner(config)
 

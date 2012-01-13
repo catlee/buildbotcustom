@@ -539,6 +539,7 @@ class Build(Base):
         return b
 
 schedulerdb_requests = Table('schedulerdb_requests', Base.metadata,
-    Column('build_id', Integer, nullable=False, index=True),
-    Column('request_id', Integer, nullable=False, index=True),
+    Column('status_build_id', Integer, nullable=False, index=True),
+    Column('scheduler_request_id', Integer, nullable=False, index=True),
+    Column('scheduler_build_id', Integer, nullable=False, index=True),
     )
