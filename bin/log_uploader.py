@@ -4,6 +4,7 @@
 Uploads logs from build to the given host.
 """
 import os, cPickle, gzip, subprocess
+from datetime import datetime
 
 from buildbot import util
 from buildbot.status.builder import Results
@@ -84,14 +85,16 @@ def isNightly(build):
     except:
         return False
 
-def formatLog(tmpdir, build, builder_suffix=''):
+def formatLog(tmpdir, build, master_name, builder_suffix=''):
     """
     Returns a filename with the contents of the build log
     written to it.
     """
     builder_name = build.builder.name
-    # TODO: Make something more unique than buildXX
-    build_name = "%s%s-build%s.txt.gz" % (builder_name, builder_suffix, build_number)
+    if master_name:
+        build_name = "%s%s-%s-build%s.txt.gz" % (builder_name, builder_suffix, master_name, build_number)
+    else:
+        build_name = "%s%s-build%s.txt.gz" % (builder_name, builder_suffix, build_number)
 
     logFile = gzip.GzipFile(os.path.join(tmpdir, build_name), "w")
 
@@ -138,7 +141,7 @@ def formatLog(tmpdir, build, builder_suffix=''):
 
         shortText = ' '.join(step.getText()) + ' (results: %s, elapsed: %s)' % (results, elapsed)
         if times and times[0]:
-            logFile.write("========= Started %s (at %s) =========\n" % (shortText, times[0]))
+            logFile.write("========= Started %s (at %s) =========\n" % (shortText, datetime.fromtimestamp(times[0])))
         else:
             logFile.write("========= Started %s =========\n" % shortText)
 
@@ -150,7 +153,7 @@ def formatLog(tmpdir, build, builder_suffix=''):
                 logFile.write("\n")
 
         if times and times[1]:
-            logFile.write("========= Finished %s (at %s) =========\n\n" % (shortText, times[1]))
+            logFile.write("========= Finished %s (at %s) =========\n\n" % (shortText, datetime.fromtimestamp(times[1])))
         else:
             logFile.write("========= Finished %s =========\n\n" % shortText)
     logFile.close()
@@ -171,6 +174,7 @@ if __name__ == "__main__":
             product="firefox",
             retries=retries,
             retry_sleep=retry_sleep,
+            master_name=None,
             )
     parser.add_option("-u", "--user", dest="user", help="upload user name")
     parser.add_option("-i", "--identity", dest="identity", help="ssh identity")
@@ -189,6 +193,7 @@ if __name__ == "__main__":
             help="upload to try build directory")
     parser.add_option("--shadow", dest="shadowbuild", action="store_true",
             help="upload to shadow build directory")
+    parser.add_option("--master-name", dest="master_name")
 
     options, args = parser.parse_args()
 
@@ -213,9 +218,9 @@ if __name__ == "__main__":
         build = getBuild(builder_path, build_number)
         if options.l10n:
             suffix = '-%s' % build.getProperty('locale')
-            logfile = formatLog(local_tmpdir, build, suffix)
+            logfile = formatLog(local_tmpdir, build, options.master_name, suffix)
         else:
-            logfile = formatLog(local_tmpdir, build)
+            logfile = formatLog(local_tmpdir, build, options.master_name)
 
         # Now....upload it!
         remote_tmpdir = ssh(user=options.user, identity=options.identity, host=host,
