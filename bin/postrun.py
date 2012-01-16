@@ -64,7 +64,7 @@ class PostRunner(object):
         if branch:
             upload_args.extend(["--branch", branch])
 
-        upload_args.extend(self.getUploadArgs(build))
+        upload_args.extend(self.getUploadArgs(build, product))
         upload_args.extend([builder.basedir, str(build.number)])
 
         my_dir = os.path.abspath(os.path.dirname(__file__))
@@ -94,17 +94,15 @@ class PostRunner(object):
                 return True
         return False
 
-    def getUploadArgs(self, build):
+    def getUploadArgs(self, build, product):
         if self.isPrivate(build):
-            retval = ["--user", self.config['pvt_upload_user']]
-            if "pvt_upload_sshkey" in self.config:
-                retval.extend(["-i", self.config['pvt_upload_sshkey']])
-            retval.append(self.config['pvt_upload_host'])
-        else:
-            retval = ["--user", self.config['upload_user']]
-            if "upload_sshkey" in self.config:
-                retval.extend(["-i", self.config['upload_sshkey']])
-            retval.append(self.config['upload_host'])
+            product = 'private'
+
+        ssh_info = self.config['product_ssh_info'][product]
+        retval = ['--user', ssh_info['user']]
+        if 'sshkey' in ssh_info:
+            retval.extend(["-i", ssh_info['sshkey']])
+        retval.append(ssh_info['host'])
         return retval
 
     def getBuild(self, build_path):
