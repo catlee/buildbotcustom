@@ -217,7 +217,10 @@ if __name__ == "__main__":
         # Format the log into a compressed text file
         build = getBuild(builder_path, build_number)
         if options.l10n:
-            suffix = '-%s' % build.getProperty('locale')
+            try:
+                suffix = '-%s' % build.getProperty('locale')
+            except KeyError:
+                suffix = '-unknown'
             logfile = formatLog(local_tmpdir, build, options.master_name, suffix)
         else:
             logfile = formatLog(local_tmpdir, build, options.master_name)
