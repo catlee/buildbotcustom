@@ -60,7 +60,7 @@ class PostRunner(object):
         if platform:
             upload_args.extend(["--platform", platform])
         elif not builder.name.startswith("release-"):
-            upload_args.extend(["--platform", 'indep'])
+            upload_args.extend(["--platform", 'noarch'])
         if branch:
             upload_args.extend(["--branch", branch])
 
