@@ -257,7 +257,7 @@ class PostRunner(object):
             self.command_queue.add(json.dumps(cmd))
             # If this is for try, mail the try user as well
             if info['branch'] in self.config['mail_notifier_branches']:
-                self.mailResults(build_path, build, log_url)
+                self.mailResults(build, log_url)
         elif not options.statusdb_id:
             log.info("adding to statusdb")
             log_url = options.log_url
