@@ -718,9 +718,6 @@ def generateBranchObjects(config, name, secrets=None):
     if config['enable_weekly_bundle']:
         weeklyBuilders.append('%s hg bundle' % name)
 
-    logUploadCmd = makeLogUploadCommand(name, config, is_try=config.get('enable_try'),
-            is_shadow=bool(name=='shadow-central'), platform_prop='stage_platform',product_prop='product')
-
     # Currently, each branch goes to a different tree
     # If this changes in the future this may have to be
     # moved out of the loop
@@ -3031,12 +3028,6 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                useChangeTime=False,
                                errorparser="unittest",
                                logCompression="gzip"))
-
-    logUploadCmd = makeLogUploadCommand(branch, branch_config,
-            is_try=bool(branch=='try'),
-            is_shadow=bool(branch=='shadow-central'),
-            platform_prop='stage_platform',
-            product_prop='product')
 
     if branch_config.get('release_tests'):
         releaseObjects = generateTalosReleaseBranchObjects(branch,

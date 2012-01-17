@@ -88,6 +88,24 @@ class PostRunner(object):
             return url.group(), retcode
         return None, retcode
 
+    def mailResults(self, build, log_url):
+        my_dir = os.path.abspath(os.path.dirname(__file__))
+        cmd = [sys.executable, "%s/try_mailer.py" % my_dir,
+                "--log-url", log_url,
+              ]
+
+        cmd.extend(['-f', self.config.get('mail_notifier_sender', 'tryserver@build.mozilla.org')])
+        if self.config.get('mail_real_author'):
+            cmd.append('--to-author')
+
+        for r in self.config.get('mail_extra_people', []):
+            cmd.extend(['-t', r])
+
+        cmd.extend([build.builder.basedir, str(build.number)])
+
+        # Add the command to our queue
+        self.command_queue.add(json.dumps(cmd))
+
     def isPrivate(self, build):
         for pat in self.config.get('pvt_upload_patterns', []):
             if re.search(pat, build.builder.name):
@@ -228,6 +246,7 @@ class PostRunner(object):
 
     def processBuild(self, options, build_path, request_ids):
         build = self.getBuild(build_path)
+        info = self.getBuildInfo(build)
         if not options.log_url:
             log.info("uploading log")
             log_url, retcode = self.uploadLog(build)
@@ -236,6 +255,9 @@ class PostRunner(object):
                 log_url = 'null'
             cmd = [sys.executable] + sys.argv + ["--log-url", log_url]
             self.command_queue.add(json.dumps(cmd))
+            # If this is for try, mail the try user as well
+            if info['branch'] in self.config['mail_notifier_branches']:
+                self.mailResults(build_path, build, log_url)
         elif not options.statusdb_id:
             log.info("adding to statusdb")
             log_url = options.log_url

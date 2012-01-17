@@ -148,7 +148,7 @@ if __name__ == '__main__':
     parser.add_argument("-f", "--from", dest="from_", help="from email address", required=True)
     parser.add_argument("-t", "--to", dest="to", help="to email address", action='append')
     parser.add_argument("--to-author", dest="to_author", help="send mail to build's owner", action="store_true")
-    parser.add_argument("--logurl", dest="log_url", help="url to uploaded log")
+    parser.add_argument("--log-url", dest="log_url", help="url to uploaded log")
     parser.set_defaults(
         to_author=False,
         to=[],
