@@ -106,17 +106,13 @@ class PostRunner(object):
         # Add the command to our queue
         self.command_queue.add(json.dumps(cmd))
 
-    def isPrivate(self, build):
-        for pat in self.config.get('pvt_upload_patterns', []):
-            if re.search(pat, build.builder.name):
-                return True
-        return False
-
     def getUploadArgs(self, build, product):
-        if self.isPrivate(build):
-            product = 'private'
+        ssh_info = self.config['ssh_info']
+        ssh_info = ssh_info.get(product, ssh_info["*"])
 
-        ssh_info = self.config['product_ssh_info'][product]
+        branch = self.getBuildInfo(build).get('branch')
+        ssh_info = ssh_info.get(branch, ssh_info["*"])
+
         retval = ['--user', ssh_info['user']]
         if 'sshkey' in ssh_info:
             retval.extend(["-i", ssh_info['sshkey']])
