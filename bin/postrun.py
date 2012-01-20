@@ -40,7 +40,7 @@ class PostRunner(object):
         product = info['product']
         platform = info['platform']
 
-        upload_args = ['--master-name', self.config['statusdb.master_name']]
+        upload_args = ['-r', '2', '-t', '10', '--master-name', self.config['statusdb.master_name']]
         if "nightly" in builder.name:
             upload_args.append("--nightly")
         if builder.name.startswith("release-"):
