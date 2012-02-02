@@ -135,6 +135,11 @@ def formatLog(tmpdir, build, master_name, builder_suffix=''):
         else:
             elapsed = util.formatInterval(times[1] - times[0])
 
+        # TODO: write out something cleaner for steps that haven't run
+        #
+        # ========= Started  (results: not started, elapsed: not started) ==========
+        # ======== Finished  (results: not started, elapsed: not started) ========
+        # sucks
         results = step.getResults()[0]
         if results == (None, []):
             results = "not started"

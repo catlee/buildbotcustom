@@ -7,6 +7,8 @@ post-job tasks
 - (optionally) mail users about try results
 - send pulse message about log being uploaded
 - update statusdb with job info (including log url)
+
+TODO: describe how we move from one task to another
 """
 import os, sys, subprocess
 import re
@@ -45,7 +47,7 @@ class PostRunner(object):
             upload_args.append("--nightly")
         if builder.name.startswith("release-"):
             upload_args.append("--release")
-            upload_args.append("%s/%s" % (info.get['version'], info.get['build_number']))
+            upload_args.append("%s/%s" % (info.get('version'), info.get('build_number')))
 
         if branch == 'try':
             upload_args.append("--try")
@@ -60,6 +62,7 @@ class PostRunner(object):
         if platform:
             upload_args.extend(["--platform", platform])
         elif not builder.name.startswith("release-"):
+            # TODO: why don't release builds need this?
             upload_args.extend(["--platform", 'noarch'])
         if branch:
             upload_args.extend(["--branch", branch])
@@ -71,8 +74,10 @@ class PostRunner(object):
         cmd = [sys.executable, "%s/log_uploader.py" % my_dir] + upload_args
         devnull = open(os.devnull)
 
+        # TODO: Use logging instead of print
         print "Running", cmd
 
+        # TODO: Use utils.commands
         proc = subprocess.Popen(cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
