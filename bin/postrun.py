@@ -3,14 +3,27 @@
 postrun.py [options] /path/to/build/pickle
 
 post-job tasks
-- upload logs
-- (optionally) mail users about try results
-- send pulse message about log being uploaded
+- upload logs and optionally mail users about try results
 - update statusdb with job info (including log url)
+- send pulse message about log being uploaded
 
-TODO: describe how we move from one task to another
+The control flow between these tasks is handled inside PostRunner.proessBuild.
+After each task completes successfully, it creates a new entry in the command
+queuedir adding the results of its operations as additional parameters to
+postrun.py.  The command runner is then responsible for running the new command
+or retrying failed commands.
+
+For example, after the log has been uploaded and the try user mailed, processBuild creates a
+new entry in the command queue copying the original arguments with the addition
+of "--log-url <url>".
+
+The statusdb import adds "--statusdb-id <buildid>".
+
+The pulse message generation is the last task, so it doesn't create any new
+command queue entries.
+
 """
-import os, sys, subprocess
+import os, sys
 import re
 import cPickle as pickle
 from datetime import datetime
@@ -25,6 +38,8 @@ log = logging.getLogger(__name__)
 import sqlalchemy as sa
 import buildbotcustom.status.db.model as model
 from mozilla_buildtools.queuedir import QueueDir
+
+from utils.commands import get_output
 
 class PostRunner(object):
     def __init__(self, config):
@@ -59,11 +74,12 @@ class PostRunner(object):
 
         if product:
             upload_args.extend(["--product", product])
+
         if platform:
             upload_args.extend(["--platform", platform])
-        elif not builder.name.startswith("release-"):
-            # TODO: why don't release builds need this?
+        else:
             upload_args.extend(["--platform", 'noarch'])
+
         if branch:
             upload_args.extend(["--branch", branch])
 
@@ -74,18 +90,9 @@ class PostRunner(object):
         cmd = [sys.executable, "%s/log_uploader.py" % my_dir] + upload_args
         devnull = open(os.devnull)
 
-        # TODO: Use logging instead of print
-        print "Running", cmd
+        log.info("Running %s", cmd)
 
-        # TODO: Use utils.commands
-        proc = subprocess.Popen(cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                stdin=devnull)
-
-        retcode = proc.wait()
-        output = proc.stdout.read().strip()
-        print output
+        output = get_output(cmd, stdin=devnull)
 
         # Look for URLs
         url = re.search("http(s)?://\S+", output)
@@ -174,14 +181,14 @@ class PostRunner(object):
         log.debug("Build info: %s", retval)
         return retval
 
-    def writePulseMessage(self, options, build):
+    def writePulseMessage(self, options, build, build_id):
         builder_name = build.builder.name
         msg = {
                 'event': 'build.%s.%s.log_uploaded' % (builder_name, build.number),
                 'payload': {"build": build.asDict()},
                 'master_name': options.master_name,
                 'master_incarnation': options.master_incarnation,
-                'id': None, #TODO
+                'id': build_id,
             }
         self.pulse_queue.add(json.dumps([msg]))
 
@@ -256,7 +263,7 @@ class PostRunner(object):
                 log_url = 'null'
             cmd = [sys.executable] + sys.argv + ["--log-url", log_url]
             self.command_queue.add(json.dumps(cmd))
-            # If this is for try, mail the try user as well
+            # If this is for try, Mail the try user as well
             if info['branch'] in self.config['mail_notifier_branches']:
                 self.mailResults(build, log_url)
         elif not options.statusdb_id:
@@ -277,7 +284,7 @@ class PostRunner(object):
             build.properties.setProperty('log_url', log_url, 'postrun.py')
             build.properties.setProperty('statusdb_id', build_id, 'postrun.py')
             build.properties.setProperty('request_ids', [int(i) for i in request_ids], 'postrun.py')
-            self.writePulseMessage(options, build)
+            self.writePulseMessage(options, build, build_id)
 
 def main():
     from optparse import OptionParser
