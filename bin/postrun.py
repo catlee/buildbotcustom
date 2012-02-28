@@ -97,8 +97,8 @@ class PostRunner(object):
         # Look for URLs
         url = re.search("http(s)?://\S+", output)
         if url:
-            return url.group(), retcode
-        return None, retcode
+            return url.group()
+        return None
 
     def mailResults(self, build, log_url):
         my_dir = os.path.abspath(os.path.dirname(__file__))
@@ -257,8 +257,7 @@ class PostRunner(object):
         info = self.getBuildInfo(build)
         if not options.log_url:
             log.info("uploading log")
-            log_url, retcode = self.uploadLog(build)
-            assert retcode == 0
+            log_url = self.uploadLog(build)
             if log_url is None:
                 log_url = 'null'
             cmd = [sys.executable] + sys.argv + ["--log-url", log_url]
