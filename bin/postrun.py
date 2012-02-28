@@ -39,7 +39,7 @@ import sqlalchemy as sa
 import buildbotcustom.status.db.model as model
 from mozilla_buildtools.queuedir import QueueDir
 
-from utils.commands import get_output
+from util.commands import get_output
 
 class PostRunner(object):
     def __init__(self, config):
