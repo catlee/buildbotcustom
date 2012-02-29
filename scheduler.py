@@ -14,6 +14,7 @@ from buildbot.schedulers.timed import Nightly
 from buildbot.schedulers.triggerable import Triggerable
 from buildbot.sourcestamp import SourceStamp
 from buildbot.process.properties import Properties
+from buildbot.status.builder import SUCCESS, WARNINGS
 
 from buildbot.util import now
 
@@ -339,6 +340,145 @@ class TriggerBouncerCheck(Triggerable):
         assert self.working
         self.working = False
         return None # eat the failure
+
+class AggregatingScheduler(BaseScheduler, Triggerable):
+    """This scheduler waits until at least one build of each of
+    `upstreamBuilders` completes with a result in `okResults`. Once this
+    happens, it triggers builds on `builderNames` with `properties` set.
+    Use trigger() method to reset its state.
+
+    `okResults` should be a tuple of acceptable result codes, and defaults to
+    (SUCCESS,WARNINGS)."""
+
+    compare_attrs = ('name', 'branch', 'builderNames', 'properties',
+                     'upstreamBuilders', 'okResults')
+
+    def __init__(self, name, branch, builderNames, upstreamBuilders,
+                 okResults=(SUCCESS,WARNINGS), properties={}):
+        BaseScheduler.__init__(self, name, builderNames, properties)
+        self.branch = branch
+        self.lock = defer.DeferredLock()
+        assert isinstance(upstreamBuilders, (list, tuple))
+        self.upstreamBuilders = upstreamBuilders
+        self.reason = "AccumulatingScheduler(%s)" % name
+        self.okResults = okResults
+        self.log_prefix = '%s(%s) <id=%s>' % (self.__class__.__name__, name,
+                                              id(self))
+
+    def get_initial_state(self, max_changeid):
+        log.msg('%s: get_initial_state()' % self.log_prefix)
+        # Keep initial state of builders in upstreamBuilders
+        # and operate on remainingBuilders to simplify comparison
+        # on reconfig
+        return {
+                "upstreamBuilders": self.upstreamBuilders,
+                "remainingBuilders": self.upstreamBuilders,
+                "lastCheck": now(),
+                }
+
+    def startService(self):
+        self.parent.db.runInteractionNow(self._startService)
+        BaseScheduler.startService(self)
+
+    def _startService(self, t):
+        state = self.get_state(t)
+        old_state = state.copy()
+        # Remove deleted/renamed upstream builders to prevent undead schedulers
+        for b in list(state['remainingBuilders']):
+            if b not in self.upstreamBuilders:
+                state['remainingBuilders'].remove(b)
+        # Add new upstream builders. New builders shouln't be in
+        # state['upstreamBuilders'] which contains old self.upstreamBuilders.
+        # Since state['upstreamBuilders'] was introduced after
+        # state['remainingBuilders'], it may be absent from the scheduler
+        # database.
+        for b in self.upstreamBuilders:
+            if b not in state.get('upstreamBuilders', []) and \
+               b not in state['remainingBuilders']:
+                state['remainingBuilders'].append(b)
+        state['upstreamBuilders'] = self.upstreamBuilders
+        log.msg('%s: reloaded' % self.log_prefix)
+        if old_state != state:
+            log.msg('%s: old state: %s' % (self.log_prefix, old_state))
+            log.msg('%s: new state: %s' % (self.log_prefix, state))
+        self.set_state(t, state)
+
+    def trigger(self, ss, set_props=None):
+        """Reset scheduler state"""
+        d = self.lock.acquire()
+        d.addCallback(lambda _: self.parent.db.runInteractionNow(self._trigger))
+        d.addBoth(lambda _: self.lock.release())
+
+    def _trigger(self, t):
+        state = self.get_initial_state(None)
+        state['lastReset'] = state['lastCheck']
+        log.msg('%s: reset state: %s' % (self.log_prefix, state))
+        self.set_state(t, state)
+
+    def run(self):
+        if self.lock.locked:
+            return
+
+        d = self.lock.acquire()
+        d.addCallback(lambda _: self.parent.db.runInteraction(self._run))
+        d.addBoth(lambda _: self.lock.release())
+        return d
+
+    def findNewBuilds(self, db, t, lastCheck):
+        q = """SELECT buildername, id, complete_at FROM
+               buildrequests WHERE
+               buildername IN %s AND
+               buildrequests.complete = 1 AND
+               buildrequests.results IN %s AND
+               buildrequests.complete_at > ?
+            """ % (
+                    db.parmlist(len(self.upstreamBuilders)),
+                    db.parmlist(len(self.okResults)),
+                    )
+        q = db.quoteq(q)
+        t.execute(q, tuple(self.upstreamBuilders) + tuple(self.okResults) +
+                  (lastCheck,))
+        newBuilds = t.fetchall()
+        if newBuilds:
+            log.msg('%s: new builds: %s since %s' % (self.log_prefix, newBuilds,
+                                                    lastCheck))
+        return newBuilds
+
+    def _run(self, t):
+        db = self.parent.db
+        state = self.get_state(t)
+        # Check for new builds completed since lastCheck
+        lastCheck = state['lastCheck']
+        remainingBuilders = state['remainingBuilders']
+
+        newBuilds = self.findNewBuilds(db, t, lastCheck)
+
+        for builder, brid, complete_at in newBuilds:
+            state['lastCheck'] = max(state['lastCheck'], complete_at)
+            if builder in remainingBuilders:
+                remainingBuilders.remove(builder)
+
+        lastCheck = state['lastCheck']
+
+        if remainingBuilders:
+            state['remainingBuilders'] = remainingBuilders
+        else:
+            ss = SourceStamp(branch=self.branch)
+            ssid = db.get_sourcestampid(ss, t)
+
+            # Start a build!
+            log.msg(
+                '%s: new buildset: branch=%s, ssid=%s, builders: %s' \
+                % (self.log_prefix, self.branch, ssid,
+                   ', '.join(self.builderNames)))
+            self.create_buildset(ssid, "downstream", t)
+
+            # Reset the list of builders we're waiting for
+            state = self.get_initial_state(None)
+            state['lastCheck'] = lastCheck
+
+        self.set_state(t, state)
+
 
 def makePropertiesScheduler(base_class, propfuncs, *args, **kw):
     """Return a subclass of `base_class` that will call each of `propfuncs` to

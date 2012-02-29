@@ -48,6 +48,12 @@ class MozillaUpdateConfig(ShellCommand):
         self.super_class.setBuild(self, build)
         title = build.slavename
 
+        try:
+            self.addOptions += self.getProperty('configurationOptions').split(',')
+        # Property doesn't exist, that's fine
+        except KeyError:
+            pass
+
         #if we are an addonTester then the addonName/addonUrl build property should be set
         #  if it's not set this will throw a key error and the run will go red - which should be the expected result
         if self.addonTester:
@@ -69,8 +75,7 @@ class MozillaUpdateConfig(ShellCommand):
             perfconfigurator = "PerfConfigurator.py"
 
         self.setCommand(["python", perfconfigurator, "-v", "-e", exePath,
-            "-t", title, "-b", self.branch,
-            '--branchName', self.branchName] + self.addOptions)
+            "-t", title, '--branchName', self.branchName] + self.addOptions)
 
     def evaluateCommand(self, cmd):
         superResult = self.super_class.evaluateCommand(self, cmd)

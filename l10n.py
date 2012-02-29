@@ -90,6 +90,8 @@ class L10nMixin(object):
         if localesURL:
             self.localesURL = localesURL
         else:
+            # Make sure that branch is not none when using this path
+            assert branch != None
             # revision will be expanded later
             self.localesURL = "%s%s/raw-file/%%(revision)s/%s" % \
                                       (repo, branch, localesFile)
@@ -102,8 +104,7 @@ class L10nMixin(object):
         # Make sure a supported platform is passed. Allow variations, but make
         # sure to convert them to the form the locales files ues.
         assert platform in ('linux', 'linux64', 'win32', 'win64',
-                'macosx', 'macosx64', 'osx', 'osx64',
-                'maemo', 'android-r7')
+                'macosx', 'macosx64', 'osx', 'osx64')
 
         self.platform = platform
         if self.platform.startswith('macosx'):
@@ -185,7 +186,7 @@ class TriggerableL10n(Triggerable, L10nMixin):
 
     compare_attrs = ('name', 'builderNames', 'branch')
 
-    def __init__(self, name,  builderNames, branch=None, **kwargs):
+    def __init__(self, name,  builderNames, **kwargs):
         L10nMixin.__init__(self, **kwargs)
         Triggerable.__init__(self, name, builderNames)
 
@@ -200,7 +201,7 @@ class DependentL10n(Dependent, L10nMixin):
     'upstream' scheduler has completed successfully.
     """
 
-    compare_attrs = ('name', 'upstream', 'builders')
+    compare_attrs = Dependent.compare_attrs[:]
 
     def __init__(self, name, upstream, builderNames, **kwargs):
         Dependent.__init__(self, name, upstream, builderNames)
