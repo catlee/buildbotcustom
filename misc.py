@@ -395,6 +395,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
             branchName=branch_name,
             remoteExtras=pf.get('remote_extras'),
             downloadSymbols=pf.get('download_symbols', True),
+            downloadSymbolsOnDemand=pf.get('download_symbols_ondemand', False),
         )
         builder = {
             'name': '%s %s' % (name_prefix, suites_name),

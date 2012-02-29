@@ -6561,7 +6561,7 @@ class MozillaTestFactory(MozillaBuildFactory):
 
         self.addCleanupSteps()
         self.addPrepareBuildSteps()
-        if self.downloadSymbols:
+        if self.downloadSymbols or self.downloadSymbolsOnDemand:
             self.addPrepareSymbolsSteps()
         if self.downloadTests:
             self.addPrepareTestsSteps()
