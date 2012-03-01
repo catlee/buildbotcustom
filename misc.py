@@ -391,7 +391,8 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
             buildToolsRepoPath=config['build_tools_repo_path'],
             branchName=branch_name,
             remoteExtras=pf.get('remote_extras'),
-            downloadSymbols=pf.get('download_symbols', True),
+            downloadSymbols=pf.get('download_symbols', False),
+            downloadSymbolsOnDemand=pf.get('download_symbols_ondemand', True),
         )
         builder = {
             'name': '%s %s' % (name_prefix, suites_name),
@@ -450,9 +451,9 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                     thisChunk=i+1,
                     chunkByDir=suites.get('chunkByDir'),
                     env=pf.get('unittest-env', {}),
-                    downloadSymbols=pf.get('download_symbols', True),
+                    downloadSymbols=pf.get('download_symbols', False),
+                    downloadSymbolsOnDemand=pf.get('download_symbols_ondemand', True),
                     resetHwClock=resetHwClock,
-                    stackwalk_cgi=config.get('stackwalk_cgi'),
                 )
                 builder = {
                     'name': '%s %s-%i/%i' % (name_prefix, suites_name, i+1, totalChunks),
@@ -479,10 +480,10 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                 buildToolsRepoPath=config['build_tools_repo_path'],
                 buildSpace=1.0,
                 buildsBeforeReboot=config['platforms'][platform]['builds_before_reboot'],
-                downloadSymbols=pf.get('download_symbols', True),
+                downloadSymbols=pf.get('download_symbols', False),
+                downloadSymbolsOnDemand=pf.get('download_symbols_ondemand', True),
                 env=pf.get('unittest-env', {}),
                 resetHwClock=resetHwClock,
-                stackwalk_cgi=config.get('stackwalk_cgi'),
             )
             builder = {
                 'name': '%s %s' % (name_prefix, suites_name),
@@ -756,7 +757,8 @@ def generateBranchObjects(config, name, secrets=None):
     if config['enable_l10n'] and config['enable_l10n_onchange']:
         hg_all_locales_poller = HgAllLocalesPoller(hgURL = config['hgurl'],
                             repositoryIndex = config['l10n_repo_path'],
-                            pollInterval=l10nPollInterval)
+                            pollInterval=l10nPollInterval,
+                            branch=name)
         hg_all_locales_poller.parallelRequests = 1
         branchObjects['change_source'].append(hg_all_locales_poller)
 
@@ -2020,7 +2022,8 @@ def generateCCBranchObjects(config, name, secrets=None):
     if config['enable_l10n'] and config['enable_l10n_onchange']:
         hg_all_locales_poller = HgAllLocalesPoller(hgURL = config['hgurl'],
                             repositoryIndex = config['l10n_repo_path'],
-                            pollInterval=l10nPollInterval)
+                            pollInterval=l10nPollInterval,
+                            branch=name)
         hg_all_locales_poller.parallelRequests = 1
         branchObjects['change_source'].append(hg_all_locales_poller)
 
