@@ -50,7 +50,7 @@ reload(release.info)
 reload(release.paths)
 
 from buildbotcustom.status.errors import purge_error, global_errors, \
-  upload_errors, tegra_errors
+  upload_errors
 from buildbotcustom.steps.base import ShellCommand, SetProperty, Mercurial, \
   Trigger, RetryingShellCommand, RetryingSetProperty
 from buildbotcustom.steps.misc import TinderboxShellCommand, SendChangeStep, \
@@ -1920,7 +1920,7 @@ class TryBuildFactory(MercurialBuildFactory):
                 haltOnFailure=True
             ))
         baseUrl = 'http://%s/pub/mozilla.org/%s/tinderbox-builds/mozilla-central-%s' % \
-            (self.stageServer, self.productName, self.platform)
+            (self.stageServer, self.productName, self.complete_platform)
 
         self.addLeakTestStepsCommon(baseUrl, leakEnv, False)
 
@@ -6429,7 +6429,7 @@ class L10nVerifyFactory(ReleaseFactory):
                   '--exclude=unsigned',
                   '--exclude=update',
                   '--exclude=*.crashreporter-symbols.zip',
-                  '--exclude=*.tests.zip',
+                  '--exclude=*.zip',
                   '--exclude=*.tests.tar.bz2',
                   '--exclude=*.txt',
                   '--exclude=logs',
@@ -6460,7 +6460,7 @@ class L10nVerifyFactory(ReleaseFactory):
                   '--exclude=unsigned',
                   '--exclude=update',
                   '--exclude=*.crashreporter-symbols.zip',
-                  '--exclude=*.tests.zip',
+                  '--exclude=*.zip',
                   '--exclude=*.tests.tar.bz2',
                   '--exclude=*.txt',
                   '--exclude=logs',
@@ -7056,7 +7056,6 @@ class RemoteUnittestFactory(MozillaTestFactory):
             command=['python', '/builds/sut_tools/cleanup.py',
                      WithProperties("%(sut_ip)s"),
                     ],
-            log_eval_func=lambda c,s: regex_log_evaluator(c, s, tegra_errors),
             haltOnFailure=True)
         )
         self.addStep(ShellCommand(
