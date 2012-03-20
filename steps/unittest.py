@@ -352,7 +352,7 @@ class ReftestMixin(object):
                     'reftest/tests/layout/reftests/reftest.list']
         elif suite == 'reftest-no-d2d-d3d':
             return ['--setpref=gfx.direct2d.disabled=true',
-                    '--setpref=layers.accelerate-none=true',
+                    '--setpref=layers.acceleration.disabled=true',
                     'reftest/tests/layout/reftests/reftest.list']
         elif suite == 'opengl-no-accel':
             return ['--setpref=layers.acceleration.force-enabled=disabled',
@@ -918,7 +918,7 @@ class RemoteMochitestStep(MochitestMixin, ChunkingMixin, ShellCommandReportTimeo
         if testManifest:
             self.command.extend(['--run-only-tests', testManifest])
         if symbols_path:
-            self.command.append(WithProperties("--symbols-path=../%s" % symbols_path))
+            self.command.append(WithProperties("--symbols-path=%s" % symbols_path))
         self.command.extend(self.getChunkOptions(totalChunks, thisChunk))
 
 
@@ -967,5 +967,5 @@ class RemoteReftestStep(ReftestMixin, ChunkingMixin, ShellCommandReportTimeout):
         self.command.extend(self.getSuiteOptions(suite))
 
         if symbols_path:
-            self.command.append(WithProperties("--symbols-path=../%s" % symbols_path))
+            self.command.append(WithProperties("--symbols-path=%s" % symbols_path))
 
