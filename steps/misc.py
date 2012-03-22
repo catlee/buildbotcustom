@@ -440,6 +440,8 @@ class DownloadFile(RetryingShellCommand):
     haltOnFailure = True
     name = "download"
     description = ["download"]
+    retryCommand = ['python', WithProperties('%(toolsdir)s/buildfarm/utils/retry.py'),
+                    '-s', '30', '-r', '10']
 
     def __init__(self, url_fn=None, url=None, url_property=None, filename_property=None,
             ignore_certs=False, wget_args=None, **kwargs):
