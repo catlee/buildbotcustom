@@ -449,14 +449,20 @@ class DownloadFile(RetryingShellCommand):
         self.url_fn = url_fn
         self.url_property = url_property
         self.filename_property = filename_property
-        self.ignore_certs = ignore_certs
         assert bool(self.url) ^ bool(self.url_fn), \
                 "One of url_fn or url must be set, not both (%s %s)"
         if wget_args:
             self.wget_args = wget_args
         else:
             self.wget_args = ['--progress=dot:mega']
-        self.super_class = ShellCommand
+
+        if ignore_certs:
+            command = ["wget"] + self.wget_args + ["-N", "--no-check-certificate"]
+        else:
+            command = ["wget"] + self.wget_args + ["-N"]
+
+        self.super_class = RetryingShellCommand
+        kwargs['command'] = command
         self.super_class.__init__(self, **kwargs)
         self.addFactoryArguments(url_fn=url_fn, url=url,
                 url_property=url_property, filename_property=filename_property,
@@ -479,10 +485,7 @@ class DownloadFile(RetryingShellCommand):
             self.setProperty(self.filename_property,
                     os.path.basename(renderedUrl), "DownloadFile")
 
-        if self.ignore_certs:
-            self.setCommand(["wget"] + self.wget_args + ["-N", "--no-check-certificate", url])
-        else:
-            self.setCommand(["wget"] + self.wget_args + ["-N", url])
+        self.command = self.command + [cmd]
         self.super_class.start(self)
 
     def evaluateCommand(self, cmd):
