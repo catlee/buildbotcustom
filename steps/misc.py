@@ -485,7 +485,7 @@ class DownloadFile(RetryingShellCommand):
             self.setProperty(self.filename_property,
                     os.path.basename(renderedUrl), "DownloadFile")
 
-        self.command = self.command + [cmd]
+        self.command = self.command + [url]
         self.super_class.start(self)
 
     def evaluateCommand(self, cmd):
