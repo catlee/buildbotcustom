@@ -436,7 +436,7 @@ class SendChangeStep(ShellCommand):
             return self.finished(FAILURE)
 
 
-class DownloadFile(ShellCommand):
+class DownloadFile(RetryingShellCommand):
     haltOnFailure = True
     name = "download"
     description = ["download"]
