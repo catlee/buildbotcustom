@@ -998,8 +998,10 @@ def generateBranchObjects(config, name, secrets=None):
 
         if per_checkin_build_uses_pgo:
             per_checkin_unittest_branch = pgoUnittestBranch
+            slaves = pf.get('pgo_slaves', pf['slaves'])
         else:
             per_checkin_unittest_branch = unittestBranch
+            slaves = pf['slaves']
 
         if config.get('mozilla_dir'):
             extra_args['mozillaDir'] = config['mozilla_dir']
@@ -1069,17 +1071,12 @@ def generateBranchObjects(config, name, secrets=None):
             }
             factory_kwargs.update(extra_args)
 
-            if name in ('mozilla-1.9.1', 'mozilla-1.9.2', 'mozilla-2.0'):
-                # We force profiledBuild off here because its meaning has changed
-                # We deal with turning on PGO for these old branches in the actual factory
-                factory_kwargs['profiledBuild'] = False
-
             mozilla2_dep_factory = factory_class(**factory_kwargs)
             #eg. TB Linux comm-central build
             #    TB Linux comm-central leak test build
             mozilla2_dep_builder = {
                 'name': '%s build' % pf['base_name'],
-                'slavenames': pf['slaves'],
+                'slavenames': slaves,
                 'builddir': '%s-%s' % (name, platform),
                 'slavebuilddir': reallyShort('%s-%s' % (name, platform), pf['stage_product']),
                 'factory': mozilla2_dep_factory,
@@ -1106,7 +1103,7 @@ def generateBranchObjects(config, name, secrets=None):
                 pgo_factory = factory_class(**pgo_kwargs)
                 pgo_builder = {
                     'name': '%s pgo-build' % pf['base_name'],
-                    'slavenames': pf['slaves'],
+                    'slavenames': pf.get('pgo_slaves', pf['slaves']),
                     'builddir':  '%s-%s-pgo' % (name, platform),
                     'slavebuilddir': reallyShort('%s-%s-pgo' % (name, platform), pf['stage_product']),
                     'factory': pgo_factory,
@@ -1258,14 +1255,11 @@ def generateBranchObjects(config, name, secrets=None):
             if platform in config['pgo_platforms']:
                 nightly_pgo = True
                 nightlyUnittestBranch = pgoUnittestBranch
+                slaves = pf.get('pgo_slaves', pf['slaves'])
             else:
                 nightlyUnittestBranch = unittestBranch
                 nightly_pgo = False
-
-            # More 191,192,20 special casing
-            if name in ('mozilla-1.9.1', 'mozilla-1.9.2', 'mozilla-2.0'):
-                nightlyUnittestBranch = unittestBranch
-                nightly_pgo = False
+                slaves = pf['slaves']
 
             mozilla2_nightly_factory = NightlyBuildFactory(
                 env=platform_env,
@@ -1335,7 +1329,7 @@ def generateBranchObjects(config, name, secrets=None):
             #eg. TB Linux comm-aurora nightly
             mozilla2_nightly_builder = {
                 'name': nightly_builder,
-                'slavenames': pf['slaves'],
+                'slavenames': slaves,
                 'builddir': '%s-%s-nightly' % (name, platform),
                 'slavebuilddir': reallyShort('%s-%s-nightly' % (name, platform), pf['stage_product']),
                 'factory': mozilla2_nightly_factory,
@@ -1428,10 +1422,7 @@ def generateBranchObjects(config, name, secrets=None):
                     branchObjects['builders'].append(mozilla2_l10n_nightly_builder)
 
             if config['enable_shark'] and pf.get('enable_shark'):
-                if name in ('mozilla-1.9.1','mozilla-1.9.2'):
-                    shark_objdir = config['objdir']
-                else:
-                    shark_objdir = pf['platform_objdir']
+                shark_objdir = pf['platform_objdir']
                 mozilla2_shark_factory = NightlyBuildFactory(
                     env=platform_env,
                     objdir=shark_objdir,
