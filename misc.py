@@ -1002,7 +1002,7 @@ def generateBranchObjects(config, name, secrets=None):
             per_checkin_unittest_branch = pgoUnittestBranch
             if 'pgo_platform' in pf:
                 slaves = config['platforms'][pf['pgo_platform']]['slaves']
-                env = config['platforms'][pf['pgo_platforms']]['env']
+                env = config['platforms'][pf['pgo_platform']]['env']
         else:
             per_checkin_unittest_branch = unittestBranch
 
