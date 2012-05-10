@@ -188,26 +188,26 @@ if __name__ == '__main__':
 
     # Let's check the results to see if we need the message
     result = build.getResults()
-    # default is silence, never make the message
+    # default is silence, never create a message
+    # if failure, send failure emails only
     # if all emails, alway make the message
-    # if failures, send failure emails only
     msgdict = None
     # Generate the message
-	if tm_options.all_emails:
-		msgdict = makeTryMessage(build, log_url)
-	elif tm_options.failure:
-		if result != SUCCESS:
-			msgdict = makeTryMessage(build, log_url)
+    if tm_options.all_emails:
+        msgdict = makeTryMessage(build, log_url)
+    elif tm_options.failure:
+        if result != SUCCESS:
+            msgdict = makeTryMessage(build, log_url)
 
-	# Send it!
-	if msgdict != None:
-		if options.to_author:
-			options.to.append(msgdict['author'])
-		msg = formatMessage(msgdict, options.from_, options.to)
-		print msg
+    # Send it!
+    if msgdict != None:
+        if options.to_author:
+            options.to.append(msgdict['author'])
+        msg = formatMessage(msgdict, options.from_, options.to)
+        print msg
 
-		s = SMTP()
-		s.connect()
-		s.sendmail(options.from_, options.to, msg.as_string())
+        s = SMTP()
+        s.connect()
+        s.sendmail(options.from_, options.to, msg.as_string())
 
     sys.exit(exit_code)
