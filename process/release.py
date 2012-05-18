@@ -31,7 +31,7 @@ from buildbotcustom.misc import get_l10n_repositories, \
 from buildbotcustom.common import reallyShort
 from buildbotcustom.process.factory import StagingRepositorySetupFactory, \
   ScriptFactory, SingleSourceFactory, ReleaseBuildFactory, \
-  ReleaseUpdatesFactory, ReleaseFinalVerification, L10nVerifyFactory, \
+  ReleaseUpdatesFactory, ReleaseFinalVerification, \
   PartnerRepackFactory, MajorUpdateFactory, XulrunnerReleaseBuildFactory, \
   TuxedoEntrySubmitterFactory, makeDummyBuilder, SigningScriptFactory
 from buildbotcustom.changes.ftppoller import UrlPoller
@@ -75,6 +75,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
     unix_slaves = []
     all_slaves = []
     for p in branchConfig['platforms']:
+        if p == 'b2g':
+            continue
         platform_slaves = branchConfig['platforms'][p].get('slaves', [])
         all_slaves.extend(platform_slaves)
         if 'win' not in p:
@@ -545,6 +547,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 ))
             xr_deliverables_builders.append(builderPrefix('xulrunner_source'))
 
+    mozillaDir = None
+    if 'mozilla_dir' in releaseConfig:
+        mozillaDir = releaseConfig['mozilla_dir']
+
     for platform in releaseConfig['enUSPlatforms']:
         # shorthand
         pf = branchConfig['platforms'][platform]
@@ -634,6 +640,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 signingServers=signingServers,
                 enableSigning=releaseConfig.get('enableSigningAtBuildTime', True),
                 createPartial=releaseConfig.get('enablePartialMarsAtBuildTime', True),
+                mozillaDir=mozillaDir,
             )
 
             builders.append({
@@ -668,6 +675,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             env = builder_env.copy()
             env.update(pf['env'])
             env['MOZ_UPDATE_CHANNEL'] = releaseChannel
+            env['COMM_REV']           = releaseTag
+            env['MOZILLA_REV']        = releaseTag
 
             if not releaseConfig.get('disableStandaloneRepacks'):
                 extra_args = [platform, branchConfigFile]
@@ -706,10 +715,13 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         extra_args=extra_args,
                     )
                 else:
-                    extra_args = [platform, branchConfigFile, str(l10nChunks),
-                                  str(n)]
+                    generatePartials = "noPartials"
                     if releaseConfig.get('enablePartialMarsAtBuildTime', True):
-                        extra_args.append('generatePartials')
+                        generatePartials = 'generatePartials'
+                    extra_args = [platform, branchConfigFile, str(l10nChunks),
+                                  str(n), generatePartials, branchConfig['stage_ssh_key'], branchConfig['stage_server'],
+                                  branchConfig['stage_username'], branchConfig['hghost'],
+                                  branchConfig['compare_locales_repo_path']]
                     repack_factory = SigningScriptFactory(
                         signingServers=signingServers,
                         env=env,
@@ -895,45 +907,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             })
             deliverables_builders.append(
                 builderPrefix('partner_repack', platform))
-
-    if not releaseConfig.get('disableL10nVerification'):
-        for platform in releaseConfig['l10nPlatforms']:
-            l10n_verification_factory = L10nVerifyFactory(
-                hgHost=branchConfig['hghost'],
-                buildToolsRepoPath=tools_repo_path,
-                cvsroot=releaseConfig['cvsroot'],
-                stagingServer=releaseConfig['stagingServer'],
-                productName=releaseConfig['productName'],
-                version=releaseConfig['version'],
-                buildNumber=releaseConfig['buildNumber'],
-                oldVersion=releaseConfig['oldVersion'],
-                oldBuildNumber=releaseConfig['oldBuildNumber'],
-                clobberURL=clobberer_url,
-                platform=platform,
-                repoPath=sourceRepoInfo['path'],
-            )
-
-            if 'macosx64' in branchConfig['platforms']:
-                slaves = branchConfig['platforms']['macosx64']['slaves']
-            else:
-                slaves = branchConfig['platforms']['macosx']['slaves']
-            builders.append({
-                'name': builderPrefix('l10n_verification', platform),
-                'slavenames': slaves,
-                'category': builderPrefix(''),
-                'builddir': builderPrefix('l10n_verification', platform),
-                'slavebuilddir': reallyShort(builderPrefix('l10n_verification', platform), releaseConfig['productName']),
-                'factory': l10n_verification_factory,
-                'nextSlave': _nextFastReservedSlave,
-                'env': builder_env,
-                'properties': {
-                    'slavebuilddir':reallyShort(builderPrefix('l10n_verification', platform), releaseConfig['productName']),
-                    'platform': platform,
-                    'branch': 'release-%s' % sourceRepoInfo['name'],
-                }
-            })
-            post_signing_builders.append(
-                builderPrefix('l10n_verification', platform))
 
     if not releaseConfig.get('enableSigningAtBuildTime', True) and \
        releaseConfig['productName'] == 'firefox':

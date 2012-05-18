@@ -1069,7 +1069,7 @@ def generateBranchObjects(config, name, secrets=None):
                 'baseBundleUrls': config.get('base_bundle_urls'),
                 'mozillaDir': config.get('mozilla_dir', None),
                 'tooltool_manifest_src': pf.get('tooltool_manifest_src', None),
-                'tooltool_url_list': pf.get('tooltool_url_list', []),
+                'tooltool_url_list': config.get('tooltool_url_list', []),
                 'runAliveTests': pf.get('run_alive_tests', True),
             }
             factory_kwargs.update(extra_args)
@@ -1326,8 +1326,8 @@ def generateBranchObjects(config, name, secrets=None):
                 baseMirrorUrls=config.get('base_mirror_urls'),
                 baseBundleUrls=config.get('base_bundle_urls'),
                 mozillaDir=config.get('mozilla_dir', None),
-                tooltool_manifest_src = pf.get('tooltool_manifest_src', None),
-                tooltool_url_list = pf.get('tooltool_url_list', []),
+                tooltool_manifest_src=pf.get('tooltool_manifest_src', None),
+                tooltool_url_list=config.get('tooltool_url_list', []),
                 **nightly_kwargs
             )
 
@@ -3534,10 +3534,6 @@ def generateNanojitObjects(config, SLAVES):
             slaves = SLAVES[platform]
             nanojit_script = 'scripts/nanojit/nanojit.sh'
             interpreter = 'bash'
-        elif 'arm' in platform:
-            slaves = SLAVES['linux']
-            nanojit_script = '/builds/slave/nanojit-arm/scripts/scripts/nanojit/nanojit.sh'
-            interpreter = ['/scratchbox/moz_scratchbox', '-d', '/builds/slave/nanojit-arm']
         else:
             slaves = SLAVES[platform]
             nanojit_script = 'scripts/nanojit/nanojit.sh'
@@ -3608,10 +3604,6 @@ def generateSpiderMonkeyObjects(config, SLAVES):
         elif 'lion' in platform:
             slaves = SLAVES['macosx64-lion']
             interpreter = None
-        elif 'arm' in platform:
-            slaves = SLAVES['linux']
-            interpreter = ['/scratchbox/moz_scratchbox', '-d',
-                    '/builds/slave/%s' % reallyShort('%s_%s_spidermonkey-%s' % (branch, platform, variant))]
         else:
             slaves = SLAVES[base_platform]
             interpreter = None

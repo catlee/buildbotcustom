@@ -58,8 +58,7 @@ from buildbotcustom.steps.misc import TinderboxShellCommand, SendChangeStep, \
   SetBuildProperty, DisconnectStep, OutputStep, MockCommand, \
   RepackPartners, UnpackTest, FunctionalStep, setBuildIDProps, \
   RetryingMockProperty, MockInit, MockInstall
-from buildbotcustom.steps.release import UpdateVerify, L10nVerifyMetaDiff, \
-  SnippetComparison
+from buildbotcustom.steps.release import UpdateVerify, SnippetComparison
 from buildbotcustom.steps.source import MercurialCloneCommand
 from buildbotcustom.steps.test import AliveTest, \
   CompareLeakLogs, Codesighs, GraphServerPost
@@ -769,7 +768,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  mock_packages=[],
                  tooltool_manifest_src=None,
                  tooltool_bootstrap="setup.sh",
-                 tooltool_url_list=[],
+                 tooltool_url_list=None,
                  tooltool_script='/tools/tooltool.py',
                  enablePackaging=True,
                  runAliveTests=True,
@@ -841,12 +840,12 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.testPrettyNames = testPrettyNames
         self.l10nCheckTest = l10nCheckTest
         self.tooltool_manifest_src = tooltool_manifest_src
-        self.tooltool_url_list = tooltool_url_list
+        self.tooltool_url_list = tooltool_url_list or []
         self.tooltool_script = tooltool_script
         self.tooltool_bootstrap = tooltool_bootstrap
         self.runAliveTests = runAliveTests
 
-        assert len(tooltool_url_list) <= 1, "multiple urls not currently supported by tooltool"
+        assert len(self.tooltool_url_list) <= 1, "multiple urls not currently supported by tooltool"
 
         if self.uploadPackages:
             assert productName and stageServer and stageUsername
@@ -1203,11 +1202,14 @@ class MercurialBuildFactory(MozillaBuildFactory):
         if self.tooltool_manifest_src:
             self.addStep(RetryingShellCommand(
                 name='fetch_tooltool_resources',
-                command=['python', self.tooltool_script, '--url', self.tooltool_url_list[0], 
+                command=[self.tooltool_script, '--url', self.tooltool_url_list[0],
                          '--overwrite', '-m', self.tooltool_manifest_src, 'fetch']))
             self.addStep(ShellCommand(
                 name='tooltool_bootstrap',
-                command=['bash', self.tooltool_bootstrap]))
+                command=['bash', '-c',
+                         'if [ -e "%s" ]; then bash "%s"; fi' % \
+                         (self.tooltool_bootstrap, self.tooltool_bootstrap)]
+            ))
 
 
     def addDoBuildSteps(self):
@@ -2888,7 +2890,7 @@ class ReleaseBuildFactory(MercurialBuildFactory):
         ))
         self.UPLOAD_EXTRA_FILES.append('%s/%s' % (update_dir, partial_mar_name))
         if self.enableSigning and self.signingServers:
-            partial_mar_path = '"%s/dist/%s/%s"' % \
+            partial_mar_path = '%s/dist/%s/%s' % \
                 (self.absMozillaObjDir, update_dir, partial_mar_name)
             cmd = '%s -f gpg -f mar "%s"' % (self.signing_command,
                                              partial_mar_path)
@@ -6508,136 +6510,6 @@ class CodeCoverageFactory(UnittestBuildFactory):
              timeout=timeout,
             ))
 
-class L10nVerifyFactory(ReleaseFactory):
-    def __init__(self, cvsroot, stagingServer, productName, version,
-                 buildNumber, oldVersion, oldBuildNumber,
-                 platform, verifyDir='verify', linuxExtension='bz2',
-                 buildSpace=4, **kwargs):
-        # MozillaBuildFactory needs the 'repoPath' argument, but we don't
-        if 'repoPath' not in kwargs:
-                    kwargs['repoPath'] = 'nothing'
-        ReleaseFactory.__init__(self, buildSpace=buildSpace, **kwargs)
-
-        verifyDirVersion = 'tools/release/l10n'
-        platformFtpDir = getPlatformFtpDir(platform)
-
-        # Remove existing verify dir
-        self.addStep(ShellCommand(
-         name='rm_verify_dir',
-         description=['remove', 'verify', 'dir'],
-         descriptionDone=['removed', 'verify', 'dir'],
-         command=['rm', '-rf', verifyDir],
-         workdir='.',
-         haltOnFailure=True,
-        ))
-
-        self.addStep(ShellCommand(
-         name='mkdir_verify',
-         description=['(re)create', 'verify', 'dir'],
-         descriptionDone=['(re)created', 'verify', 'dir'],
-         command=['bash', '-c', 'mkdir -p ' + verifyDirVersion],
-         workdir='.',
-         haltOnFailure=True,
-        ))
-
-        # Download current release
-        self.addStep(RetryingShellCommand(
-         name='download_current_release',
-         description=['download', 'current', 'release'],
-         descriptionDone=['downloaded', 'current', 'release'],
-         command=['rsync',
-                  '-Lav',
-                  '-e', 'ssh',
-                  '--exclude=*.asc',
-                  '--exclude=*.checksums',
-                  '--exclude=source',
-                  '--exclude=xpi',
-                  '--exclude=unsigned',
-                  '--exclude=update',
-                  '--exclude=*.crashreporter-symbols.zip',
-                  '--exclude=*.zip',
-                  '--exclude=*.tests.tar.bz2',
-                  '--exclude=*.txt',
-                  '--exclude=logs',
-                  '%s:/home/ftp/pub/%s/nightly/%s-candidates/build%s/%s' %
-                   (stagingServer, productName, version, str(buildNumber),
-                    platformFtpDir),
-                  '%s-%s-build%s/' % (productName,
-                                      version,
-                                      str(buildNumber))
-                  ],
-         workdir=verifyDirVersion,
-         haltOnFailure=True,
-         timeout=60*60
-        ))
-
-        # Download previous release
-        self.addStep(RetryingShellCommand(
-         name='download_previous_release',
-         description=['download', 'previous', 'release'],
-         descriptionDone =['downloaded', 'previous', 'release'],
-         command=['rsync',
-                  '-Lav',
-                  '-e', 'ssh',
-                  '--exclude=*.asc',
-                  '--exclude=*.checksums',
-                  '--exclude=source',
-                  '--exclude=xpi',
-                  '--exclude=unsigned',
-                  '--exclude=update',
-                  '--exclude=*.crashreporter-symbols.zip',
-                  '--exclude=*.zip',
-                  '--exclude=*.tests.tar.bz2',
-                  '--exclude=*.txt',
-                  '--exclude=logs',
-                  '%s:/home/ftp/pub/%s/nightly/%s-candidates/build%s/%s' %
-                   (stagingServer,
-                    productName,
-                    oldVersion,
-                    str(oldBuildNumber),
-                    platformFtpDir),
-                  '%s-%s-build%s/' % (productName,
-                                      oldVersion,
-                                      str(oldBuildNumber))
-                  ],
-         workdir=verifyDirVersion,
-         haltOnFailure=True,
-         timeout=60*60
-        ))
-
-        currentProduct = '%s-%s-build%s' % (productName,
-                                            version,
-                                            str(buildNumber))
-        previousProduct = '%s-%s-build%s' % (productName,
-                                             oldVersion,
-                                             str(oldBuildNumber))
-
-        for product in [currentProduct, previousProduct]:
-            self.addStep(ShellCommand(
-                         name='recreate_product_dir',
-                         description=['(re)create', 'product', 'dir'],
-                         descriptionDone=['(re)created', 'product', 'dir'],
-                         command=['bash', '-c', 'mkdir -p %s/%s' % (verifyDirVersion, product)],
-                         workdir='.',
-                         haltOnFailure=True,
-            ))
-            self.addStep(ShellCommand(
-                         name='verify_l10n',
-                         description=['verify', 'l10n', product],
-                         descriptionDone=['verified', 'l10n', product],
-                         command=["bash", "-c",
-                                  "./verify_l10n.sh %s %s" % (product,
-                                                              platformFtpDir)],
-                         workdir=verifyDirVersion,
-                         haltOnFailure=True,
-            ))
-
-        self.addStep(L10nVerifyMetaDiff(
-                     currentProduct=currentProduct,
-                     previousProduct=previousProduct,
-                     workdir=verifyDirVersion,
-        ))
-
 
 def parse_sendchange_files(build, include_substr='', exclude_substrs=[]):
     '''Given a build object, figure out which files have the include_substr
@@ -7222,10 +7094,18 @@ class RemoteUnittestFactory(MozillaTestFactory):
          haltOnFailure=True,
         ))
         self.addStep(RetryingShellCommand(
+         name='get_sut_lib_py',
+         description="Download sut_lib.py",
+         command=['wget', '--no-check-certificate', '-O', 'sut_lib.py',
+                  'http://hg.mozilla.org/build/tools/raw-file/5e8bc65670cc/sut_tools/sut_lib.py'],
+         workdir='build',
+         haltOnFailure=True,
+        ))
+        self.addStep(RetryingShellCommand(
          name='get_updateSUT_py',
          description="Download updateSUT.py",
          command=['wget', '--no-check-certificate', '-O', 'updateSUT.py',
-                  'http://hg.mozilla.org/build/tools/raw-file/eba35f2aeabd/sut_tools/updateSUT.py'],
+                  'http://hg.mozilla.org/build/tools/raw-file/16fc4f354b44/sut_tools/updateSUT.py'],
          workdir='build',
          haltOnFailure=True,
         ))
@@ -7899,9 +7779,17 @@ class TalosFactory(RequestSortingBuildFactory):
              haltOnFailure=True,
             ))
             self.addStep(RetryingShellCommand(
+             name='get_sut_lib_py',
+             description="Download sut_lib.py",
+             command=['wget', '--no-check-certificate', '-O', 'sut_lib.py',
+                      'http://hg.mozilla.org/build/tools/raw-file/5e8bc65670cc/sut_tools/sut_lib.py'],
+             workdir=self.workdirBase,
+             haltOnFailure=True,
+            ))
+            self.addStep(RetryingShellCommand(
              name='get_updateSUT_py',
              command=['wget', '--no-check-certificate', '-O', 'updateSUT.py',
-                      'http://hg.mozilla.org/build/tools/raw-file/eba35f2aeabd/sut_tools/updateSUT.py'],
+                      'http://hg.mozilla.org/build/tools/raw-file/16fc4f354b44/sut_tools/updateSUT.py'],
              workdir=self.workdirBase,
              haltOnFailure=True,
             ))
@@ -8526,7 +8414,14 @@ class ScriptFactory(BuildFactory):
             property_name='master',
             value=lambda b: b.builder.botmaster.parent.buildbotURL
         ))
-        self.env = {'PROPERTIES_FILE': 'buildprops.json'}
+        self.addStep(SetProperty(
+            name='get_basedir',
+            property='basedir',
+            command=['bash', '-c', 'pwd'],
+            workdir='.',
+            haltOnFailure=True,
+        ))
+        self.env = {'PROPERTIES_FILE': WithProperties('%(basedir)s/buildprops.json')}
         self.addStep(JSONPropertiesDownload(
             name="download_props",
             slavedest="buildprops.json",
@@ -8539,7 +8434,7 @@ class ScriptFactory(BuildFactory):
                 slavedest="data.json",
                 workdir="."
             ))
-            self.env['EXTRA_DATA'] = 'data.json'
+            self.env['EXTRA_DATA'] = WithProperties('%(basedir)s/data.json')
         self.addStep(ShellCommand(
             name="clobber_properties",
             command=['rm', '-rf', 'properties'],
