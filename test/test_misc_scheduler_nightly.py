@@ -181,23 +181,27 @@ class TestLastGoodFuncs(unittest.TestCase):
         createTestData(self.dbc)
         self.s.builderNames = ['builder1']
 
-        with mock.patch('time.time') as t:
-            # Check that ssFunc returns something for both branches
-            t.return_value = 10
-            ssFunc = lastRevFunc('b1')
-            ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
-            self.assertEquals(ss.revision, 'r1')
+        # Check that ssFunc returns something for both branches
+        ssFunc = lastRevFunc('b1')
+        ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+        self.assertEquals(ss.revision, 'r1')
 
-            t.return_value = 10
-            ssFunc = lastRevFunc('b2')
-            ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
-            self.assertEquals(ss.revision, 'r234567890')
+        ssFunc = lastRevFunc('b2')
+        ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+        self.assertEquals(ss.revision, 'r234567890')
 
-            # Check that ssFunc returns None if triggerBuildIfNoChanges=False
-            # and we already built the revision
-            ssFunc = lastRevFunc('b1', triggerBuildIfNoChanges=False)
-            ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
-            self.assertEquals(ss, None)
+        # Check that ssFunc returns None if triggerBuildIfNoChanges=False
+        # and we already built the revision
+        ssFunc = lastRevFunc('b1', triggerBuildIfNoChanges=False)
+        ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+        self.assertEquals(ss, None)
+
+        # Check that ssFunc returns the later revision if we already built something old
+        c1 = Change(who='me!', branch='b1', revision='r345', files=[], comments='really important', when=2, revlink='from poller')
+        self.dbc.addChangeToDatabase(c1)
+        ssFunc = lastRevFunc('b1', triggerBuildIfNoChanges=False)
+        ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+        self.assertEquals(ss.revision, 'r345')
 
 
 class TestSpecificNightlyScheduler(unittest.TestCase):
