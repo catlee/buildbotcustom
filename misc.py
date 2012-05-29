@@ -59,9 +59,7 @@ from buildbotcustom.status.mail import MercurialEmailLookup, ChangeNotifier
 from buildbotcustom.status.generators import buildTryChangeMessage
 from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
-    buildUIDSchedFunc, lastGoodFunc
-from buildbotcustom.status.log_handlers import SubprocessLogHandler
-from build.paths import getRealpath
+    buildUIDSchedFunc, lastGoodFunc, lastRevFunc
 
 # This file contains misc. helper function that don't make sense to put in
 # other files. For example, functions that are called in a master.cfg
@@ -871,8 +869,9 @@ def generateBranchObjects(config, name, secrets=None):
 
     if len(periodicPgoBuilders) > 0:
         pgo_scheduler = makePropertiesScheduler(
-                            Nightly,
+                            SpecificNightly,
                             [buildIDSchedFunc, buildUIDSchedFunc])(
+                            ssFunc=lastRevFunc(config['repo_path']),
                             name="%s pgo" % name,
                             branch=config['repo_path'],
                             builderNames=periodicPgoBuilders,

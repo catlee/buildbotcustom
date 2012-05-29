@@ -7,7 +7,7 @@ from buildbot.db.schema.manager import DBSchemaManager
 from buildbot.changes.changes import Change
 
 from buildbotcustom.misc_scheduler import lastChange, lastGoodRev, \
-    getLatestRev, getLastBuiltRevision, lastGoodFunc
+    getLatestRev, getLastBuiltRevision, lastGoodFunc, lastRevFunc
 from buildbotcustom.scheduler import SpecificNightly
 
 import mock
@@ -176,6 +176,29 @@ class TestLastGoodFuncs(unittest.TestCase):
             ssFunc = lastGoodFunc('b2', ['builder1', 'builder2'], triggerBuildIfNoChanges=False, l10nBranch='b2-l10n')
             ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
             self.assertEquals(ss, None)
+
+    def test_lastRevFunc(self):
+        createTestData(self.dbc)
+        self.s.builderNames = ['builder1']
+
+        with mock.patch('time.time') as t:
+            # Check that ssFunc returns something for both branches
+            t.return_value = 10
+            ssFunc = lastRevFunc('b1')
+            ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+            self.assertEquals(ss.revision, 'r1')
+
+            t.return_value = 10
+            ssFunc = lastRevFunc('b2')
+            ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+            self.assertEquals(ss.revision, 'r234567890')
+
+            # Check that ssFunc returns None if triggerBuildIfNoChanges=False
+            # and we already built the revision
+            ssFunc = lastRevFunc('b1', triggerBuildIfNoChanges=False)
+            ss = self.dbc.runInteractionNow(lambda t: ssFunc(self.s, t))
+            self.assertEquals(ss, None)
+
 
 class TestSpecificNightlyScheduler(unittest.TestCase):
     basedir = "test_misc_scheduler_nightly_scheduler"
