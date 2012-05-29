@@ -337,7 +337,7 @@ def lastRevFunc(branch, triggerBuildIfNoChanges=True):
         if last_built_rev is not None:
             # Make sure that rev is newer than the last revision we built.
             later_rev = getLatestRev(db, t, branch, rev, last_built_rev)
-            if later_rev == rev and not triggerBuildIfNoChanges:
+            if later_rev == last_built_rev and not triggerBuildIfNoChanges:
                 log.msg("lastGoodRev: Skipping %s since we've already built it" % rev)
                 return None
         return SourceStamp(branch=scheduler.branch, revision=rev)
