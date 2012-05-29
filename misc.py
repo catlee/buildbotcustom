@@ -871,7 +871,7 @@ def generateBranchObjects(config, name, secrets=None):
         pgo_scheduler = makePropertiesScheduler(
                             SpecificNightly,
                             [buildIDSchedFunc, buildUIDSchedFunc])(
-                            ssFunc=lastRevFunc(config['repo_path']),
+                            ssFunc=lastRevFunc(config['repo_path'], triggerBuildIfNoChanges=False),
                             name="%s pgo" % name,
                             branch=config['repo_path'],
                             builderNames=periodicPgoBuilders,
