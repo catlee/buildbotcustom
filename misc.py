@@ -414,6 +414,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
             scriptName=suites['script_path'],
             hg_bin=suites['hg_bin'],
             extra_args=suites.get('extra_args', []),
+            script_maxtime=suites.get('script_maxtime', 1200),
             reboot_command=suites.get('reboot_command'),
             log_eval_func=lambda c,s: regex_log_evaluator(c, s, (
              (re.compile('# TBPL WARNING #'), WARNINGS),
@@ -997,13 +998,8 @@ def generateBranchObjects(config, name, secrets=None):
             # All platforms that can't do PGO... shouldn't do PGO.
             per_checkin_build_uses_pgo = False
 
-        slaves = pf['slaves']
-        env = pf['env']
         if per_checkin_build_uses_pgo:
             per_checkin_unittest_branch = pgoUnittestBranch
-            if 'pgo_platform' in pf:
-                slaves = config['platforms'][pf['pgo_platform']]['slaves']
-                env = config['platforms'][pf['pgo_platform']]['env']
         else:
             per_checkin_unittest_branch = unittestBranch
 
@@ -1015,7 +1011,7 @@ def generateBranchObjects(config, name, secrets=None):
         # Some platforms shouldn't do dep builds (i.e. RPM)
         if pf.get('enable_dep', True):
             factory_kwargs = {
-                'env': env,
+                'env': pf['env'],
                 'objdir': pf['platform_objdir'],
                 'platform': platform,
                 'hgHost': config['hghost'],
@@ -1080,7 +1076,7 @@ def generateBranchObjects(config, name, secrets=None):
             #    TB Linux comm-central leak test build
             mozilla2_dep_builder = {
                 'name': '%s build' % pf['base_name'],
-                'slavenames': slaves,
+                'slavenames': pf['slaves'],
                 'builddir': '%s-%s' % (name, platform),
                 'slavebuilddir': reallyShort('%s-%s' % (name, platform), pf['stage_product']),
                 'factory': mozilla2_dep_factory,
@@ -1104,13 +1100,10 @@ def generateBranchObjects(config, name, secrets=None):
                 pgo_kwargs['profiledBuild'] = True
                 pgo_kwargs['stagePlatform'] += '-pgo'
                 pgo_kwargs['unittestBranch'] = pgoUnittestBranch
-                if 'pgo_platform' in pf:
-                    slaves = config['platforms'][pf['pgo_platform']]['slaves']
-                    pgo_kwargs['env'] = config['platforms'][pf['pgo_platform']]['env']
                 pgo_factory = factory_class(**pgo_kwargs)
                 pgo_builder = {
                     'name': '%s pgo-build' % pf['base_name'],
-                    'slavenames': slaves,
+                    'slavenames': pf['slaves'],
                     'builddir':  '%s-%s-pgo' % (name, platform),
                     'slavebuilddir': reallyShort('%s-%s-pgo' % (name, platform), pf['stage_product']),
                     'factory': pgo_factory,
@@ -1158,17 +1151,8 @@ def generateBranchObjects(config, name, secrets=None):
             nightly_builder = '%s nightly' % pf['base_name']
 
             platform_env = pf['env'].copy()
-            # We may need a seperate dict for pgo builds
-            if platform in config['pgo_platforms'] and 'pgo_platform' in pf:
-                nightly_env = config['platforms'][pf['pgo_platform']]['env'].copy()
-            else:
-                nightly_env = platform_env.copy()
-
-            nightly_env['IS_NIGHTLY'] = "yes"
-
             if 'update_channel' in config and config.get('create_snippet'):
                 platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
-                nightly_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
 
             triggeredSchedulers=None
             if config['enable_l10n'] and pf.get('is_mobile_l10n') and pf.get('l10n_chunks'):
@@ -1268,16 +1252,15 @@ def generateBranchObjects(config, name, secrets=None):
             # branches get some PGO coverage
             # We do not stick '-pgo' in the stage_platform for
             # nightlies because it'd be ugly and break stuff
-            slaves = pf['slaves']
-
             if platform in config['pgo_platforms']:
                 nightly_pgo = True
                 nightlyUnittestBranch = pgoUnittestBranch
-                if 'pgo_platform' in pf:
-                    slaves = config['platforms'][pf['pgo_platform']]['slaves']
             else:
                 nightlyUnittestBranch = unittestBranch
                 nightly_pgo = False
+
+            nightly_env=platform_env.copy()
+            nightly_env['IS_NIGHTLY'] = "yes"
 
             mozilla2_nightly_factory = NightlyBuildFactory(
                 env=nightly_env,
@@ -1347,7 +1330,7 @@ def generateBranchObjects(config, name, secrets=None):
             #eg. TB Linux comm-aurora nightly
             mozilla2_nightly_builder = {
                 'name': nightly_builder,
-                'slavenames': slaves,
+                'slavenames': pf['slaves'],
                 'builddir': '%s-%s-nightly' % (name, platform),
                 'slavebuilddir': reallyShort('%s-%s-nightly' % (name, platform), pf['stage_product']),
                 'factory': mozilla2_nightly_factory,
@@ -2479,10 +2462,6 @@ def generateCCBranchObjects(config, name, secrets=None):
             nightly_builder = '%s nightly' % pf['base_name']
 
             platform_env = pf['env'].copy()
-            if platform in config['pgo_platforms']:
-                if 'pgo_platform' in pf:
-                    platform_env = config['platforms'][pf['pgo_platform']]['env'].copy()
-
             if 'update_channel' in config and config.get('create_snippet'):
                 platform_env['MOZ_UPDATE_CHANNEL'] = config['update_channel']
 
