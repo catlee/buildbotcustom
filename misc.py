@@ -346,8 +346,17 @@ def _nextSlowIdleSlave(nReserved):
     return _nextslave
 
 nomergeBuilders = []
+genericBuilders = []
 def mergeRequests(builder, req1, req2):
     if builder.name in nomergeBuilders:
+        return False
+
+    if builder.name in genericBuilders:
+        return canMergeGenericRequests(builder, req1, req2)
+
+    p1 = req1.properties()
+    p2 = req2.properties()
+    if not p1.get('mergeable', True) or not p2.get('mergeable', True):
         return False
     return req1.canBeMergedWith(req2)
 
