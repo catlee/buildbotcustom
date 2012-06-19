@@ -31,7 +31,7 @@ import buildbotcustom.status.queued_command
 import buildbotcustom.status.log_handlers
 import buildbotcustom.misc_scheduler
 import build.paths
-import mozilla_buildtools.queuedir
+import buildbotcustom.process.generic
 reload(buildbotcustom.changes.hgpoller)
 reload(buildbotcustom.process.factory)
 reload(buildbotcustom.log)
@@ -42,7 +42,7 @@ reload(buildbotcustom.status.generators)
 reload(buildbotcustom.status.log_handlers)
 reload(buildbotcustom.misc_scheduler)
 reload(build.paths)
-reload(mozilla_buildtools.queuedir)
+reload(buildbotcustom.process.generic)
 
 from buildbotcustom.common import reallyShort
 from buildbotcustom.changes.hgpoller import HgPoller, HgAllLocalesPoller
@@ -60,6 +60,7 @@ from buildbotcustom.status.generators import buildTryChangeMessage
 from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.misc_scheduler import tryChooser, buildIDSchedFunc, \
     buildUIDSchedFunc, lastGoodFunc, lastRevFunc
+from buildbotcustom.process.generic import canMergeGenericRequests, makeGenericBuilder
 
 # This file contains misc. helper function that don't make sense to put in
 # other files. For example, functions that are called in a master.cfg
@@ -1784,6 +1785,10 @@ def generateBranchObjects(config, name, secrets=None):
                            }
         }
         branchObjects['builders'].append(bundle_builder)
+
+    for platform in config.get('generic_platforms', []):
+        builder = makeGenericBuilder(name, platform, config['platforms'][platform]['slaves'])
+        branchObjects['builders'].append(builder)
 
     return branchObjects
 
