@@ -3597,6 +3597,42 @@ def generateJetpackObjects(config, SLAVES):
             'schedulers': [scheduler],
             }
 
+def generateDXRObjects(config, SLAVES):
+    builders = []
+    branch = os.path.basename(config['repo_path'])
+
+    platform = config['platform']
+    slaves = SLAVES[platform]
+    script = 'scripts/dxr/dxr.sh'
+
+    f = ScriptFactory(
+            config['scripts_repo'],
+            script,
+            log_eval_func=rc_eval_func({1: WARNINGS}),
+            )
+
+    builder = {'name': 'dxr-%s' % branch,
+                'builddir': 'dxr-%s' % branch,
+                'slavenames': slaves,
+                'factory': f,
+                'category': 'idle',
+                'properties': {'branch': branch, 'platform': platform, 'product': 'dxr'},
+                }
+    builders.append(builder)
+
+    # Set up scheduler
+    scheduler = Nightly(
+            name="dxr-%s" % branch,
+            branch=config['repo_path'],
+            hour=[3], minute=[05],
+            builderNames=[b['name'] for b in builders],
+            )
+
+    return {
+            'builders': builders,
+            'schedulers': [scheduler],
+            }
+
 def generateProjectObjects(project, config, SLAVES):
     builders = []
     schedulers = []
@@ -3627,6 +3663,11 @@ def generateProjectObjects(project, config, SLAVES):
     # Spidermonkey
     elif project.startswith('spidermonkey'):
         spiderMonkeyObjects = generateSpiderMonkeyObjects(config, SLAVES)
+        buildObjects = mergeBuildObjects(buildObjects, spiderMonkeyObjects)
+
+    # DXR
+    elif project.startswith('dxr'):
+        spiderMonkeyObjects = generateDXRObjects(config, SLAVES)
         buildObjects = mergeBuildObjects(buildObjects, spiderMonkeyObjects)
 
     return buildObjects
