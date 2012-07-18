@@ -2151,6 +2151,7 @@ class TryBuildFactory(MercurialBuildFactory):
              user=WithProperties('%(who)s'),
              comments=WithProperties('%(comments:-)s'),
              sendchange_props=sendchange_props,
+             env=self.env,
             ))
         for master, warn, retries in self.unittestMasters:
             self.addStep(SendChangeStep(
@@ -2165,6 +2166,7 @@ class TryBuildFactory(MercurialBuildFactory):
              user=WithProperties('%(who)s'),
              comments=WithProperties('%(comments:-)s'),
              sendchange_props=sendchange_props,
+             env=self.env,
             ))
 
 class CCMercurialBuildFactory(MercurialBuildFactory):
@@ -2739,6 +2741,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
                  user="sendchange",
                  comments=WithProperties('%(comments:-)s'),
                  sendchange_props=sendchange_props,
+                 env=self.env,
                 ))
 
             files = [WithProperties('%(packageUrl)s')]
@@ -2757,6 +2760,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
                  user="sendchange-unittest",
                  comments=WithProperties('%(comments:-)s'),
                  sendchange_props=sendchange_props,
+                 env=self.env,
                 ))
 
 
