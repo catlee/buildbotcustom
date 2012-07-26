@@ -3608,6 +3608,7 @@ def generateDXRObjects(config, SLAVES):
     f = ScriptFactory(
             config['scripts_repo'],
             script,
+            env=config['env'],
             log_eval_func=rc_eval_func({1: WARNINGS}),
             )
 
