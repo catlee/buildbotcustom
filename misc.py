@@ -3608,11 +3608,11 @@ def generateDXRObjects(config, SLAVES):
     f = ScriptFactory(
             config['scripts_repo'],
             script,
-            env=config['env'],
             log_eval_func=rc_eval_func({1: WARNINGS}),
             )
 
     builder = {'name': 'dxr-%s' % branch,
+                'env': config['env'],
                 'builddir': 'dxr-%s' % branch,
                 'slavenames': slaves,
                 'factory': f,
