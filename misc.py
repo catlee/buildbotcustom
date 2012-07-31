@@ -3618,8 +3618,15 @@ def generateDXRObjects(config, SLAVES):
                 'slavenames': slaves,
                 'factory': f,
                 'category': 'idle',
-                'properties': {'branch': branch, 'platform': platform, 'product': 'dxr'},
-                }
+                'properties': {
+                    'branch': branch,
+                    'platform': platform,
+                    'product': 'dxr',
+                    'upload_host': config['upload_host'],
+                    'upload_user': config['upload_user'],
+                    'upload_sshkey': config['upload_sshkey'],
+                },
+              }
     builders.append(builder)
 
     # Set up scheduler
