@@ -3676,8 +3676,8 @@ def generateProjectObjects(project, config, SLAVES):
 
     # DXR
     elif project.startswith('dxr'):
-        spiderMonkeyObjects = generateDXRObjects(config, SLAVES)
-        buildObjects = mergeBuildObjects(buildObjects, spiderMonkeyObjects)
+        dxrObjects = generateDXRObjects(config, SLAVES)
+        buildObjects = mergeBuildObjects(buildObjects, dxrObjects)
 
     return buildObjects
 
