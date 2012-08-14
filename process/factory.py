@@ -5190,7 +5190,7 @@ class RemoteUnittestFactory(MozillaTestFactory):
                 downloadSymbols=False, downloadTests=True, posixBinarySuffix='',
                 remoteExtras=None, branchName=None, **kwargs):
         self.suites = suites
-        self.hostUtils = hostUtils
+        self.hostUtils = WithProperties(hostUtils)
 
         if remoteExtras is not None:
             self.remoteExtras = remoteExtras
@@ -5237,6 +5237,11 @@ class RemoteUnittestFactory(MozillaTestFactory):
          command=['python', '/builds/sut_tools/verify.py'],
          workdir='build',
          haltOnFailure=True,
+        ))
+        self.addStep(SetProperty(
+            name="GetFoopyPlatform",
+            command=['bash', '-c', 'uname -s'],
+            property='foopy_type'
         ))
 
     def addSetupSteps(self):
@@ -5523,13 +5528,13 @@ class TalosFactory(RequestSortingBuildFactory):
         Return path to a python version that eithers has "simplejson" or
         it is 2.6 or higher (which includes the json module)
         '''
-        if (platform in ("fedora", "fedora64", "leopard", "snowleopard", "lion")):
+        if (platform in ("fedora", "fedora64", "leopard", "snowleopard", "lion", "mountainlion")):
             return "/tools/buildbot/bin/python"
         elif (platform in ('w764', 'win7', 'xp')):
             return "C:\\mozilla-build\\python25\\python.exe"
         elif (platform.find("android") > -1):
             # path in the foopies
-            return "/opt/local/bin/python"
+            return "/usr/local/bin/python2.6"
         else:
             raise ValueError("No valid platform was passed: %s" % platform)
 
@@ -5636,7 +5641,7 @@ class TalosFactory(RequestSortingBuildFactory):
 
 
     def addDmgInstaller(self):
-        if self.OS in ('leopard', 'tiger', 'snowleopard', 'lion'):
+        if self.OS in ('leopard', 'tiger', 'snowleopard', 'lion', 'mountainlion'):
             self.addStep(DownloadFile(
              url=WithProperties("%s/tools/buildfarm/utils/installdmg.sh" % self.supportUrlBase),
              workdir=self.workdirBase,
@@ -5733,7 +5738,7 @@ class TalosFactory(RequestSortingBuildFactory):
              command=["chmod", "-v", "-R", "a+x", "."],
              env=self.env)
             )
-        if self.OS in ('tiger', 'leopard', 'snowleopard', 'lion'):
+        if self.OS in ('tiger', 'leopard', 'snowleopard', 'lion', 'mountainlion'):
             self.addStep(FindFile(
              workdir=os.path.join(self.workdirBase, "talos"),
              filename="%s-bin" % self.productName,
@@ -5941,7 +5946,7 @@ class TalosFactory(RequestSortingBuildFactory):
     def addPluginInstallSteps(self):
         if self.plugins:
             #32 bit (includes mac browsers)
-            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', 'leopard', 'snowleopard', 'leopard-o', 'lion'):
+            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', 'leopard', 'snowleopard', 'leopard-o', 'lion', 'mountainlion'):
                 self.addStep(DownloadFile(
                  url=WithProperties("%s/%s" % (self.supportUrlBase, self.plugins['32'])),
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
@@ -6049,7 +6054,7 @@ class TalosFactory(RequestSortingBuildFactory):
         )
 
     def addRunTestStep(self):
-        if self.OS in ('lion', 'snowleopard'):
+        if self.OS in ('mountainlion', 'lion', 'snowleopard'):
             self.addStep(resolution_step())
         self.addStep(talos_steps.MozillaRunPerfTests(
          warnOnWarnings=True,
@@ -6060,11 +6065,11 @@ class TalosFactory(RequestSortingBuildFactory):
          command=self.talosCmd,
          env=self.env)
         )
-        if self.OS in ('lion', 'snowleopard'):
+        if self.OS in ('mountainlion', 'lion', 'snowleopard'):
             self.addStep(resolution_step())
 
     def addRebootStep(self):
-        if self.OS in ('lion',):
+        if self.OS in ('mountainlion', 'lion',):
             self.addStep(ShellCommand(
                 name="clear_saved_state",
                 flunkOnFailure=False,
