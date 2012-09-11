@@ -126,7 +126,7 @@ class Pluggable(object):
 
     This is in particular useful when a network request doesn't really
     error in a reasonable time, and you want to make sure that if it
-    answers after you tried to give up on it, it's not confusing the 
+    answers after you tried to give up on it, it's not confusing the
     rest of your app by calling back with data twice or something.
     '''
     def __init__(self, d):
@@ -331,14 +331,14 @@ class HgPoller(base.ChangeSource, BaseHgPoller):
 
     compare_attrs = ['hgURL', 'branch', 'pollInterval',
                      'pushlogUrlOverride', 'tipsOnly', 'storeRev',
-                     'repo_branch']
+                     'repo_branch', 'maxChanges']
     parent = None
     loop = None
     volatile = ['loop']
 
     def __init__(self, hgURL, branch, pushlogUrlOverride=None,
                  tipsOnly=False, pollInterval=30, storeRev=None,
-                 repo_branch="default"):
+                 repo_branch="default", maxChanges=100):
         """
         @type   hgURL:          string
         @param  hgURL:          The base URL of the Hg repo
@@ -362,7 +362,7 @@ class HgPoller(base.ChangeSource, BaseHgPoller):
         """
 
         BaseHgPoller.__init__(self, hgURL, branch, pushlogUrlOverride,
-                              tipsOnly, repo_branch=repo_branch)
+                              tipsOnly, repo_branch=repo_branch, maxChanges=maxChanges)
         self.pollInterval = pollInterval
         self.storeRev = storeRev
 
@@ -514,7 +514,7 @@ class HgAllLocalesPoller(base.ChangeSource, BasePoller):
                     msg += ". All %d locale pollers failed" % len(loadTimes)
                 else:
                     msg += ", min: %.1f, max: %.1f, mean: %.1f" % \
-                        (min(goodTimes), max(goodTimes), 
+                        (min(goodTimes), max(goodTimes),
                          sum(goodTimes) / len(goodTimes))
                     if len(loadTimes) > len(goodTimes):
                         msg += ", %d failed" % (len(loadTimes) - len(goodTimes))
@@ -528,7 +528,7 @@ class HgAllLocalesPoller(base.ChangeSource, BasePoller):
     def localeDone(self, loc):
         if self.verboseChilds:
             log.msg("done with " + loc)
-        reactor.callLater(0, self.pollNextLocale)        
+        reactor.callLater(0, self.pollNextLocale)
 
     def __str__(self):
         return "<HgAllLocalesPoller for %s/%s/>" % (self.hgURL,

@@ -522,7 +522,6 @@ def generateBranchObjects(config, name, secrets=None):
     if secrets is None:
         secrets = {}
     builders = []
-    unittestBuilders = []
     triggeredUnittestBuilders = []
     nightlyBuilders = []
     xulrunnerNightlyBuilders = []
@@ -576,7 +575,7 @@ def generateBranchObjects(config, name, secrets=None):
                     test_builders.extend(generateTestBuilderNames('%s debug test' % base_name, suites_name, suites))
                 triggeredUnittestBuilders.append(('%s-%s-unittest' % (name, platform), test_builders, config.get('enable_merging', True)))
             # Skip l10n, unit tests
-            # Skip nightlies for debug builds unless requested  
+            # Skip nightlies for debug builds unless requested
             if not pf.has_key('enable_nightly'):
                 continue
         elif pf.get('enable_dep', True):
@@ -646,7 +645,7 @@ def generateBranchObjects(config, name, secrets=None):
             tree=config['tinderbox_tree'],
             extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
             relayhost="mail.build.mozilla.org",
-            builders=builders + nightlyBuilders + unittestBuilders + debugBuilders,
+            builders=builders + nightlyBuilders + debugBuilders,
             logCompression="gzip",
             errorparser="unittest"
         ))
@@ -735,10 +734,12 @@ def generateBranchObjects(config, name, secrets=None):
     else:
         if config.get('enable_try', False):
             tipsOnly = True
+            maxChanges = 100
             # Pay attention to all branches for pushes to try
             repo_branch = None
         else:
-            tipsOnly = True
+            tipsOnly = False
+            maxChanges = 100
             # Other branches should only pay attention to the default branch
             repo_branch = "default"
 
@@ -746,6 +747,7 @@ def generateBranchObjects(config, name, secrets=None):
             hgURL=config['hgurl'],
             branch=config['repo_path'],
             tipsOnly=tipsOnly,
+            maxChanges=maxChanges,
             repo_branch=repo_branch,
             pollInterval=pollInterval,
         ))
@@ -773,7 +775,7 @@ def generateBranchObjects(config, name, secrets=None):
         scheduler_class = makePropertiesScheduler(Scheduler, [buildIDSchedFunc, buildUIDSchedFunc])
 
     if not config.get('enable_merging', True):
-        nomergeBuilders.extend(builders + unittestBuilders + debugBuilders)
+        nomergeBuilders.extend(builders + debugBuilders)
     nomergeBuilders.extend(periodicPgoBuilders) # these should never, ever merge
     extra_args['treeStableTimer'] = None
 
@@ -785,7 +787,8 @@ def generateBranchObjects(config, name, secrets=None):
     branchObjects['schedulers'].append(scheduler_class(
         name=scheduler_name_prefix,
         branch=config['repo_path'],
-        builderNames=builders + unittestBuilders + debugBuilders,
+        # XXX: Split this up into b2g/desktop/mobile
+        builderNames=builders + debugBuilders,
         fileIsImportant=lambda c: isHgPollerTriggered(c, config['hgurl']) and shouldBuild(c),
         **extra_args
     ))
@@ -1092,7 +1095,7 @@ def generateBranchObjects(config, name, secrets=None):
             branchObjects['builders'].append(mozilla2_dep_builder)
 
             # We have some platforms which need to be built every X hours with PGO.
-            # These builds are as close to regular dep builds as we can make them, 
+            # These builds are as close to regular dep builds as we can make them,
             # other than PGO
             if config['pgo_strategy'] in ('periodic', 'try') and platform in config['pgo_platforms']:
                 pgo_kwargs = factory_kwargs.copy()
@@ -1707,7 +1710,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
            branch_config['platforms'].has_key(platform) and \
            not branch_config['platforms'][platform].get('enable_talos', True):
             continue
-        
+
         if platform_config.get('is_mobile', False):
             branchName = branch_config['mobile_branch_name']
             tinderboxTree = branch_config['mobile_tinderbox_tree']
