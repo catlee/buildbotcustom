@@ -130,7 +130,7 @@ _product_excludes = {
     'firefox':     [re.compile("^b2g/"), re.compile("^mobile/")],
     'mobile':      [re.compile("^b2g/"), re.compile("^browser/")],
     'b2g':         [re.compile("^browser/"), re.compile("^mobile/")],
-    'thunderbird': [re.compile("^mobile/"), re.compile("^b2g/")],
+    'thunderbird': [re.compile("^browser/"), re.compile("^mobile/"), re.compile("^b2g/")],
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
