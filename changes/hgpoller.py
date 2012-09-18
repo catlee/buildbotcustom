@@ -278,14 +278,27 @@ class BaseHgPoller(BasePoller):
         # Go through the list of changes backwards, since we want to keep the
         # latest ones and possibly discard earlier ones.
         change_list = []
+        too_many = False
         for change in reversed(all_changes):
             if self.maxChanges is not None and len(change_list) >= self.maxChanges:
+                too_many = True
                 break
 
             # Ignore changes not on the specified in-repo branch.
             if self.repo_branch is not None and self.repo_branch != change['branch']:
                 continue
             change_list.append(change)
+
+        if too_many:
+            # Add a dummy change to indicate we had too many changes
+            c = changes.Change(who='buildbot',
+                               files=['overflow'],
+                               comments='more than maxChanges(%i) received; ignoring the rest' % self.maxChanges,
+                               when=time.time(),
+                               branch=self.branch,
+                               )
+            change_list.append(c)
+
         # Un-reverse the list of changes so they get added in the right order
         change_list.reverse()
 
