@@ -137,10 +137,10 @@ def isImportantForProduct(change, product):
     for f in change.files:
         for e in excludes:
             if not e.match(f):
-                # This file isn't excluded, so it's imporant
+                # This file isn't excluded, so it's important
                 return True
 
-    # Looks like everything was excluded, so this change isn't imporant
+    # Looks like everything was excluded, so this change isn't important
     return False
 
 def isImportantL10nFile(change, l10nModules):
