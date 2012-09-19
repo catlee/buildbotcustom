@@ -141,7 +141,7 @@ def isImportantForProduct(change, product):
     excludes = _product_excludes[product]
     for f in change.files:
         for e in excludes:
-            if not e.match(f):
+            if not e.search(f):
                 # This file isn't excluded, so it's important
                 return True
 
