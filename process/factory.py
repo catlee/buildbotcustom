@@ -3050,7 +3050,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                     echo Using in-tree mozconfig;
                     cp %(mozconfig)s .mozconfig;
                 else
-                    echo "Couldn't find" in-tree mozconfig
+                    echo Could not find in-tree mozconfig;
                 fi'''.replace("\n","") % {'mozconfig': self.mozconfig}]
 
         self.addStep(RetryingShellCommand(
