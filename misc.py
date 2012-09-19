@@ -149,6 +149,15 @@ def isImportantForProduct(change, product):
     # log.msg("%s not important for %s" % (change.revision, product))
     return False
 
+def makeImportantFunc(hgurl, product):
+    def isImportant(c):
+        if not isHgPollerTriggered(c, hgurl):
+            return False
+        if not shouldBuild(c):
+            return False
+        return isImportantForProduct(c, product)
+    return isImportant
+
 def isImportantL10nFile(change, l10nModules):
     for f in change.files:
         for basepath in l10nModules:
@@ -833,17 +842,11 @@ def generateBranchObjects(config, name, secrets=None):
         scheduler_name_prefix = name
 
     for product, product_builders in buildersByProduct.items():
-        def isImportant(c):
-            if not isHgPollerTriggered(c, config['hgurl']):
-                return False
-            if not shouldBuild(c):
-                return False
-            return isImportantForProduct(c, product)
         branchObjects['schedulers'].append(scheduler_class(
             name=scheduler_name_prefix + "-" + product,
             branch=config['repo_path'],
             builderNames=product_builders,
-            fileIsImportant=isImportant,
+            fileIsImportant=makeImportantFunc(config['hgurl'], product),
             **extra_args
         ))
 
