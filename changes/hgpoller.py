@@ -292,7 +292,7 @@ class BaseHgPoller(BasePoller):
 
         if too_many:
             # Add a dummy change to indicate we had too many changes
-            c = dict(who='author',
+            c = dict(author='buildbot',
                      files=['overflow'],
                      changeset=None,
                      comments='more than maxChanges(%i) received; ignoring the rest' % self.maxChanges,
