@@ -150,6 +150,7 @@ def isImportantForProduct(change, product):
     return False
 
 def makeImportantFunc(hgurl, product):
+    # TODO: If the top-most changeset in a push isn't important for some products...what ends up getting built?
     def isImportant(c):
         if not isHgPollerTriggered(c, hgurl):
             return False
@@ -614,6 +615,15 @@ def generateBranchObjects(config, name, secrets=None):
         pf = config['platforms'][platform]
         base_name = pf['base_name']
         pretty_name = PRETTY_NAME % base_name
+
+        # short-circuit the extra logic below for debug, l10n, pgo and nightly
+        # builds these aren't required (yet) for mozharness builds
+        if 'mozharness_config' in pf:
+            buildername = '%s_dep' % pf['base_name']
+            builders.append(buildername)
+            buildersByProduct.setdefault(pf['stage_product'], []).append(buildername)
+            continue
+
         if platform.endswith("-debug"):
             builders.append(pretty_name)
             buildersByProduct.setdefault(pf['stage_product'], []).append(pretty_name)
@@ -693,39 +703,6 @@ def generateBranchObjects(config, name, secrets=None):
     if config['enable_weekly_bundle']:
         weeklyBuilders.append('%s hg bundle' % name)
 
-    # Currently, each branch goes to a different tree
-    # If this changes in the future this may have to be
-    # moved out of the loop
-    if not config.get('disable_tinderbox_mail'):
-        branchObjects['status'].append(TinderboxMailNotifier(
-            fromaddr="mozilla2.buildbot@build.mozilla.org",
-            tree=config['tinderbox_tree'],
-            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
-            relayhost="mail.build.mozilla.org",
-            builders=builders + nightlyBuilders,
-            logCompression="gzip",
-            errorparser="unittest"
-        ))
-        # XULRunner builds
-        branchObjects['status'].append(TinderboxMailNotifier(
-            fromaddr="mozilla2.buildbot@build.mozilla.org",
-            tree=config['xulrunner_tinderbox_tree'],
-            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
-            relayhost="mail.build.mozilla.org",
-            builders=xulrunnerNightlyBuilders,
-            logCompression="gzip"
-        ))
-        # Code coverage builds go to a different tree
-        branchObjects['status'].append(TinderboxMailNotifier(
-            fromaddr="mozilla2.buildbot@build.mozilla.org",
-            tree=config['weekly_tinderbox_tree'],
-            extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
-            relayhost="mail.build.mozilla.org",
-            builders=coverageBuilders,
-            logCompression="gzip",
-            errorparser="unittest"
-        ))
-
     # Try Server notifier
     if config.get('enable_mail_notifier'):
         packageUrl = config['package_url']
@@ -785,29 +762,25 @@ def generateBranchObjects(config, name, secrets=None):
             binaryURL=l10n_binaryURL
         ))
 
-    # Skip https repos until bug 592060 is fixed and we have a https-capable HgPoller
-    if config['hgurl'].startswith('https:'):
-        pass
+    if config.get('enable_try', False):
+        tipsOnly = True
+        maxChanges = 100
+        # Pay attention to all branches for pushes to try
+        repo_branch = None
     else:
-        if config.get('enable_try', False):
-            tipsOnly = True
-            maxChanges = 100
-            # Pay attention to all branches for pushes to try
-            repo_branch = None
-        else:
-            tipsOnly = False
-            maxChanges = 100
-            # Other branches should only pay attention to the default branch
-            repo_branch = "default"
+        tipsOnly = True
+        maxChanges = 100
+        # Other branches should only pay attention to the default branch
+        repo_branch = "default"
 
-        branchObjects['change_source'].append(HgPoller(
-            hgURL=config['hgurl'],
-            branch=config['repo_path'],
-            tipsOnly=tipsOnly,
-            maxChanges=maxChanges,
-            repo_branch=repo_branch,
-            pollInterval=pollInterval,
-        ))
+    branchObjects['change_source'].append(HgPoller(
+        hgURL=config['hgurl'],
+        branch=config['repo_path'],
+        tipsOnly=tipsOnly,
+        maxChanges=maxChanges,
+        repo_branch=repo_branch,
+        pollInterval=pollInterval,
+    ))
 
     if config['enable_l10n'] and config['enable_l10n_onchange']:
         hg_all_locales_poller = HgAllLocalesPoller(hgURL = config['hgurl'],
@@ -974,6 +947,34 @@ def generateBranchObjects(config, name, secrets=None):
     for platform in enabled_platforms:
         # shorthand
         pf = config['platforms'][platform]
+
+        if 'mozharness_config' in pf:
+            factory = ScriptFactory(
+                scriptRepo='%s%s' % (config['hgurl'],
+                                     config['mozharness_repo_path']),
+                scriptName=pf['mozharness_config']['script_name'],
+                extra_args=pf['mozharness_config'].get('extra_args'),
+                reboot_command=pf['mozharness_config'].get('reboot_command'),
+            )
+
+            builder = {
+                'name': '%s_dep' % pf['base_name'],
+                'slavenames': pf['slaves'],
+                'builddir': '%s_dep' % pf['base_name'],
+                'slavebuilddir': reallyShort('%s_dep' % pf['base_name']),
+                'factory': factory,
+                'category': name,
+                'properties': {
+                    'branch': name,
+                    'platform': platform,
+                    'product': pf['stage_product'],
+                    'repo_path': config['repo_path'],
+                }
+            }
+            branchObjects['builders'].append(builder)
+
+            # Nothing else to do for this builder
+            continue
 
         # The stage platform needs to be used by the factory __init__ methods
         # as well as the log handler status target.  Instead of repurposing the
