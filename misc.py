@@ -140,12 +140,13 @@ def isImportantForProduct(change, product):
 
     excludes = _product_excludes[product]
     for f in change.files:
-        for e in excludes:
-            if not e.search(f):
-                # This file isn't excluded, so it's important
-                return True
+        if not any(e.search(f) for e in excludes):
+            # This file isn't excluded, so it's important
+            # log.msg("%s important for %s because of %s" % (change.revision, product, f))
+            return True
 
     # Looks like everything was excluded, so this change isn't important
+    # log.msg("%s not important for %s" % (change.revision, product))
     return False
 
 def isImportantL10nFile(change, l10nModules):
