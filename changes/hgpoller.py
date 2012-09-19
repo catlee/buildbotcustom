@@ -292,6 +292,9 @@ class BaseHgPoller(BasePoller):
 
         if too_many:
             # Add a dummy change to indicate we had too many changes
+            # We add this at the end, and the list gets reversed below. That
+            # means this dummy change ends up being the 'first' change of the
+            # set, and buildbot chooses the last one to build.
             c = dict(author='buildbot',
                      files=['overflow'],
                      changeset=None,
