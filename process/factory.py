@@ -3045,13 +3045,15 @@ class BaseRepackFactory(MozillaBuildFactory):
         if not self.mozconfig:
             return
 
+        mozconfig = "%s/%s" % (self.origSrcDir, self.mozconfig)
+
         cmd = ['bash', '-c',
                 '''if [ -f "%(mozconfig)s" ]; then
                     echo Using in-tree mozconfig;
                     cp %(mozconfig)s .mozconfig;
                 else
                     echo Could not find in-tree mozconfig;
-                fi'''.replace("\n","") % {'mozconfig': self.mozconfig}]
+                fi'''.replace("\n","") % {'mozconfig': mozconfig}]
 
         self.addStep(RetryingShellCommand(
             name='get_mozconfig',
