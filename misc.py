@@ -594,7 +594,7 @@ def generateBranchObjects(config, name, secrets=None):
                     test_builders.extend(generateTestBuilderNames('%s debug test' % base_name, suites_name, suites))
                 triggeredUnittestBuilders.append(('%s-%s-unittest' % (name, platform), test_builders, config.get('enable_merging', True)))
             # Skip l10n, unit tests
-            # Skip nightlies for debug builds unless requested  
+            # Skip nightlies for debug builds unless requested
             if not pf.has_key('enable_nightly'):
                 continue
         elif pf.get('enable_dep', True):
@@ -1110,7 +1110,7 @@ def generateBranchObjects(config, name, secrets=None):
             branchObjects['builders'].append(mozilla2_dep_builder)
 
             # We have some platforms which need to be built every X hours with PGO.
-            # These builds are as close to regular dep builds as we can make them, 
+            # These builds are as close to regular dep builds as we can make them,
             # other than PGO
             if config['pgo_strategy'] in ('periodic', 'try') and platform in config['pgo_platforms']:
                 pgo_kwargs = factory_kwargs.copy()
@@ -1369,10 +1369,8 @@ def generateBranchObjects(config, name, secrets=None):
 
             if config['enable_l10n']:
                 if platform in config['l10n_platforms']:
-                    # TODO Linux and mac are not working with mozconfig at this point
-                    # and this will disable it for now. We will fix this in bug 518359.
                     objdir = ''
-                    mozconfig = None
+                    mozconfig = pf['src_mozconfig']
                     l10n_kwargs = {}
                     if config.get('call_client_py', False):
                         l10n_kwargs['callClientPy'] = True
@@ -1395,8 +1393,6 @@ def generateBranchObjects(config, name, secrets=None):
                         appName=pf['app_name'],
                         enUSBinaryURL=config['enUS_binaryURL'],
                         nightly=True,
-                        configRepoPath=config['config_repo_path'],
-                        configSubDir=config['config_subdir'],
                         mozconfig=mozconfig,
                         l10nNightlyUpdate=config['l10nNightlyUpdate'],
                         l10nDatedDirs=config['l10nDatedDirs'],
@@ -1558,7 +1554,8 @@ def generateBranchObjects(config, name, secrets=None):
                 signingServers=secrets.get(pf.get('dep_signing_servers')),
                 baseMirrorUrls=config.get('base_mirror_urls'),
                 extraConfigureArgs=config.get('l10n_extra_configure_args', []),
-                buildsBeforeReboot=pf.get('builds_before_reboot',0),
+                buildsBeforeReboot=pf.get('builds_before_reboot', 0),
+                mozconfig=pf['src_mozconfig'],
                 **dep_kwargs
             )
             # eg. Thunderbird comm-central linux l10n dep
@@ -1725,7 +1722,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
            branch_config['platforms'].has_key(platform) and \
            not branch_config['platforms'][platform].get('enable_talos', True):
             continue
-        
+
         if platform_config.get('is_mobile', False):
             branchName = branch_config['mobile_branch_name']
             tinderboxTree = branch_config['mobile_tinderbox_tree']
