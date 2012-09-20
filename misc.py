@@ -1371,7 +1371,7 @@ def generateBranchObjects(config, name, secrets=None):
             if config['enable_l10n']:
                 if platform in config['l10n_platforms']:
                     objdir = ''
-                    mozconfig = pf['src_mozconfig']
+                    mozconfig = os.path.join(os.path.dirname(pf['src_mozconfig']), 'l10n-mozconfig')
                     l10n_kwargs = {}
                     if config.get('call_client_py', False):
                         l10n_kwargs['callClientPy'] = True
@@ -1540,6 +1540,7 @@ def generateBranchObjects(config, name, secrets=None):
                      'skip_blank_repos':    config.get('skip_blank_repos', False),
                      'venkman_repo_path':   config.get('venkman_repo_path', ''),
                 }
+            mozconfig = os.path.join(os.path.dirname(pf['src_mozconfig']), 'l10n-mozconfig')
             mozilla2_l10n_dep_factory = NightlyRepackFactory(
                 env=platform_env,
                 platform=platform,
@@ -1570,7 +1571,7 @@ def generateBranchObjects(config, name, secrets=None):
                 mock_target=pf.get('mock_target'),
                 mock_packages=pf.get('mock_packages'),
                 mock_copyin_files=pf.get('mock_copyin_files'),
-                mozconfig=pf['src_mozconfig'],
+                mozconfig=mozconfig,
                 **dep_kwargs
             )
             # eg. Thunderbird comm-central linux l10n dep
