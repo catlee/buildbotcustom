@@ -819,6 +819,8 @@ def generateBranchObjects(config, name, secrets=None):
             name=scheduler_name_prefix + "-" + product,
             branch=config['repo_path'],
             builderNames=product_builders,
+            # TODO: this will skip unimportant changes if they're the first in the push
+            # We want to build the top of a push if anything in the push is important
             fileIsImportant=makeImportantFunc(config['hgurl'], product),
             **extra_args
         ))
