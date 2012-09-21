@@ -112,19 +112,16 @@ def get_locales_from_json(jsonFile, l10nRepoPath, relbranch):
 # dep/nightlies and release builds. Because they build the same "branch" this
 # allows us to have the release builder ignore HgPoller triggered changse
 # and the dep builders only obey HgPoller/Force Build triggered ones.
-
 def isHgPollerTriggered(change, hgUrl):
-    # Check for poller overflow
-    if change.who == 'buildbot' and 'overflow' in change.files:
+    if (change.revlink and hgUrl in change.revlink) or \
+            change.comments.find(hgUrl) > -1:
         return True
 
-    if (change.revlink and hgUrl in change.revlink) or \
-       change.comments.find(hgUrl) > -1:
-        return True
 
 def shouldBuild(change):
     """check for commit message disabling build for this change"""
     return "DONTBUILD" not in change.comments
+
 
 _product_excludes = {
     'firefox':     [re.compile("^b2g/"), re.compile("^mobile/")],
@@ -148,6 +145,7 @@ def isImportantForProduct(change, product):
     # Looks like everything was excluded, so this change isn't important
     # log.msg("%s not important for %s" % (change.revision, product))
     return False
+
 
 def makeImportantFunc(hgurl, product):
     # TODO: If the top-most changeset in a push isn't important for some products...what ends up getting built?
