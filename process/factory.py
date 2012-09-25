@@ -212,6 +212,8 @@ def parse_make_upload(rc, stdout, stderr):
             retval['packageRpmUrl'] = m
         elif m.endswith("crashreporter-symbols.zip"):
             retval['symbolsUrl'] = m
+        elif m.endswith("crashreporter-symbols-full.zip"):
+            retval['symbolsUrl'] = m
         elif m.endswith("tests.tar.bz2") or m.endswith("tests.zip"):
             retval['testsUrl'] = m
         elif m.endswith('apk') and 'unsigned-unaligned' in m:
@@ -469,15 +471,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
                     properties['purge_target'] = '%sGB' % str(self.buildSpace)
                 return properties
 
-            if self.use_mock:
-                self.addStep(MockReset(
-                    target=self.mock_target,
-                ))
-                self.addStep(MockInit(
-                    target=self.mock_target,
-                ))
-
-            self.addStep(MockProperty(
+            self.addStep(SetProperty(
              name='clean_old_builds',
              command=command,
              description=['cleaning', 'old', 'builds'],
@@ -488,8 +482,14 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
              extract_fn=parse_purge_builds,
              log_eval_func=lambda c,s: regex_log_evaluator(c, s, purge_error),
              env=self.env,
-             mock=self.use_mock,
-             target=self.mock_target,
+            ))
+
+        if self.use_mock:
+            self.addStep(MockReset(
+                target=self.mock_target,
+            ))
+            self.addStep(MockInit(
+                target=self.mock_target,
             ))
 
     def addPeriodicRebootSteps(self):
@@ -731,6 +731,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  enablePackaging=True,
                  runAliveTests=True,
                  enableInstaller=False,
+                 gaiaRepo=None,
+                 gaiaRevision=None,
                  **kwargs):
         MozillaBuildFactory.__init__(self, **kwargs)
 
@@ -801,6 +803,8 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.tooltool_script = tooltool_script
         self.tooltool_bootstrap = tooltool_bootstrap
         self.runAliveTests = runAliveTests
+        self.gaiaRepo = gaiaRepo
+        self.gaiaRevision = gaiaRevision
 
         assert len(self.tooltool_url_list) <= 1, "multiple urls not currently supported by tooltool"
 
@@ -1120,14 +1124,23 @@ class MercurialBuildFactory(MozillaBuildFactory):
              property='got_revision'
             ))
 
-        changesetLink = '<a href=http://%s/%s/rev' % (self.hgHost,
-                                                        self.repoPath)
+        changesetLink = '<a href=http://%s/%s/rev' % (self.hgHost, self.repoPath)
         changesetLink += '/%(got_revision)s title="Built from revision %(got_revision)s">rev:%(got_revision)s</a>'
         self.addStep(OutputStep(
          name='tinderboxprint_changeset',
          data=['TinderboxPrint:', WithProperties(changesetLink)]
         ))
 
+        if self.gaiaRepo:
+            self.addStep(self.makeHgtoolStep(
+                name="gaia_sources",
+                rev=self.gaiaRevision or 'default',
+                repo_url="http://%s/%s" % (self.hgHost, self.gaiaRepo),
+                workdir="build/",
+                use_properties=False,
+                mirrors=['%s/%s' % (url, self.gaiaRepo) for url in self.baseMirrorUrls],
+                bundles=[],
+            ))
         self.addStep(SetBuildProperty(
             name='set_comments',
             property_name="comments",
@@ -1972,7 +1985,6 @@ class TryBuildFactory(MercurialBuildFactory):
 
             step = self.makeHgtoolStep(
                     clone_by_revision=True,
-                    bundles=[],
                     wc='build',
                     workdir='.',
                     locks=[hg_try_lock.access('counting')],
@@ -2028,7 +2040,6 @@ class TryBuildFactory(MercurialBuildFactory):
          workdir='build/%s/tools/codesighs' % self.mozillaObjdir,
          mock=self.use_mock,
          target=self.mock_target,
-         mock_workdir_prefix=None,
         ))
         self.addStep(RetryingShellCommand(
          name='get_codesize_log',
@@ -2106,6 +2117,7 @@ class TryBuildFactory(MercurialBuildFactory):
              timeout=40*60, # 40 minutes
              log_eval_func=lambda c,s: regex_log_evaluator(c, s, upload_errors),
              locks=[upload_lock.access('counting')],
+             mock_workdir_prefix=None,
         ))
 
         talosBranch = "%s-%s-talos" % (self.branchName, self.complete_platform)
@@ -3439,8 +3451,8 @@ class BaseRepackFactory(MozillaBuildFactory):
         self.addStep(MockCommand(
          name='repack_installers_pretty',
          description=['repack', 'installers', 'pretty'],
-         command=['sh', '-c', 'make', WithProperties('installers-%(locale)s'),
-                  'LOCALE_MERGEDIR=$PWD/merged'],
+         command=['sh', '-c',
+            WithProperties('make installers-%(locale)s LOCALE_MERGEDIR=$PWD/merged')],
          env=prettyEnv,
          haltOnFailure=False,
          flunkOnFailure=False,
@@ -3711,8 +3723,8 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
         self.addStep(MockCommand(
          name='repack_installers',
          description=['repack', 'installers'],
-         command=['make', WithProperties('installers-%(locale)s'),
-                  'LOCALE_MERGEDIR=$PWD/merged'],
+         command=['sh', '-c',
+            WithProperties('make installers-%(locale)s LOCALE_MERGEDIR=$PWD/merged')],
          env = self.env,
          haltOnFailure=True,
          workdir='%s/%s/%s/locales' % (self.baseWorkDir, self.objdir, self.appName),
