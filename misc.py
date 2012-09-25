@@ -156,11 +156,12 @@ def generateTestBuilderNames(name_prefix, suites_name, suites):
 
 fastRegexes = []
 nReservedSlaves = 0
-
-
 # A list of (regular rexpression, priority, time offset) tuples
+# Used by _nextSlaveFunc
 slave_scores = []
-def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
+
+
+def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False, reverse_priority=False):
     """
     Returns a nextSlave function that pick slaves according to slave_scores,
     request times, most recent slave to do a job and the colour of your
@@ -174,6 +175,8 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
     If `max_priority` is set, only slaves of this priority or lower will be chosen.
     If `use_reserved` is True, then we're allowed to use slaves otherwise
     reserved for special things (like release jobs)
+    If `reverse_priority` is True, then we choose slaves with lower priority
+    first. This doesn't affect the slave score.
     """
     def nextSlave(builder, available_slaves):
         # Check if our reserved slaves count needs updating
@@ -182,6 +185,12 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
         if int(now - _checkedReservedSlaveFile) > 60:
             _readReservedFile(_reservedFileName)
             _checkedReservedSlaveFile = int(now)
+
+        # TODO: If min/max priority are set, check that the builder has slaves
+        # configured that are within the specified range, even if they're not
+        # currently available. If there are no such slaves, then we reset
+        # min/max priority to their defaults, otherwise these builds can never
+        # run.
 
         # TODO: can we call builder.triggerNewBuildCheck if we decide we have
         # no slaves due to time offset?
@@ -212,8 +221,12 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
                 continue
             slave_list.append( (s, p, score) )
 
-        # Sort by priority, score. Better slaves are at the end.
-        slave_list.sort(key=lambda s: s[1:2])
+        if reverse_priority:
+            # Sort by reverse priority, score. Better slaves are at the end.
+            slave_list.sort(key=lambda s: (-s[1], s[2]))
+        else:
+            # Sort by priority, score. Better slaves are at the end.
+            slave_list.sort(key=lambda s: s[1:2])
 
         # If we aren't using reserved slaves, set aside the reserved slaves now
         if not use_reserved:
@@ -225,12 +238,22 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
         # Sort by which slave last did this kind of job for the highest priority
         highest_p = slave_list[-1][1]
         # Grab only slaves with this priority
-        slave_list = filter(slave_list, lambda s: s[1]==highest_p)
+        slave_list = filter(slave_list, lambda s: s[1] == highest_p)
         slave_list.sort(key=lambda s: _getLastTimeOnBuilder(builder, s.slave.slavename))
 
         # Anybody left idle? Back to work you slacker!
         return slave_list[-1][0]
-    return nextSlave
+
+    # Wrap all the above in a try/except which picks a random slave if there's an exception
+    def nextSlaveErrorWrapper(builder, available_slaves):
+        try:
+            return nextSlave(builder, available_slaves)
+        except:
+            log.msg("Error choosing next slave for builder '%s'; choosing randomly instead" % builder.name)
+            log.err()
+            return random.choice(available_slaves)
+
+    return nextSlaveErrorWrapper
 
 
 def _partitionSlaves(slaves):
@@ -306,74 +329,17 @@ def _recentSort(builder):
         return cmp(t1, t2)
     return sortfunc
 
-def _nextSlowSlave(builder, available_slaves):
-    try:
-        fast, slow = _partitionUnreservedSlaves(available_slaves)
-        # Choose the slow slave that was most recently on this builder
-        # If there aren't any slow slaves, choose the slow slave that was most
-        # recently on this builder
-        if slow:
-            return sorted(slow, _recentSort(builder))[-1]
-        elif fast:
-            return sorted(fast, _recentSort(builder))[-1]
-        else:
-            return None
-    except:
-        log.msg("Error choosing next slow slave for builder '%s', choosing randomly instead" % builder.name)
-        log.err()
-        return random.choice(available_slaves)
+_nextSlowSlave = _nextSlaveFunc(reverse_priority=True)
+_nextFastReservedSlave = _nextSlaveFunc(use_reserved=True, min_priority=1)
+_nextFastSlave = _nextSlaveFunc()
+_nextFastOnlySlave = _nextSlaveFunc(min_priority=1)
 
-def _nextFastSlave(builder, available_slaves, only_fast=False, reserved=False):
-    # Check if our reserved slaves count needs updating
-    global _checkedReservedSlaveFile, _reservedFileName
-    if int(time.time() - _checkedReservedSlaveFile) > 60:
-        _readReservedFile(_reservedFileName)
-        _checkedReservedSlaveFile = int(time.time())
-
-    try:
-        if only_fast:
-            # Check that the builder has some fast slaves configured.  We do
-            # this because some machines classes don't have a fast/slow
-            # distinction, and so they default to 'slow'
-            # We should look at the full set of slaves here regardless of if
-            # we're only supposed to be returning unreserved slaves so we get
-            # the full set of slaves on the builder.
-            fast, slow = _partitionSlaves(builder.slaves)
-            if not fast:
-                log.msg("Builder '%s' has no fast slaves configured, but only_fast is enabled; disabling only_fast" % builder.name)
-                only_fast = False
-
-        if reserved:
-            # We have access to the full set of slaves!
-            fast, slow = _partitionSlaves(available_slaves)
-        else:
-            # We only have access to unreserved slaves
-            fast, slow = _partitionUnreservedSlaves(available_slaves)
-
-        # Choose the fast slave that was most recently on this builder
-        # If there aren't any fast slaves, choose the slow slave that was most
-        # recently on this builder if only_fast is False
-        if not fast and only_fast:
-            return None
-        elif fast:
-            return sorted(fast, _recentSort(builder))[-1]
-        elif slow and not only_fast:
-            return sorted(slow, _recentSort(builder))[-1]
-        else:
-            return None
-    except:
-        log.msg("Error choosing next fast slave for builder '%s', choosing randomly instead" % builder.name)
-        log.err()
-        return random.choice(available_slaves)
 
 _checkedReservedSlaveFile = 0
 _reservedFileName = None
 def setReservedFileName(filename):
     global _reservedFileName
     _reservedFileName = filename
-
-def _nextFastReservedSlave(builder, available_slaves, only_fast=True):
-    return _nextFastSlave(builder, available_slaves, only_fast, reserved=True)
 
 def _nextL10nSlave(n=4):
     """Return a nextSlave function that restricts itself to choosing amongst
@@ -1441,7 +1407,7 @@ def generateBranchObjects(config, name, secrets=None):
                 'slavebuilddir': reallyShort('%s-%s-nightly' % (name, platform), pf['stage_product']),
                 'factory': mozilla2_nightly_factory,
                 'category': name,
-                'nextSlave': lambda b, sl: _nextFastSlave(b, sl, only_fast=True),
+                'nextSlave': _nextFastOnlySlave,
                 'properties': {'branch': name,
                                'platform': platform,
                                'stage_platform': stage_platform,
