@@ -157,6 +157,82 @@ def generateTestBuilderNames(name_prefix, suites_name, suites):
 fastRegexes = []
 nReservedSlaves = 0
 
+
+# A list of (regular rexpression, priority, time offset) tuples
+slave_scores = []
+def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
+    """
+    Returns a nextSlave function that pick slaves according to slave_scores,
+    request times, most recent slave to do a job and the colour of your
+    unicorn's mane.
+
+    The time offset in slave_scores is used as an offset to the amount of time
+    the oldest job in the builder has been waiting. If (oldest_job_wait_time -
+    offset) < 0, then the slave is discarded.
+
+    If `min_priority` is set, only slaves of this priority or higher will be chosen.
+    If `max_priority` is set, only slaves of this priority or lower will be chosen.
+    If `use_reserved` is True, then we're allowed to use slaves otherwise
+    reserved for special things (like release jobs)
+    """
+    def nextSlave(builder, available_slaves):
+        # Check if our reserved slaves count needs updating
+        global _checkedReservedSlaveFile, _reservedFileName
+        if int(time.time() - _checkedReservedSlaveFile) > 60:
+            _readReservedFile(_reservedFileName)
+            _checkedReservedSlaveFile = int(time.time())
+
+        # TODO: can we call builder.triggerNewBuildCheck if we decide we have
+        # no slaves due to time offset?
+        # TODO: Handle _nextSlowIdleSlave, and _nextL10nSlave too?
+
+        # Calculate priority, score for each of available_slaves
+        # Throw out slaves outside our priority range, or with negative score
+        now = time.time()
+        oldest = builder.getOldestRequestTime()
+        slave_list = []
+        for s in available_slaves:
+            for exp, p, score in slave_scores:
+                if exp.match(s.slave.slavename):
+                    score = (now - oldest + score)
+                    break
+            else:
+                # No match in slave_scores, so assign some default values
+                p = 0
+                score = now - oldest
+
+            if p < min_priority:
+                log.msg("Discarding %s - priority %i < %i" % (s.slave.slavename, p, min_priority)
+                continue
+            if max_priority is not None and p > max_priority:
+                log.msg("Discarding %s - priority %i > %i" % (s.slave.slavename, p, max_priority)
+                continue
+            if score < 0:
+                log.msg("Discarding %s - score %i < 0 " % (s.slave.slavename, score)
+                continue
+            slave_list.append( (s, p, score) )
+
+        # Sort by priority, score. Better slaves are at the end.
+        slave_list.sort(key=lambda s: s[1:2])
+
+        # If we aren't using reserved slaves, set aside the reserved slaves now
+        if not use_reserved:
+            slave_list = slave_list[:-nReservedSlaves]
+
+        if not slave_list:
+            return None
+
+        # Sort by which slave last did this kind of job for the highest priority
+        highest_p = slave_list[-1][1]
+        # Grab only slaves with this priority
+        slave_list = filter(slave_list, lambda s: s[1]==highest_p)
+        slave_list.sort(key=lambda s: _getLastTimeOnBuilder(builder, s.slave.slavename))
+
+        # Anybody left idle? Back to work you slacker!
+        return slave_list[-1][0]
+    return nextSlave
+
+
 def _partitionSlaves(slaves):
     """Partitions the list of slaves into 'fast' and 'slow' slaves, according
     to fastRegexes.
