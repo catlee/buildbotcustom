@@ -3121,6 +3121,7 @@ class BaseRepackFactory(MozillaBuildFactory):
                     cp %(mozconfig)s .mozconfig;
                 else
                     echo Could not find in-tree mozconfig;
+                    exit 1;
                 fi'''.replace("\n","") % {'mozconfig': self.mozconfig}]
 
         self.addStep(RetryingShellCommand(
