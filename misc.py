@@ -178,9 +178,10 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
     def nextSlave(builder, available_slaves):
         # Check if our reserved slaves count needs updating
         global _checkedReservedSlaveFile, _reservedFileName
-        if int(time.time() - _checkedReservedSlaveFile) > 60:
+        now = time.time()
+        if int(now - _checkedReservedSlaveFile) > 60:
             _readReservedFile(_reservedFileName)
-            _checkedReservedSlaveFile = int(time.time())
+            _checkedReservedSlaveFile = int(now)
 
         # TODO: can we call builder.triggerNewBuildCheck if we decide we have
         # no slaves due to time offset?
@@ -188,7 +189,6 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
 
         # Calculate priority, score for each of available_slaves
         # Throw out slaves outside our priority range, or with negative score
-        now = time.time()
         oldest = builder.getOldestRequestTime()
         slave_list = []
         for s in available_slaves:
@@ -202,13 +202,13 @@ def _nextSlaveFunc(min_priority=0, max_priority=None, use_reserved=False):
                 score = now - oldest
 
             if p < min_priority:
-                log.msg("Discarding %s - priority %i < %i" % (s.slave.slavename, p, min_priority)
+                log.msg("Discarding %s - priority %i < %i" % (s.slave.slavename, p, min_priority))
                 continue
             if max_priority is not None and p > max_priority:
-                log.msg("Discarding %s - priority %i > %i" % (s.slave.slavename, p, max_priority)
+                log.msg("Discarding %s - priority %i > %i" % (s.slave.slavename, p, max_priority))
                 continue
             if score < 0:
-                log.msg("Discarding %s - score %i < 0 " % (s.slave.slavename, score)
+                log.msg("Discarding %s - score %i < 0 " % (s.slave.slavename, score))
                 continue
             slave_list.append( (s, p, score) )
 
