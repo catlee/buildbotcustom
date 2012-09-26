@@ -794,7 +794,6 @@ def generateBranchObjects(config, name, secrets=None):
             properties={
                 'app': 'browser',
                 'en_revision': 'default',
-                #'l10n_revision': 'default',
                 }
         ))
 
