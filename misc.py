@@ -133,6 +133,7 @@ def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
     # We don't know how to handle this product, so everything is important!
     if product not in _product_excludes:
+        # log.msg("%s important for %s because we don't know anything about it" % (change.revision, product))
         return True
 
     excludes = _product_excludes[product]
@@ -767,7 +768,7 @@ def generateBranchObjects(config, name, secrets=None):
         # Pay attention to all branches for pushes to try
         repo_branch = None
     else:
-        tipsOnly = True
+        tipsOnly = False
         maxChanges = 100
         # Other branches should only pay attention to the default branch
         repo_branch = "default"
