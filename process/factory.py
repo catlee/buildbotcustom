@@ -265,6 +265,7 @@ def getPlatformMinidumpPath(platform):
         'macosx64_gecko': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         # Android uses OSX because the Foopies are OSX.
         'android': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
+        'android-noion': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         # Pandas will run on Linux Foopies.
         'android-armv6': WithProperties('%(toolsdir:-)s/breakpad/linux/minidump_stackwalk'),
         }
@@ -2054,13 +2055,16 @@ class TryBuildFactory(MercurialBuildFactory):
         else:
             codesighsObjdir = '../%s' % self.mozillaObjdir
 
-        self.addStep(Codesighs(
+        self.addStep(MockCodesighs(
          name='get_codesighs_diff',
          objdir=codesighsObjdir,
          platform=self.platform,
          workdir='build%s' % self.mozillaDir,
          env=self.env,
          tbPrint=self.tbPrint,
+         mock=self.use_mock,
+         target=self.mock_target,
+         mock_workdir_prefix='%(basedir)s/',
         ))
 
         self.addStep(ShellCommand(
@@ -2372,7 +2376,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
     def addCreateUpdateSteps(self):
         self.addStep(ShellCommand(
             name='rm_existing_mars',
-            command=['bash', '-c', 'rm -rvf *.mar'],
+            command=['bash', '-c', 'rm -rf *.mar'],
             env=self.env,
             workdir='%s/dist/update' % self.absMozillaObjDir,
             haltOnFailure=True,
@@ -3776,7 +3780,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
         # Remove the source (en-US) package so as not to confuse later steps
         # that look up build details.
         self.addStep(ShellCommand(name='rm_en-US_build',
-                                  command=['bash', '-c', 'rm -rvf *.en-US.*'],
+                                  command=['bash', '-c', 'rm -rf *.en-US.*'],
                                   description=['remove','en-US','build'],
                                   env=self.env,
                                   workdir='%s/dist' % self.absMozillaObjDir,
@@ -4994,7 +4998,7 @@ class RemoteUnittestFactory(MozillaTestFactory):
         #On windows, we should try using cmd's attrib and native rmdir
         self.addStep(ShellCommand(
             name='rm_builddir',
-            command=['rm', '-rfv', 'build'],
+            command=['rm', '-rf', 'build'],
             workdir='.'
         ))
 
@@ -5225,8 +5229,9 @@ class TalosFactory(RequestSortingBuildFactory):
             configOptions, talosCmd, customManifest=None, customTalos=None,
             workdirBase=None, fetchSymbols=False, plugins=None, pagesets=[],
             remoteTests=False, productName="firefox", remoteExtras=None,
-            talosAddOns=[], releaseTester=False,
-            talosBranch=None, branch=None, talos_from_source_code=False):
+            talosAddOns=[], releaseTester=False, credentialsFile=None,
+            talosBranch=None, branch=None, talos_from_source_code=False,
+            datazillaUrl=None):
 
         BuildFactory.__init__(self)
 
@@ -5248,7 +5253,7 @@ class TalosFactory(RequestSortingBuildFactory):
         except:
             # simple-talos does not use --activeTests
             self.suites = ""
-        self.talosCmd = talosCmd
+        self.talosCmd = talosCmd[:]
         self.customManifest = customManifest
         self.customTalos = customTalos
         self.fetchSymbols = fetchSymbols
@@ -5261,6 +5266,11 @@ class TalosFactory(RequestSortingBuildFactory):
         self.productName = productName
         self.remoteExtras = remoteExtras
         self.talos_from_source_code = talos_from_source_code
+        self.credentialsFile = credentialsFile
+
+        if datazillaUrl:
+            self.talosCmd.extend(['--datazilla-url', datazillaUrl])
+            self.talosCmd.extend(['--authfile', os.path.basename(credentialsFile)])
         if talosBranch is None:
             self.talosBranch = branchName
         else:
@@ -5366,7 +5376,7 @@ class TalosFactory(RequestSortingBuildFactory):
              flunkOnFailure=False,
              warnOnFailure=False,
              description="chmod files (see msys bug)",
-             command=["chmod", "-v", "-R", "a+rwx", "."],
+             command=["chmod", "-R", "a+rwx", "."],
              env=self.env)
             )
             #on windows move the whole working dir out of the way, saves us trouble later
@@ -5381,7 +5391,7 @@ class TalosFactory(RequestSortingBuildFactory):
              name='remove any old working dirs',
              workdir=os.path.dirname(self.workdirBase),
              description="remove old working dirs",
-             command='if exist t-* nohup rm -vrf t-*',
+             command='if exist t-* nohup rm -rf t-*',
              env=self.env)
             )
             self.addStep(ShellCommand(
@@ -5396,7 +5406,7 @@ class TalosFactory(RequestSortingBuildFactory):
              name='cleanup',
              workdir=self.workdirBase,
              description="Cleanup",
-             command='nohup rm -vrf *',
+             command='nohup rm -rf *',
              env=self.env)
             )
         if 'fed' in self.OS:
@@ -5512,7 +5522,7 @@ class TalosFactory(RequestSortingBuildFactory):
              flunkOnFailure=False,
              warnOnFailure=False,
              description="chmod files (see msys bug)",
-             command=["chmod", "-v", "-R", "a+x", "."],
+             command=["chmod", "-R", "a+x", "."],
              env=self.env)
             )
         if self.OS in ('tiger', 'leopard', 'snowleopard', 'lion', 'mountainlion'):
@@ -5596,6 +5606,14 @@ class TalosFactory(RequestSortingBuildFactory):
                 name='check sdk okay'))
 
     def addSetupSteps(self):
+        if self.credentialsFile:
+            target_file_name = os.path.basename(self.credentialsFile)
+            self.addStep(FileDownload(
+                mastersrc=self.credentialsFile,
+                slavedest=target_file_name,
+                workdir=os.path.join(self.workdirBase, "talos"),
+                flunkOnFailure=False,
+            ))
         if self.customManifest:
             self.addStep(FileDownload(
              mastersrc=self.customManifest,
@@ -5723,9 +5741,10 @@ class TalosFactory(RequestSortingBuildFactory):
     def addPluginInstallSteps(self):
         if self.plugins:
             #32 bit (includes mac browsers)
-            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', \
-                           'tegra_android-armv6', 'leopard', 'snowleopard', \
-                           'leopard-o', 'lion', 'mountainlion'):
+            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android',
+                           'tegra_android-armv6', 'tegra_android-noion',
+                           'leopard', 'snowleopard', 'leopard-o', 'lion',
+                           'mountainlion'):
                 self.addStep(DownloadFile(
                  url=WithProperties("%s/%s" % (self.supportUrlBase, self.plugins['32'])),
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
