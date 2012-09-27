@@ -277,6 +277,7 @@ class BaseHgPoller(BasePoller):
 
             i = 0
             for change in push['changesets']:
+                i += 1
                 if self.maxChanges is not None and (len(change_list) >= self.maxChanges or
                                                     i >= self.maxChanges):
                     too_many = True
