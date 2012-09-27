@@ -130,22 +130,30 @@ _product_includes = {
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
-    somebody_else_wants = False
-    for p, includes in _product_includes.items():
-        for f in change.files:
-            if any(i.search(f) for i in includes):
-                if p == product:
-                    # This file is important for us!
-                    # log.msg("%s important for %s because of %s" % (change.revision, product, f))
-                    return True
-                somebody_else_wants = True
+    # For each file, check each product's include list
+    # If our product is watching it, then it's important
+    # If no other product is watching it, then it's important
+    for f in change.files:
+        somebody_else_wants = False
+        for p, includes in _product_includes.items():
+            for i in includes:
+                if i.search(f) is not None:
+                    if p == product:
+                        # This file is important for us!
+                        log.msg("%s important for %s because of %s" % (change.revision, product, f))
+                        return True
+                    somebody_else_wants = True
+        if not somebody_else_wants:
+            log.msg("%s important for %s because of %s" % (change.revision, product, f))
+            return True
 
     if somebody_else_wants:
         # Looks like some other product cares about this, so don't build it.
-        # log.msg("%s not important for %s" % (change.revision, product))
+        log.msg("%s not important for %s" % (change.revision, product))
         return False
 
     # Nobody cares :\ It's important for everybody then!
+    log.msg("%s important because nobody cares" % (change.revision, product))
     return True
 
 
