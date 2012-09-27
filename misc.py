@@ -149,7 +149,6 @@ def isImportantForProduct(change, product):
 
 
 def makeImportantFunc(hgurl, product):
-    # TODO: If the top-most changeset in a push isn't important for some products...what ends up getting built?
     def isImportant(c):
         if not isHgPollerTriggered(c, hgurl):
             return False
@@ -819,8 +818,6 @@ def generateBranchObjects(config, name, secrets=None):
             name=scheduler_name_prefix + "-" + product,
             branch=config['repo_path'],
             builderNames=product_builders,
-            # TODO: this will skip unimportant changes if they're the first in the push
-            # We want to build the top of a push if anything in the push is important
             fileIsImportant=makeImportantFunc(config['hgurl'], product),
             **extra_args
         ))
