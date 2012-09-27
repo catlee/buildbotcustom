@@ -123,29 +123,30 @@ def shouldBuild(change):
     return "DONTBUILD" not in change.comments
 
 
-_product_excludes = {
-    'firefox':     [re.compile("^b2g/"), re.compile("^mobile/")],
-    'mobile':      [re.compile("^b2g/"), re.compile("^browser/")],
-    'b2g':         [re.compile("^browser/"), re.compile("^mobile/")],
-    'thunderbird': [re.compile("^browser/"), re.compile("^mobile/"), re.compile("^b2g/")],
+_product_includes = {
+    'firefox':     [re.compile("^browser/")],
+    'mobile':      [re.compile("^mobile/")],
+    'b2g':         [re.compile("^b2g/")],
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
-    # We don't know how to handle this product, so everything is important!
-    if product not in _product_excludes:
-        # log.msg("%s important for %s because we don't know anything about it" % (change.revision, product))
-        return True
+    somebody_else_wants = False
+    for p, includes in _product_includes.items():
+        for f in change.files:
+            if any(i.search(f) for i in includes):
+                if p == product:
+                    # This file is important for us!
+                    # log.msg("%s important for %s because of %s" % (change.revision, product, f))
+                    return True
+                somebody_else_wants = True
 
-    excludes = _product_excludes[product]
-    for f in change.files:
-        if not any(e.search(f) for e in excludes):
-            # This file isn't excluded, so it's important
-            # log.msg("%s important for %s because of %s" % (change.revision, product, f))
-            return True
+    if somebody_else_wants:
+        # Looks like some other product cares about this, so don't build it.
+        # log.msg("%s not important for %s" % (change.revision, product))
+        return False
 
-    # Looks like everything was excluded, so this change isn't important
-    # log.msg("%s not important for %s" % (change.revision, product))
-    return False
+    # Nobody cares :\ It's important for everybody then!
+    return True
 
 
 def makeImportantFunc(hgurl, product):
@@ -818,6 +819,7 @@ def generateBranchObjects(config, name, secrets=None):
             name=scheduler_name_prefix + "-" + product,
             branch=config['repo_path'],
             builderNames=product_builders,
+            # TODO: Disable for try?
             fileIsImportant=makeImportantFunc(config['hgurl'], product),
             **extra_args
         ))
