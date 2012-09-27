@@ -97,7 +97,7 @@ from buildbot.util import json
 
 
 def _parse_changes(data):
-    pushes = json.loads(data)
+    pushes = json.loads(data).values()
     # Sort by push date
     pushes.sort(key=lambda p: p['date'])
     return pushes
