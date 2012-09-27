@@ -147,11 +147,6 @@ def isImportantForProduct(change, product):
             log.msg("%s important for %s because of %s" % (change.revision, product, f))
             return True
 
-    if somebody_else_wants:
-        # Looks like some other product cares about this, so don't build it.
-        log.msg("%s not important for %s" % (change.revision, product))
-        return False
-
     # Nobody cares :\ It's important for everybody then!
     log.msg("%s important because nobody cares" % (change.revision, product))
     return True
