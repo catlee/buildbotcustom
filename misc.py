@@ -127,6 +127,7 @@ _product_includes = {
     'firefox':     [re.compile("^browser/")],
     'mobile':      [re.compile("^mobile/")],
     'b2g':         [re.compile("^b2g/")],
+    'thunderbird': [re.compile("^mail/")],
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
@@ -142,6 +143,9 @@ def isImportantForProduct(change, product):
                         # This file is important for us!
                         log.msg("%s important for %s because of %s" % (change.revision, product, f))
                         return True
+                    # Mark this file as wanted by somebody else
+                    # We can't just return False here because it's possible
+                    # that *we* are interested in this file too.
                     somebody_else_wants = True
         if not somebody_else_wants:
             log.msg("%s important for %s because of %s" % (change.revision, product, f))

@@ -299,12 +299,14 @@ class BaseHgPoller(BasePoller):
 
             if too_many:
                 # Add a dummy change to indicate we had too many changes
-                # We add this at the end, and the list gets reversed below. That
-                # means this dummy change ends up being the 'first' change of the
-                # set, and buildbot chooses the last one to build.
                 if self.mergePushChanges:
                     c['files'].extend(['overflow'])
                 else:
+                    # We add this at the end, and the list gets reversed below. That
+                    # means this dummy change ends up being the 'first' change of the
+                    # set, and buildbot chooses the last change as the one to
+                    # build, so this dummy change doesn't impact which revision
+                    # gets built.
                     c = dict(
                         user='buildbot',
                         files=['overflow'],
