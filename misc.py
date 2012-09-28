@@ -127,13 +127,16 @@ _product_includes = {
     'firefox':     [re.compile("^browser/")],
     'mobile':      [re.compile("^mobile/")],
     'b2g':         [re.compile("^b2g/")],
-    'thunderbird': [re.compile("^mail/")],
+}
+_product_excludes = {
+    'thunderbird': [re.compile("^suite/")],
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
     # For each file, check each product's include list
     # If our product is watching it, then it's important
     # If no other product is watching it, then it's important
+    excludes = _product_excludes.get(product, [])
     for f in change.files:
         somebody_else_wants = False
         for p, includes in _product_includes.items():
@@ -147,7 +150,10 @@ def isImportantForProduct(change, product):
                     # We can't just return False here because it's possible
                     # that *we* are interested in this file too.
                     somebody_else_wants = True
-        if not somebody_else_wants:
+
+        # If nobody else wants this, and we don't specifically exclude it, then
+        # it's important
+        if not somebody_else_wants and not any(e.search(f) for e in excludes):
             log.msg("%s important for %s because of %s" % (change.revision, product, f))
             return True
 
