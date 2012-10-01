@@ -262,7 +262,7 @@ class BaseHgPoller(BasePoller):
             return
 
         # We want to add at most self.maxChanges changes per push
-        # Go through the list of changes backwards, since we want to keep the
+        # Go through the list of pushes backwards, since we want to keep the
         # latest ones and possibly discard earlier ones.
         change_list = []
         too_many = False
@@ -273,11 +273,11 @@ class BaseHgPoller(BasePoller):
                 date=push['date'],
                 files=[],
                 desc="",
+                node=None,
             )
 
             i = 0
-            for change in push['changesets']:
-                i += 1
+            for change in reversed(push['changesets']):
                 if self.maxChanges is not None and (len(change_list) >= self.maxChanges or
                                                     i >= self.maxChanges):
                     too_many = True
@@ -288,36 +288,50 @@ class BaseHgPoller(BasePoller):
                 if self.repo_branch is not None and self.repo_branch != change['branch']:
                     continue
 
+                i += 1
+
                 if self.mergePushChanges:
                     # Collect all the files for this push
                     c['files'].extend(change['files'])
-                    # Keep the comments and revision of the last change of this push
-                    c['desc'] = change['desc']
-                    c['node'] = change['node']
+                    # Keep the comments and revision of the last change of this push.
+                    # We're going through the changes in reverse order, so we
+                    # should use the comments and revision of the first change
+                    # in this loop
+                    if c['node'] is None:
+                        c['desc'] = change['desc']
+                        c['node'] = change['node']
                 else:
-                    change_list.append(change)
-
-            if too_many:
-                # Add a dummy change to indicate we had too many changes
-                if self.mergePushChanges:
-                    c['files'].extend(['overflow'])
-                else:
-                    # We add this at the end, and the list gets reversed below. That
-                    # means this dummy change ends up being the 'first' change of the
-                    # set, and buildbot chooses the last change as the one to
-                    # build, so this dummy change doesn't impact which revision
-                    # gets built.
                     c = dict(
-                        user='buildbot',
-                        files=['overflow'],
-                        node=None,
-                        desc='more than maxChanges(%i) received; ignoring the rest' % self.maxChanges,
-                        date=time.time(),
+                        user=push['user'],
+                        date=push['date'],
+                        files=change['files'],
+                        desc=change['desc'],
+                        node=change['node'],
+                        branch=change['branch'],
                     )
                     change_list.append(c)
 
-            if self.mergePushChanges:
+            if too_many and self.mergePushChanges:
+                # Add a dummy change to indicate we had too many changes
+                c['files'].extend(['overflow'])
+
+            if self.mergePushChanges and c['node'] is not None:
                 change_list.append(c)
+
+        if too_many and not self.mergePushChanges:
+            # We add this at the end, and the list gets reversed below. That
+            # means this dummy change ends up being the 'first' change of the
+            # set, and buildbot chooses the last change as the one to
+            # build, so this dummy change doesn't impact which revision
+            # gets built.
+            c = dict(
+                user='buildbot',
+                files=['overflow'],
+                node=None,
+                desc='more than maxChanges(%i) received; ignoring the rest' % self.maxChanges,
+                date=time.time(),
+            )
+            change_list.append(c)
 
         # Un-reverse the list of changes so they get added in the right order
         change_list.reverse()
