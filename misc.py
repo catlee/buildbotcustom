@@ -1,15 +1,13 @@
 from urlparse import urljoin
 try:
     import json
-    assert json # pyflakes
+    assert json  # pyflakes
 except:
     import simplejson as json
 import collections
 import random
 import re
 import sys, os, time
-
-from copy import deepcopy
 
 from twisted.python import log
 
@@ -123,12 +121,19 @@ def shouldBuild(change):
     return "DONTBUILD" not in change.comments
 
 
-_product_includes = {
-    'firefox':     [re.compile("^browser/")],
-    'mobile':      [re.compile("^mobile/")],
-    'b2g':         [re.compile("^b2g/")],
-}
 _product_excludes = {
+    'firefox': [
+        re.compile('^mobile/'),
+        re.compile('^b2g/'),
+    ],
+    'mobile': [
+        re.compile('^browser/'),
+        re.compile('^b2g/'),
+    ],
+    'b2g': [
+        re.compile('^browser/'),
+        re.compile('^mobile/'),
+    ],
     'thunderbird': [re.compile("^suite/")],
 }
 def isImportantForProduct(change, product):
@@ -138,27 +143,13 @@ def isImportantForProduct(change, product):
     # If no other product is watching it, then it's important
     excludes = _product_excludes.get(product, [])
     for f in change.files:
-        somebody_else_wants = False
-        for p, includes in _product_includes.items():
-            for i in includes:
-                if i.search(f) is not None:
-                    if p == product:
-                        # This file is important for us!
-                        log.msg("%s important for %s because of %s" % (change.revision, product, f))
-                        return True
-                    # Mark this file as wanted by somebody else
-                    # We can't just return False here because it's possible
-                    # that *we* are interested in this file too.
-                    somebody_else_wants = True
-
-        # If nobody else wants this, and we don't specifically exclude it, then
-        # it's important
-        if not somebody_else_wants and not any(e.search(f) for e in excludes):
+        excluded = any(e.search(f) for e in excludes)
+        if not excluded:
             log.msg("%s important for %s because of %s" % (change.revision, product, f))
             return True
 
-    # Nobody cares :\ It's important for everybody then!
-    log.msg("%s important because nobody cares" % (change.revision, product))
+    # Everything was excluded
+    log.msg("%s not important because all files were excluded cares" % (change.revision, product))
     return True
 
 
