@@ -149,7 +149,7 @@ def isImportantForProduct(change, product):
             return True
 
     # Everything was excluded
-    log.msg("%s not important because all files were excluded cares" % (change.revision, product))
+    log.msg("%s not important for %s because all files were excluded" % (change.revision, product))
     return True
 
 
