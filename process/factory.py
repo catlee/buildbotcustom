@@ -5046,7 +5046,7 @@ class RemoteUnittestFactory(MozillaTestFactory):
         self.addStep(ShellCommand(
          name="verify_tegra_state",
          description="Running verify.py",
-         command=['python', '/builds/sut_tools/verify.py'],
+         command=['python', '-u', '/builds/sut_tools/verify.py'],
          workdir='build',
          haltOnFailure=True,
          log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
@@ -5252,9 +5252,10 @@ class RemoteUnittestFactory(MozillaTestFactory):
             flunkOnFailure=False,
             timeout=60*30,
             description='Reboot Device',
-            command=['python', '/builds/sut_tools/reboot.py',
+            command=['python', '-u', '/builds/sut_tools/reboot.py',
                       WithProperties("%(sut_ip)s"),
                      ],
+            log_eval_func=lambda c,s: SUCCESS,
         ))
 
 class TalosFactory(RequestSortingBuildFactory):
@@ -5377,7 +5378,7 @@ class TalosFactory(RequestSortingBuildFactory):
         self.addStep(ShellCommand(
          name="verify_tegra_state",
          description="Running verify.py",
-         command=['python', '/builds/sut_tools/verify.py'],
+         command=['python', '-u', '/builds/sut_tools/verify.py'],
          workdir='build',
          haltOnFailure=True,
          log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
@@ -5927,11 +5928,12 @@ class TalosFactory(RequestSortingBuildFactory):
                          workdir=self.workdirBase,
                          description="Reboot Device",
                          timeout=60*30,
-                         command=['python', '/builds/sut_tools/reboot.py',
+                         command=['python', '-u', '/builds/sut_tools/reboot.py',
                                   WithProperties("%(sut_ip)s"),
                                  ],
-                         env=self.env)
-            )
+                         env=self.env,
+                         log_eval_func=lambda c,s: SUCCESS,
+            ))
         else:
             #the following step is to help the linux running on mac minis reboot cleanly
             #see bug561442
