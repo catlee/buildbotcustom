@@ -384,4 +384,3 @@ class MaxChangesHandling(unittest.TestCase):
         self.doTest('GECKO20b5pre_20100820_RELBRANCH', 1, False)
 
         self.assertEquals(len(self.changes), 1)
-

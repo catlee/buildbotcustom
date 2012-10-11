@@ -844,12 +844,16 @@ def generateBranchObjects(config, name, secrets=None):
         scheduler_name_prefix = name
 
     for product, product_builders in buildersByProduct.items():
+        if config.get('enable_try'):
+            fileIsImportant = lambda c: isHgPollerTriggered(c, config['hgurl'])
+        else:
+            fileIsImportant = makeImportantFunc(config['hgurl'], product)
+
         branchObjects['schedulers'].append(scheduler_class(
             name=scheduler_name_prefix + "-" + product,
             branch=config['repo_path'],
             builderNames=product_builders,
-            # TODO: Disable for try?
-            fileIsImportant=makeImportantFunc(config['hgurl'], product),
+            fileIsImportant=fileIsImportant,
             **extra_args
         ))
 
