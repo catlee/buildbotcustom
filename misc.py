@@ -138,9 +138,9 @@ _product_excludes = {
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
-    # For each file, check each product's include list
-    # If our product is watching it, then it's important
-    # If no other product is watching it, then it's important
+    # For each file, check each product's exclude list
+    # If a file is not excluded, then the change is important
+    # If all files are excluded, then the change is not important
     excludes = _product_excludes.get(product, [])
     for f in change.files:
         excluded = any(e.search(f) for e in excludes)
@@ -150,7 +150,7 @@ def isImportantForProduct(change, product):
 
     # Everything was excluded
     log.msg("%s not important for %s because all files were excluded" % (change.revision, product))
-    return True
+    return False
 
 
 def makeImportantFunc(hgurl, product):
