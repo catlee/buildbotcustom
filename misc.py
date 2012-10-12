@@ -353,8 +353,12 @@ def _nextOldTegra(builder, available_slaves):
         old = []
         for s in available_slaves:
             number = s.slave.slavename.replace('tegra-', '')
-            if int(number) < 286:
-                old.append(s)
+            try:
+                if int(number) < 286:
+                    old.append(s)
+            except ValueError:
+                log.msg("Error parsing number out of '%s', discarding from old list" % s.slave.slavename)
+                continue
         if old:
             return random.choice(old)
         return None
