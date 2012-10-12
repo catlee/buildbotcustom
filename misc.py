@@ -349,14 +349,19 @@ def _nextSlowIdleSlave(nReserved):
 # XXX Bug 790698 hack for no android reftests on new tegras
 # Purge with fire when this is no longer needed
 def _nextOldTegra(builder, available_slaves):
-    old = []
-    for s in available_slaves:
-        number = s.slave.slavename.replace('tegra-', '')
-        if int(number) < 286:
-            old.append(s)
-    if old:
-        return random.choice(old)
-    return None
+    try:
+        old = []
+        for s in available_slaves:
+            number = s.slave.slavename.replace('tegra-', '')
+            if int(number) < 286:
+                old.append(s)
+        if old:
+            return random.choice(old)
+        return None
+    except:
+        log.msg("Error choosing old tegra for builder '%s', choosing randomly instead" % builder.name)
+        log.err()
+        return random.choice(available_slaves)
 
 nomergeBuilders = []
 def mergeRequests(builder, req1, req2):
