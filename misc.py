@@ -217,6 +217,9 @@ def _getLastTimeOnBuilder(builder, slavename):
     for buildNumber in buildNumbers:
         try:
             build = builder.builder_status.buildCache[buildNumber]
+            # Skip non-successful builds
+            if build.getResults() != 0:
+                continue
             if build.slavename == slavename:
                 return build.finished
         except KeyError:
@@ -345,17 +348,15 @@ def _nextSlowIdleSlave(nReserved):
 
 # XXX Bug 790698 hack for no android reftests on new tegras
 # Purge with fire when this is no longer needed
-def _nextOldTegra():
-    def _nextSlave(builder, available_slaves):
-        old = []
-        for s in available_slaves:
-            number = s.slave.slavename.replace('tegra-', '')
-            if int(number) < 286:
-                old.append(s)
-        if old:
-            return sorted(old, _recentSort(builder))[-1]
-        return None
-    return _nextSlave
+def _nextOldTegra(builder, available_slaves):
+    old = []
+    for s in available_slaves:
+        number = s.slave.slavename.replace('tegra-', '')
+        if int(number) < 286:
+            old.append(s)
+    if old:
+        return random.choice(old)
+    return None
 
 nomergeBuilders = []
 def mergeRequests(builder, req1, req2):
@@ -422,7 +423,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
         # XXX Bug 790698 hack for no android reftests on new tegras
         # Purge with fire when this is no longer needed
         if 'reftest' in suites_name:
-            builder['nextSlave'] = _nextOldTegra()
+            builder['nextSlave'] = _nextOldTegra
         builders.append(builder)
     elif mozharness:
         # suites is a dict!
@@ -484,7 +485,6 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                     'slavebuilddir': 'test',
                     'factory': factory,
                     'category': category,
-                    'nextSlave': _nextSlowSlave,
                     'properties': properties,
                     'env' : MozillaEnvironments.get(config['platforms'][platform].get('env_name'), {}),
                 }
