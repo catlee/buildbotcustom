@@ -257,6 +257,9 @@ def _getLastTimeOnBuilder(builder, slavename):
     for buildNumber in buildNumbers:
         try:
             build = builder.builder_status.buildCache[buildNumber]
+            # Skip non-successful builds
+            if build.getResults() != 0:
+                continue
             if build.slavename == slavename:
                 return build.finished
         except KeyError:
@@ -385,17 +388,24 @@ def _nextSlowIdleSlave(nReserved):
 
 # XXX Bug 790698 hack for no android reftests on new tegras
 # Purge with fire when this is no longer needed
-def _nextOldTegra():
-    def _nextSlave(builder, available_slaves):
+def _nextOldTegra(builder, available_slaves):
+    try:
         old = []
         for s in available_slaves:
             number = s.slave.slavename.replace('tegra-', '')
-            if int(number) < 286:
-                old.append(s)
+            try:
+                if int(number) < 286:
+                    old.append(s)
+            except ValueError:
+                log.msg("Error parsing number out of '%s', discarding from old list" % s.slave.slavename)
+                continue
         if old:
-            return sorted(old, _recentSort(builder))[-1]
+            return random.choice(old)
         return None
-    return _nextSlave
+    except:
+        log.msg("Error choosing old tegra for builder '%s', choosing randomly instead" % builder.name)
+        log.err()
+        return random.choice(available_slaves)
 
 nomergeBuilders = []
 def mergeRequests(builder, req1, req2):
@@ -462,7 +472,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
         # XXX Bug 790698 hack for no android reftests on new tegras
         # Purge with fire when this is no longer needed
         if 'reftest' in suites_name:
-            builder['nextSlave'] = _nextOldTegra()
+            builder['nextSlave'] = _nextOldTegra
         builders.append(builder)
     elif mozharness:
         # suites is a dict!
@@ -524,7 +534,6 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                     'slavebuilddir': 'test',
                     'factory': factory,
                     'category': category,
-                    'nextSlave': _nextSlowSlave,
                     'properties': properties,
                     'env' : MozillaEnvironments.get(config['platforms'][platform].get('env_name'), {}),
                 }
@@ -1020,6 +1029,7 @@ def generateBranchObjects(config, name, secrets=None):
 
         uploadPackages = pf.get('uploadPackages', True)
         uploadSymbols = False
+        disableSymbols = pf.get('disable_symbols', False)
         packageTests = False
         talosMasters = pf.get('talos_masters', [])
         unittestBranch = "%s-%s-opt-unittest" % (name, platform)
@@ -1141,6 +1151,7 @@ def generateBranchObjects(config, name, secrets=None):
                 'codesighs': codesighs,
                 'uploadPackages': uploadPackages,
                 'uploadSymbols': uploadSymbols,
+                'disableSymbols': disableSymbols,
                 'buildSpace': buildSpace,
                 'clobberURL': config['base_clobber_url'],
                 'clobberTime': clobberTime,
@@ -1394,6 +1405,7 @@ def generateBranchObjects(config, name, secrets=None):
                 doBuildAnalysis=doBuildAnalysis,
                 uploadPackages=uploadPackages,
                 uploadSymbols=pf.get('upload_symbols', False),
+                disableSymbols=pf.get('disable_symbols', False),
                 nightly=True,
                 createSnippet=create_snippet,
                 createPartial=pf.get('create_partial', config['create_partial']),
