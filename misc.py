@@ -129,10 +129,12 @@ _product_excludes = {
     'mobile': [
         re.compile('^browser/'),
         re.compile('^b2g/'),
+        re.compile('^xulrunner/'),
     ],
     'b2g': [
         re.compile('^browser/'),
         re.compile('^mobile/'),
+        re.compile('^xulrunner/'),
     ],
     'thunderbird': [re.compile("^suite/")],
 }
