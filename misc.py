@@ -316,6 +316,9 @@ def _getLastTimeOnBuilder(builder, slavename):
     for buildNumber in buildNumbers:
         try:
             build = builder.builder_status.buildCache[buildNumber]
+            # Skip non-successful builds
+            if build.getResults() != 0:
+                continue
             if build.slavename == slavename:
                 return build.finished
         except KeyError:
@@ -387,17 +390,24 @@ def _nextSlowIdleSlave(nReserved):
 
 # XXX Bug 790698 hack for no android reftests on new tegras
 # Purge with fire when this is no longer needed
-def _nextOldTegra():
-    def _nextSlave(builder, available_slaves):
+def _nextOldTegra(builder, available_slaves):
+    try:
         old = []
         for s in available_slaves:
             number = s.slave.slavename.replace('tegra-', '')
-            if int(number) < 286:
-                old.append(s)
+            try:
+                if int(number) < 286:
+                    old.append(s)
+            except ValueError:
+                log.msg("Error parsing number out of '%s', discarding from old list" % s.slave.slavename)
+                continue
         if old:
-            return sorted(old, _recentSort(builder))[-1]
+            return random.choice(old)
         return None
-    return _nextSlave
+    except:
+        log.msg("Error choosing old tegra for builder '%s', choosing randomly instead" % builder.name)
+        log.err()
+        return random.choice(available_slaves)
 
 nomergeBuilders = []
 def mergeRequests(builder, req1, req2):
@@ -464,7 +474,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
         # XXX Bug 790698 hack for no android reftests on new tegras
         # Purge with fire when this is no longer needed
         if 'reftest' in suites_name:
-            builder['nextSlave'] = _nextOldTegra()
+            builder['nextSlave'] = _nextOldTegra
         builders.append(builder)
     elif mozharness:
         # suites is a dict!
@@ -526,7 +536,6 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                     'slavebuilddir': 'test',
                     'factory': factory,
                     'category': category,
-                    'nextSlave': _nextSlowSlave,
                     'properties': properties,
                     'env' : MozillaEnvironments.get(config['platforms'][platform].get('env_name'), {}),
                 }
@@ -561,6 +570,31 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
             }
             builders.append(builder)
     return builders
+
+def generateMozharnessTalosBuilder(platform, mozharness_repo, script_path,
+                                   hg_bin, mozharness_python,
+                                   reboot_command, extra_args=None,
+                                   script_timeout=3600,
+                                   script_maxtime=7200):
+    if extra_args is None:
+        extra_args = []
+    return ScriptFactory(
+        interpreter=mozharness_python,
+        scriptRepo=mozharness_repo,
+        scriptName=script_path,
+        hg_bin=hg_bin,
+        extra_args=extra_args,
+        script_timeout=script_timeout,
+        script_maxtime=script_maxtime,
+        reboot_command=reboot_command,
+        platform=platform,
+        log_eval_func=lambda c,s: regex_log_evaluator(c, s, (
+         (re.compile('# TBPL WARNING #'), WARNINGS),
+         (re.compile('# TBPL FAILURE #'), FAILURE),
+         (re.compile('# TBPL EXCEPTION #'), EXCEPTION),
+         (re.compile('# TBPL RETRY #'), RETRY),
+        ))
+    )
 
 def generateBranchObjects(config, name, secrets=None):
     """name is the name of branch which is usually the last part of the path
@@ -985,6 +1019,7 @@ def generateBranchObjects(config, name, secrets=None):
 
         uploadPackages = pf.get('uploadPackages', True)
         uploadSymbols = False
+        disableSymbols = pf.get('disable_symbols', False)
         packageTests = False
         talosMasters = pf.get('talos_masters', [])
         unittestBranch = "%s-%s-opt-unittest" % (name, platform)
@@ -1106,6 +1141,7 @@ def generateBranchObjects(config, name, secrets=None):
                 'codesighs': codesighs,
                 'uploadPackages': uploadPackages,
                 'uploadSymbols': uploadSymbols,
+                'disableSymbols': disableSymbols,
                 'buildSpace': buildSpace,
                 'clobberURL': config['base_clobber_url'],
                 'clobberTime': clobberTime,
@@ -1359,6 +1395,7 @@ def generateBranchObjects(config, name, secrets=None):
                 doBuildAnalysis=doBuildAnalysis,
                 uploadPackages=uploadPackages,
                 uploadSymbols=pf.get('upload_symbols', False),
+                disableSymbols=pf.get('disable_symbols', False),
                 nightly=True,
                 createSnippet=create_snippet,
                 createPartial=pf.get('create_partial', config['create_partial']),
@@ -1862,23 +1899,48 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                         "talosCmd": branch_config['talos_command'],
                         "fetchSymbols": branch_config['fetch_symbols'] and
                           platform_config[slave_platform].get('download_symbols',True),
-                        "talos_from_source_code": branch_config.get('talos_from_source_code', False)
+                        "talos_from_source_code": branch_config.get('talos_from_source_code', False),
+                        "credentialsFile": os.path.join(os.getcwd(), "BuildSlaves.py"),
+                        "datazillaUrl": branch_config.get('datazilla_url')
                     }
-
-                    if extra and extra.get('remoteTests', False) and 'xul' in platform:
-                        myextra      = deepcopy(extra)
-                        remoteExtras = myextra.get('remoteExtras', {})
-                        reOptions    = remoteExtras.get('options', [])
-                        reOptions.append('--nativeUI')
-                        remoteExtras['options'] = reOptions
-                        myextra['remoteExtras'] = remoteExtras
-                        factory_kwargs.update(myextra)
-                    else:
-                        factory_kwargs.update(extra)
+                    factory_kwargs.update(extra)
 
                     builddir = "%s_%s_test-%s" % (branch, slave_platform, suite)
                     slavebuilddir= 'test'
-                    factory = factory_class(**factory_kwargs)
+                    if branch_config.get('mozharness_talos') and not platform_config.get('is_mobile'):
+                        extra_args = ['--suite', suite,
+                                      '--add-option',
+                                      ','.join(['--webServer', 'localhost']),
+                                      '--branch-name', opt_talos_branch]
+                        if '64' in platform:
+                            extra_args.extend(['--system-bits', '64'])
+                        else:
+                            extra_args.extend(['--system-bits', '32'])
+                        if 'win' in platform:
+                            extra_args.extend(['--cfg', 'talos/windows_config.py'])
+                        elif 'mac' in platform:
+                            extra_args.extend(['--cfg', 'talos/mac_config.py'])
+                        else:
+                            assert 'linux' in platform, "buildbotcustom.misc: mozharness talos: unknown platform %s!" % platform
+                            extra_args.extend(['--cfg', 'talos/linux_config.py'])
+                        if factory_kwargs['fetchSymbols']:
+                            extra_args.append('--download-symbols')
+                        if factory_kwargs["talos_from_source_code"]:
+                            extra_args.append('--use-talos-json')
+                        factory = generateMozharnessTalosBuilder(
+                         platform=platform,
+                         mozharness_repo=platform_config['mozharness_config']['mozharness_repo'],
+                         script_path="scripts/talos_script.py",
+                         hg_bin=platform_config['mozharness_config']['hg_bin'],
+                         mozharness_python=platform_config['mozharness_config']['mozharness_python'],
+                         extra_args=extra_args,
+                         script_timeout=platform_config['mozharness_config'].get('script_timeout', 3600),
+                         script_maxtime=platform_config['mozharness_config'].get('script_maxtime', 7200),
+                         reboot_command=platform_config['mozharness_config'].get('reboot_command'),
+                        )
+                    else:
+                        factory = factory_class(**factory_kwargs)
+
                     builder = {
                         'name': "%s %s talos %s" % (platform_name, branch, suite),
                         'slavenames': platform_config[slave_platform]['slaves'],

@@ -74,7 +74,7 @@ from buildbotcustom.steps.mock import MockReset, MockInit, MockCommand, MockInst
 import buildbotcustom.steps.unittest as unittest_steps
 
 import buildbotcustom.steps.talos as talos_steps
-from buildbot.status.builder import SUCCESS, FAILURE
+from buildbot.status.builder import SUCCESS, FAILURE, RETRY
 
 from release.paths import makeCandidatesDir
 
@@ -202,7 +202,7 @@ def parse_make_upload(rc, stdout, stderr):
     the upload make target and returns a dictionary of important
     file urls.'''
     retval = {}
-    for m in re.findall("^(https?://.*?\.(?:tar\.bz2|dmg|zip|apk|rpm|mar))$",
+    for m in re.findall("^(https?://.*?\.(?:tar\.bz2|dmg|zip|apk|rpm|mar|tar\.gz))$",
                         "\n".join([stdout, stderr]), re.M):
         if 'devel' in m and m.endswith('.rpm'):
             retval['develRpmUrl'] = m
@@ -265,6 +265,7 @@ def getPlatformMinidumpPath(platform):
         'macosx64_gecko': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         # Android uses OSX because the Foopies are OSX.
         'android': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
+        'android-noion': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         # Pandas will run on Linux Foopies.
         'android-armv6': WithProperties('%(toolsdir:-)s/breakpad/linux/minidump_stackwalk'),
         }
@@ -413,6 +414,8 @@ class MozillaBuildFactory(RequestSortingBuildFactory):
          name='rm_buildtools',
          command=['rm', '-rf', 'tools'],
          description=['clobber', 'build tools'],
+         haltOnFailure=True,
+         log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
          workdir='.'
         ))
         self.addStep(MercurialCloneCommand(
@@ -713,6 +716,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
                  triggeredSchedulers=None, triggerBuilds=False,
                  mozconfigBranch="production", useSharedCheckouts=False,
                  stagePlatform=None, testPrettyNames=False, l10nCheckTest=False,
+                 disableSymbols=False,
                  doBuildAnalysis=False,
                  downloadSubdir=None,
                  multiLocale=False,
@@ -780,6 +784,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.baseName = baseName
         self.uploadPackages = uploadPackages
         self.uploadSymbols = uploadSymbols
+        self.disableSymbols = disableSymbols
         self.createSnippet = createSnippet
         self.createPartial = createPartial
         self.doCleanup = doCleanup
@@ -934,7 +939,7 @@ class MercurialBuildFactory(MozillaBuildFactory):
         self.multiLocale = multiLocale
 
         self.addBuildSteps()
-        if self.uploadSymbols or self.packageTests or self.leakTest:
+        if self.uploadSymbols or (not self.disableSymbols and (self.packageTests or self.leakTest)):
             self.addBuildSymbolsStep()
         if self.uploadSymbols:
             self.addUploadSymbolsStep()
@@ -2067,13 +2072,16 @@ class TryBuildFactory(MercurialBuildFactory):
         else:
             codesighsObjdir = '../%s' % self.mozillaObjdir
 
-        self.addStep(Codesighs(
+        self.addStep(MockCodesighs(
          name='get_codesighs_diff',
          objdir=codesighsObjdir,
          platform=self.platform,
          workdir='build%s' % self.mozillaDir,
          env=self.env,
          tbPrint=self.tbPrint,
+         mock=self.use_mock,
+         target=self.mock_target,
+         mock_workdir_prefix='%(basedir)s/',
         ))
 
         self.addStep(ShellCommand(
@@ -2086,7 +2094,7 @@ class TryBuildFactory(MercurialBuildFactory):
         self.addStep(SetBuildProperty(
              name='set_who',
              property_name='who',
-             value=lambda build:str(build.source.changes[0].who) if len(build.source.changes) > 0 else "",
+             value=lambda build:str(build.source.changes[0].who) if len(build.source.changes) > 0 else "nobody@example.com",
              haltOnFailure=True
         ))
 
@@ -2385,7 +2393,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
     def addCreateUpdateSteps(self):
         self.addStep(ShellCommand(
             name='rm_existing_mars',
-            command=['bash', '-c', 'rm -rvf *.mar'],
+            command=['bash', '-c', 'rm -rf *.mar'],
             env=self.env,
             workdir='%s/dist/update' % self.absMozillaObjDir,
             haltOnFailure=True,
@@ -3708,7 +3716,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
             name='make_bsdiff',
             command=['sh', '-c',
                      'if [ ! -e dist/host/bin/mbsdiff ]; then ' +
-                     'make tier_base; make -C config;' +
+                     'make tier_base; make tier_nspr; make -C config;' +
                      'make -C modules/libmar; make -C modules/libbz2;' +
                      'make -C other-licenses/bsdiff;'
                      'fi'],
@@ -3809,7 +3817,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
         # Remove the source (en-US) package so as not to confuse later steps
         # that look up build details.
         self.addStep(ShellCommand(name='rm_en-US_build',
-                                  command=['bash', '-c', 'rm -rvf *.en-US.*'],
+                                  command=['bash', '-c', 'rm -rf *.en-US.*'],
                                   description=['remove','en-US','build'],
                                   env=self.env,
                                   workdir='%s/dist' % self.absMozillaObjDir,
@@ -5027,7 +5035,7 @@ class RemoteUnittestFactory(MozillaTestFactory):
         #On windows, we should try using cmd's attrib and native rmdir
         self.addStep(ShellCommand(
             name='rm_builddir',
-            command=['rm', '-rfv', 'build'],
+            command=['rm', '-rf', 'build'],
             workdir='.'
         ))
 
@@ -5040,10 +5048,10 @@ class RemoteUnittestFactory(MozillaTestFactory):
         self.addStep(ShellCommand(
          name="verify_tegra_state",
          description="Running verify.py",
-         command=['python', '/builds/sut_tools/verify.py'],
+         command=['python', '-u', '/builds/sut_tools/verify.py'],
          workdir='build',
          haltOnFailure=True,
-         log_eval_func=lambda c,s: regex_log_evaluator(c, s, tegra_errors),
+         log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
         ))
         self.addStep(SetProperty(
             name="GetFoopyPlatform",
@@ -5246,9 +5254,10 @@ class RemoteUnittestFactory(MozillaTestFactory):
             flunkOnFailure=False,
             timeout=60*30,
             description='Reboot Device',
-            command=['python', '/builds/sut_tools/reboot.py',
+            command=['python', '-u', '/builds/sut_tools/reboot.py',
                       WithProperties("%(sut_ip)s"),
                      ],
+            log_eval_func=lambda c,s: SUCCESS,
         ))
 
 class TalosFactory(RequestSortingBuildFactory):
@@ -5258,8 +5267,9 @@ class TalosFactory(RequestSortingBuildFactory):
             configOptions, talosCmd, customManifest=None, customTalos=None,
             workdirBase=None, fetchSymbols=False, plugins=None, pagesets=[],
             remoteTests=False, productName="firefox", remoteExtras=None,
-            talosAddOns=[], releaseTester=False,
-            talosBranch=None, branch=None, talos_from_source_code=False):
+            talosAddOns=[], releaseTester=False, credentialsFile=None,
+            talosBranch=None, branch=None, talos_from_source_code=False,
+            datazillaUrl=None):
 
         BuildFactory.__init__(self)
 
@@ -5281,7 +5291,7 @@ class TalosFactory(RequestSortingBuildFactory):
         except:
             # simple-talos does not use --activeTests
             self.suites = ""
-        self.talosCmd = talosCmd
+        self.talosCmd = talosCmd[:]
         self.customManifest = customManifest
         self.customTalos = customTalos
         self.fetchSymbols = fetchSymbols
@@ -5294,6 +5304,11 @@ class TalosFactory(RequestSortingBuildFactory):
         self.productName = productName
         self.remoteExtras = remoteExtras
         self.talos_from_source_code = talos_from_source_code
+        self.credentialsFile = credentialsFile
+
+        if datazillaUrl:
+            self.talosCmd.extend(['--datazilla-url', datazillaUrl])
+            self.talosCmd.extend(['--authfile', os.path.basename(credentialsFile)])
         if talosBranch is None:
             self.talosBranch = branchName
         else:
@@ -5365,10 +5380,10 @@ class TalosFactory(RequestSortingBuildFactory):
         self.addStep(ShellCommand(
          name="verify_tegra_state",
          description="Running verify.py",
-         command=['python', '/builds/sut_tools/verify.py'],
+         command=['python', '-u', '/builds/sut_tools/verify.py'],
          workdir='build',
          haltOnFailure=True,
-         log_eval_func=lambda c,s: regex_log_evaluator(c, s, tegra_errors),
+         log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
         ))
 
     def addCleanupSteps(self):
@@ -5399,7 +5414,7 @@ class TalosFactory(RequestSortingBuildFactory):
              flunkOnFailure=False,
              warnOnFailure=False,
              description="chmod files (see msys bug)",
-             command=["chmod", "-v", "-R", "a+rwx", "."],
+             command=["chmod", "-R", "a+rwx", "."],
              env=self.env)
             )
             #on windows move the whole working dir out of the way, saves us trouble later
@@ -5414,7 +5429,7 @@ class TalosFactory(RequestSortingBuildFactory):
              name='remove any old working dirs',
              workdir=os.path.dirname(self.workdirBase),
              description="remove old working dirs",
-             command='if exist t-* nohup rm -vrf t-*',
+             command='if exist t-* nohup rm -rf t-*',
              env=self.env)
             )
             self.addStep(ShellCommand(
@@ -5429,7 +5444,7 @@ class TalosFactory(RequestSortingBuildFactory):
              name='cleanup',
              workdir=self.workdirBase,
              description="Cleanup",
-             command='nohup rm -vrf *',
+             command='nohup rm -rf *',
              env=self.env)
             )
         if 'fed' in self.OS:
@@ -5545,7 +5560,7 @@ class TalosFactory(RequestSortingBuildFactory):
              flunkOnFailure=False,
              warnOnFailure=False,
              description="chmod files (see msys bug)",
-             command=["chmod", "-v", "-R", "a+x", "."],
+             command=["chmod", "-R", "a+x", "."],
              env=self.env)
             )
         if self.OS in ('tiger', 'leopard', 'snowleopard', 'lion', 'mountainlion'):
@@ -5629,6 +5644,14 @@ class TalosFactory(RequestSortingBuildFactory):
                 name='check sdk okay'))
 
     def addSetupSteps(self):
+        if self.credentialsFile:
+            target_file_name = os.path.basename(self.credentialsFile)
+            self.addStep(FileDownload(
+                mastersrc=self.credentialsFile,
+                slavedest=target_file_name,
+                workdir=os.path.join(self.workdirBase, "talos"),
+                flunkOnFailure=False,
+            ))
         if self.customManifest:
             self.addStep(FileDownload(
              mastersrc=self.customManifest,
@@ -5756,9 +5779,10 @@ class TalosFactory(RequestSortingBuildFactory):
     def addPluginInstallSteps(self):
         if self.plugins:
             #32 bit (includes mac browsers)
-            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android', \
-                           'tegra_android-armv6', 'leopard', 'snowleopard', \
-                           'leopard-o', 'lion', 'mountainlion'):
+            if self.OS in ('xp', 'vista', 'win7', 'fedora', 'tegra_android',
+                           'tegra_android-armv6', 'tegra_android-noion',
+                           'leopard', 'snowleopard', 'leopard-o', 'lion',
+                           'mountainlion'):
                 self.addStep(DownloadFile(
                  url=WithProperties("%s/%s" % (self.supportUrlBase, self.plugins['32'])),
                  workdir=os.path.join(self.workdirBase, "talos/base_profile"),
@@ -5906,11 +5930,12 @@ class TalosFactory(RequestSortingBuildFactory):
                          workdir=self.workdirBase,
                          description="Reboot Device",
                          timeout=60*30,
-                         command=['python', '/builds/sut_tools/reboot.py',
+                         command=['python', '-u', '/builds/sut_tools/reboot.py',
                                   WithProperties("%(sut_ip)s"),
                                  ],
-                         env=self.env)
-            )
+                         env=self.env,
+                         log_eval_func=lambda c,s: SUCCESS,
+            ))
         else:
             #the following step is to help the linux running on mac minis reboot cleanly
             #see bug561442
