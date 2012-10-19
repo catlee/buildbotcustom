@@ -451,6 +451,7 @@ class HgLocalePoller(BaseHgPoller):
 
     def changeHook(self, change):
         change.properties.setProperty('locale', self.locale, 'HgLocalePoller')
+        change.properties.setProperty('l10n_revision', change.revision, 'HgLocalePoller')
 
     def pollDone(self, res):
         self.parent.localeDone(self.locale)
