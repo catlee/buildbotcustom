@@ -40,3 +40,8 @@ class TestProductImportance(unittest.TestCase):
         f = makeImportantFunc('http://hg.mozilla.org/mozilla-central', 'firefox')
         c = Change(revlink="", files=['browser/foo', 'mobile/bar'])
         self.assertFalse(f(c))
+
+    def testImportantNoProduct(self):
+        f = makeImportantFunc('http://hg.mozilla.org/mozilla-central', None)
+        c = Change(revlink="http://hg.mozilla.org/mozilla-central/rev/1234", files=['browser/foo', 'mobile/bar'])
+        self.assertTrue(f(c))

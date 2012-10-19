@@ -261,7 +261,9 @@ class BaseHgPoller(BasePoller):
             # Nothing else to do
             return
 
-        # We want to add at most self.maxChanges changes per push
+        # We want to add at most self.maxChanges changes per push. If
+        # mergePushChanges is True, then we'll get up to maxChanges pushes,
+        # each with up to maxChanges changes.
         # Go through the list of pushes backwards, since we want to keep the
         # latest ones and possibly discard earlier ones.
         change_list = []
@@ -281,7 +283,7 @@ class BaseHgPoller(BasePoller):
                 if self.maxChanges is not None and (len(change_list) >= self.maxChanges or
                                                     i >= self.maxChanges):
                     too_many = True
-                    log.msg("got too many changes")
+                    log.msg("%s: got too many changes" % self.baseURL)
                     break
 
                 # Ignore changes not on the specified in-repo branch.

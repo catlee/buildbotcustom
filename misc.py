@@ -143,6 +143,8 @@ def isImportantForProduct(change, product):
     # For each file, check each product's exclude list
     # If a file is not excluded, then the change is important
     # If all files are excluded, then the change is not important
+    # As long as hgpoller's 'overflow' marker isn't excluded, it will cause all
+    # products to build
     excludes = _product_excludes.get(product, [])
     for f in change.files:
         excluded = any(e.search(f) for e in excludes)
@@ -161,6 +163,9 @@ def makeImportantFunc(hgurl, product):
             return False
         if not shouldBuild(c):
             return False
+        # No product is specified, so all changes are important
+        if product is None:
+            return True
         return isImportantForProduct(c, product)
     return isImportant
 
@@ -858,6 +863,11 @@ def generateBranchObjects(config, name, secrets=None):
         if config.get('enable_try'):
             fileIsImportant = lambda c: isHgPollerTriggered(c, config['hgurl'])
         else:
+            # The per-produt build behaviour is tweakable per branch. If it's
+            # not enabled, pass None as the product, which disables the
+            # per-product build behaviour.
+            if not config.get('enable_perproduct_builds'):
+                product = None
             fileIsImportant = makeImportantFunc(config['hgurl'], product)
 
         branchObjects['schedulers'].append(scheduler_class(
