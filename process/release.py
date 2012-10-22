@@ -73,6 +73,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
 
     branchConfigFile = getRealpath('localconfig.py')
     unix_slaves = []
+    mock_slaves = []
     all_slaves = []
     for p in branchConfig['platforms']:
         if p == 'b2g':
@@ -81,7 +82,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         all_slaves.extend(platform_slaves)
         if 'win' not in p:
             unix_slaves.extend(platform_slaves)
+            if branchConfig['platforms'][p].get('use_mock'):
+                mock_slaves.extend(platform_slaves)
     unix_slaves = [x for x in set(unix_slaves)]
+    mock_slaves = [x for x in set(mock_slaves)]
     all_slaves = [x for x in set(all_slaves)]
 
     manuallySignedPlatforms = ()
@@ -293,6 +297,13 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             platforms = (platforms,)
         return bool([p for p in platforms if substring in p])
 
+    def use_mock(platform):
+        pf = branchConfig['platforms'][platform]
+        if releaseConfig.get('use_mock', pf.get('use_mock')):
+            if platform in releaseConfig['mock_platforms']:
+                return True
+        return False
+
     builders = []
     test_builders = []
     schedulers = []
@@ -316,6 +327,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         'CLOBBERER_URL': clobberer_url,
     }
 
+    if use_mock('linux'):
+        unix_slaves = mock_slaves
     if releaseConfig.get('enable_repo_setup'):
         if not releaseConfig.get('skip_repo_setup'):
             clone_repositories = dict()
@@ -332,15 +345,22 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     sourceRepoInfo['relbranch'])
                 clone_repositories.update(l10n_clone_repos)
 
+            pf = branchConfig['platforms']['linux']
+            hgSshKey = releaseConfig['hgSshKey']
             repository_setup_factory = StagingRepositorySetupFactory(
                 hgHost=branchConfig['hghost'],
                 buildToolsRepoPath=tools_repo_path,
                 username=releaseConfig['hgUsername'],
-                sshKey=releaseConfig['hgSshKey'],
+                sshKey=hgSshKey,
                 repositories=clone_repositories,
                 clobberURL=clobberer_url,
                 clobberBranch='release-%s' % sourceRepoInfo['name'],
                 userRepoRoot=releaseConfig['userRepoRoot'],
+                use_mock=use_mock('linux'),
+                mock_target=pf.get('mock_target'),
+                mock_packages=pf.get('mock_packages'),
+                mock_copyin_files=pf.get('mock_copyin_files'),
+                env=pf['env'],
             )
 
             builders.append({
@@ -407,13 +427,15 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
     if not releaseConfig.get('skip_tag'):
         pf = branchConfig['platforms']['linux']
         tag_env = builder_env.copy()
+        if pf['env'].get('PATH'):
+            tag_env['PATH'] = pf['env']['PATH']
         if pf['env'].get('HG_SHARE_BASE_DIR', None):
             tag_env['HG_SHARE_BASE_DIR'] = pf['env']['HG_SHARE_BASE_DIR']
 
         tag_factory = ScriptFactory(
             scriptRepo=tools_repo,
             scriptName='scripts/release/tagging.sh',
-            use_mock=releaseConfig.get('use_mock', pf.get('use_mock')),
+            use_mock=use_mock('linux'),
             mock_target=pf.get('mock_target'),
             mock_packages=pf.get('mock_packages'),
             mock_copyin_files=pf.get('mock_copyin_files'),
@@ -458,6 +480,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         platform_env = pf['env'].copy()
         platform_env['COMM_REV']    = releaseTag
         platform_env['MOZILLA_REV'] = releaseTag
+	# do not use use_mock(platform) check because we are building source
+	# packages on the linux platform, else the |platform in mock_platforms|
+	# check will fail for android.
+        source_use_mock = releaseConfig.get('use_mock')
+
         source_factory = SingleSourceFactory(
             env=platform_env,
             objdir=pf['platform_objdir'],
@@ -480,6 +507,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             configSubDir=branchConfig['config_subdir'],
             signingServers=getSigningServers('linux'),
             enableSigning=releaseConfig.get('enableSigningAtBuildTime', True),
+            use_mock=source_use_mock,
+            mock_target=pf.get('mock_target'),
+            mock_packages=pf.get('mock_packages'),
+            mock_copyin_files=pf.get('mock_copyin_files'),
         )
 
         builders.append({
@@ -528,6 +559,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 configSubDir=branchConfig['config_subdir'],
                 signingServers=getSigningServers('linux'),
                 enableSigning=releaseConfig.get('enableSigningAtBuildTime', True),
+                use_mock=use_mock('linux'),
+                mock_target=pf.get('mock_target'),
+                mock_packages=pf.get('mock_packages'),
+                mock_copyin_files=pf.get('mock_copyin_files'),
             )
 
             builders.append({
@@ -665,7 +700,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 enableInstaller=pf.get('enable_installer', False),
                 tooltool_manifest_src=pf.get('tooltool_manifest_src', None),
                 tooltool_url_list=branchConfig.get('tooltool_url_list', []),
-                use_mock=releaseConfig.get('use_mock', pf.get('use_mock')),
+                use_mock=use_mock(platform),
                 mock_target=pf.get('mock_target'),
                 mock_packages=pf.get('mock_packages'),
                 mock_copyin_files=pf.get('mock_copyin_files'),
@@ -726,7 +761,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     interpreter='bash',
                     scriptName='scripts/l10n/release_repacks.sh',
                     extra_args=extra_args,
-                    use_mock=releaseConfig.get('use_mock', pf.get('use_mock')),
+                    use_mock=use_mock(platform),
                     mock_target=pf.get('mock_target'),
                     mock_packages=pf.get('mock_packages'),
                     mock_copyin_files=pf.get('mock_copyin_files'),
@@ -755,8 +790,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         scriptRepo=mozharness_repo,
                         scriptName='scripts/mobile_l10n.py',
                         extra_args=extra_args,
-                        use_mock=releaseConfig.get('use_mock',
-                                                   pf.get('use_mock')),
+                        use_mock=use_mock(platform),
                         mock_target=pf.get('mock_target'),
                         mock_packages=pf.get('mock_packages'),
                         mock_copyin_files=pf.get('mock_copyin_files'),
@@ -784,8 +818,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         scriptName='scripts/l10n/release_repacks.sh',
                         extra_args=extra_args,
                         script_timeout=2400,
-                        use_mock=releaseConfig.get('use_mock',
-                                                   pf.get('use_mock')),
+                        use_mock=use_mock(platform),
                         mock_target=pf.get('mock_target'),
                         mock_packages=pf.get('mock_packages'),
                         mock_copyin_files=pf.get('mock_copyin_files'),
@@ -886,7 +919,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 partialUpdates=releaseConfig.get('partialUpdates', {}),
                 tooltool_manifest_src=pf.get('tooltool_manifest_src', None),
                 tooltool_url_list=branchConfig.get('tooltool_url_list', []),
-                use_mock=releaseConfig.get('use_mock', pf.get('use_mock')),
+                use_mock=use_mock(platform),
                 mock_target=pf.get('mock_target'),
                 mock_packages=pf.get('mock_packages'),
                 mock_copyin_files=pf.get('mock_copyin_files'),
@@ -933,7 +966,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     scriptRepo=mozharness_repo,
                     scriptName=mh_cfg['script'],
                     extra_args=extra_args,
-                    use_mock=releaseConfig.get('use_mock', pf.get('use_mock')),
+                    use_mock=use_mock(platform),
                     mock_target=pf.get('mock_target'),
                     mock_packages=pf.get('mock_packages'),
                     mock_copyin_files=pf.get('mock_copyin_files'),
@@ -958,7 +991,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     signingServers=getSigningServers(platform),
                     enableSigning=releaseConfig.get('enableSigningAtBuildTime', True),
                     env=pr_pf['env'],
-                    use_mock=releaseConfig.get('use_mock', pf.get('use_mock')),
+                    use_mock=use_mock(platform),
                     mock_target=pf.get('mock_target'),
                     mock_packages=pf.get('mock_packages'),
                     mock_copyin_files=pf.get('mock_copyin_files'),
@@ -1069,6 +1102,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
 
     if releaseConfig.get('verifyConfigs') and \
        not releaseConfig.get('skip_updates'):
+        pf = branchConfig['platforms']['linux']
         try:
             moz_repo_path = releaseConfig['sourceRepositories']['mozilla']['path']
         except KeyError:
@@ -1109,7 +1143,12 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             signingServers=getSigningServers('linux'),
             useChecksums=releaseConfig.get('enablePartialMarsAtBuildTime', True),
             mozRepoPath=moz_repo_path,
+            env=branchConfig['platforms']['linux']['env'],
             python=branchConfig['platforms']['linux']['env'].get('PYTHON26', 'python'),
+            use_mock=use_mock('linux'),
+            mock_target=pf.get('mock_target'),
+            mock_packages=pf.get('mock_packages'),
+            mock_copyin_files=pf.get('mock_copyin_files'),
         )
 
         builders.append({
@@ -1146,6 +1185,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         post_signing_builders.append(builderPrefix('updates'))
 
     for platform in sorted(releaseConfig.get('verifyConfigs', {}).keys()):
+        vpf = branchConfig['platforms'][platform]
         for n, builderName in updateVerifyBuilders(platform).iteritems():
             uv_factory = ScriptFactory(
                 scriptRepo=tools_repo,
@@ -1153,7 +1193,12 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 scriptName='scripts/release/updates/chunked-verify.sh',
                 extra_args=[platform, 'verifyConfigs',
                             str(updateVerifyChunks), str(n)],
-                log_eval_func=lambda c, s: regex_log_evaluator(c, s, update_verify_error)
+                log_eval_func=lambda c, s: regex_log_evaluator(c, s, update_verify_error),
+                use_mock=use_mock(platform),
+                mock_target=vpf.get('mock_target'),
+                mock_packages=vpf.get('mock_packages'),
+                mock_copyin_files=vpf.get('mock_copyin_files'),
+                env=branchConfig['platforms'][platform]['env'],
             )
 
             builddir = builderPrefix('%s_update_verify' % platform) + \
