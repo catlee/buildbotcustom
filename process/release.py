@@ -966,10 +966,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     scriptRepo=mozharness_repo,
                     scriptName=mh_cfg['script'],
                     extra_args=extra_args,
-                    use_mock=use_mock(platform),
-                    mock_target=pf.get('mock_target'),
-                    mock_packages=pf.get('mock_packages'),
-                    mock_copyin_files=pf.get('mock_copyin_files'),
                     env=builder_env,
                 )
             else:
@@ -991,10 +987,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     signingServers=getSigningServers(platform),
                     enableSigning=releaseConfig.get('enableSigningAtBuildTime', True),
                     env=pr_pf['env'],
-                    use_mock=use_mock(platform),
-                    mock_target=pf.get('mock_target'),
-                    mock_packages=pf.get('mock_packages'),
-                    mock_copyin_files=pf.get('mock_copyin_files'),
                 )
                 partner_repack_factory = PartnerRepackFactory(**repack_params)
 
