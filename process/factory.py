@@ -2983,7 +2983,7 @@ class XulrunnerReleaseBuildFactory(ReleaseBuildFactory):
                 return {'packageUrl': m}
             return {'packageUrl': ''}
 
-        self.addStep(RetryingSetProperty(
+        self.addStep(RetryingMockProperty(
          command=self.makeCmd + ['-f', 'client.mk', 'upload'],
          env=uploadEnv,
          workdir='build',
@@ -2991,6 +2991,8 @@ class XulrunnerReleaseBuildFactory(ReleaseBuildFactory):
          haltOnFailure=True,
          description=['upload'],
          log_eval_func=lambda c,s: regex_log_evaluator(c, s, upload_errors),
+         mock=self.use_mock,
+         target=self.mock_target,
         ))
 
 
