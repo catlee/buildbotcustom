@@ -444,8 +444,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
 
         builders.append({
             'name': builderPrefix('%s_tag' % releaseConfig['productName']),
-            'slavenames': pf['slaves'] + \
-            branchConfig['platforms']['linux64']['slaves'],
+            'slavenames': pf['slaves'],
             'category': builderPrefix(''),
             'builddir': builderPrefix('%s_tag' % releaseConfig['productName']),
             'slavebuilddir': reallyShort(
