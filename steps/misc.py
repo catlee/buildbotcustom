@@ -36,7 +36,7 @@ import re
 from buildbot.process.buildstep import LoggedRemoteCommand, BuildStep
 from buildbot.steps.shell import WithProperties
 from buildbot.status.builder import FAILURE, SUCCESS, worst_status
-from buildbot.status.builder import STDOUT, STDERR #MockProperty
+from buildbot.status.logfile import STDOUT, STDERR #MockProperty
 
 from buildbotcustom.steps.base import LoggingBuildStep, ShellCommand, \
   addRetryEvaluateCommand, RetryingShellCommand

@@ -11,7 +11,6 @@ from buildbot.process.buildstep import regex_log_evaluator
 from buildbot.process.factory import BuildFactory
 from buildbot.steps.shell import WithProperties
 from buildbot.steps.transfer import FileDownload, JSONPropertiesDownload, JSONStringDownload
-from buildbot.steps.dummy import Dummy
 from buildbot import locks
 from buildbot.status.builder import worst_status
 

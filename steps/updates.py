@@ -6,7 +6,7 @@ from buildbot.interfaces import BuildSlaveTooOldError
 from buildbot.process.buildstep import BuildStep
 from buildbot.status.builder import SUCCESS, FAILURE, SKIPPED
 from buildbot.steps.shell import WithProperties
-from buildbot.steps.transfer import _FileReader, StatusRemoteCommand
+from buildbot.steps.transfer import _FileReader, makeStatusRemoteCommand
 
 class CreateUpdateSnippet(BuildStep):
     def __init__(self, objdir, milestone, baseurl, appendDatedDir=True,
@@ -118,7 +118,7 @@ class CreateUpdateSnippet(BuildStep):
                                                     self.snippetFilename)
         self.stdio_log.addStdout(msg)
 
-        self.cmd = StatusRemoteCommand('downloadFile', args)
+        self.cmd = makeStatusRemoteCommand(self, 'downloadFile', args)
         d = self.runCommand(self.cmd)
         return d.addErrback(self.failed)
 
@@ -143,7 +143,7 @@ class CreateUpdateSnippet(BuildStep):
 class CreateCompleteUpdateSnippet(CreateUpdateSnippet):
     def __init__(self, **kwargs):
         CreateUpdateSnippet.__init__(self, snippetType='complete', **kwargs)
-        
+
 
 class CreatePartialUpdateSnippet(CreateUpdateSnippet):
     def __init__(self, **kwargs):

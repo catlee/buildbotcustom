@@ -28,7 +28,8 @@
 import re
 
 from buildbot.steps.shell import WithProperties
-from buildbot.status.builder import SUCCESS, WARNINGS, FAILURE, HEADER, worst_status
+from buildbot.status.builder import SUCCESS, WARNINGS, FAILURE, worst_status
+from buildbot.status.logfile import HEADER
 
 from buildbotcustom.steps.base import ShellCommand
 
@@ -586,7 +587,7 @@ class RemoteMochitestStep(MochitestMixin, ChunkingMixin, ShellCommandReportTimeo
     def __init__(self, variant, symbols_path=None, testPath=None,
                  xrePath='../hostutils/xre', testManifest=None,
                  utilityPath='../hostutils/bin', certificatePath='certs',
-                 app='org.mozilla.fennec', consoleLevel='INFO', 
+                 app='org.mozilla.fennec', consoleLevel='INFO',
                  totalChunks=None, thisChunk=None, **kwargs):
         self.super_class = ShellCommandReportTimeout
         ShellCommandReportTimeout.__init__(self, **kwargs)

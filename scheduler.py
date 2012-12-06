@@ -130,7 +130,7 @@ class PersistentScheduler(BaseScheduler):
         return now() + self.pollInterval
 
 class BuilderChooserScheduler(MultiScheduler):
-    compare_attrs = MultiScheduler.compare_attrs + ('chooserFunc', 'prettyNames', 
+    compare_attrs = MultiScheduler.compare_attrs + ('chooserFunc', 'prettyNames',
                      'unittestPrettyNames', 'unittestSuites', 'talosSuites', 'buildbotBranch')
     def __init__(self, chooserFunc, prettyNames=None, unittestPrettyNames=None, unittestSuites=None,
                  talosSuites=None, buildbotBranch=None, **kwargs):
@@ -343,7 +343,7 @@ class TriggerBouncerCheck(Triggerable):
         self.working = False
         return None # eat the failure
 
-class AggregatingScheduler(BaseScheduler, Triggerable):
+class AggregatingScheduler(Triggerable):
     """This scheduler waits until at least one build of each of
     `upstreamBuilders` completes with a result in `okResults`. Once this
     happens, it triggers builds on `builderNames` with `properties` set.

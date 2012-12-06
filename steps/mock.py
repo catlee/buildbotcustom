@@ -20,7 +20,7 @@
 # ***** END LICENSE BLOCK *****
 
 from pipes import quote
-from buildbot.status.builder import STDOUT, STDERR
+from buildbot.status.logfile import STDOUT, STDERR
 from buildbot.steps.shell import WithProperties
 from buildbotcustom.steps.base import addRetryEvaluateCommand
 from buildbotcustom.steps.base import ShellCommand
