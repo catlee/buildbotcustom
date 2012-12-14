@@ -8,6 +8,7 @@ import collections
 import random
 import re
 import sys, os, time
+from copy import deepcopy
 
 from twisted.python import log
 
