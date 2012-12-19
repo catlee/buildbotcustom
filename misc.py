@@ -977,7 +977,7 @@ def generateBranchObjects(config, name, secrets=None):
     if nightlyBuilders or xulrunnerNightlyBuilders:
         scheduler_args = dict(
             name="%s nightly" % scheduler_name_prefix,
-            branch=config['repo_path'],
+            branch=None,
             # bug 482123 - keep the minute to avoid problems with DST
             # changes
             hour=config['start_hour'], minute=config['start_minute'],
