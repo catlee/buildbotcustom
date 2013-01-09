@@ -13,6 +13,7 @@ from copy import deepcopy
 from twisted.python import log
 
 from buildbot.scheduler import Nightly, Scheduler, Triggerable
+from buildbot.schedulers.filter import ChangeFilter
 from buildbot.status.tinderbox import TinderboxMailNotifier
 from buildbot.steps.shell import WithProperties
 from buildbot.status.builder import WARNINGS, FAILURE, EXCEPTION, RETRY
@@ -124,20 +125,26 @@ def shouldBuild(change):
 
 _product_excludes = {
     'firefox': [
+        re.compile('^CLOBBER'),
         re.compile('^mobile/'),
         re.compile('^b2g/'),
     ],
     'mobile': [
+        re.compile('^CLOBBER'),
         re.compile('^browser/'),
         re.compile('^b2g/'),
         re.compile('^xulrunner/'),
     ],
     'b2g': [
+        re.compile('^CLOBBER'),
         re.compile('^browser/'),
         re.compile('^mobile/'),
         re.compile('^xulrunner/'),
     ],
-    'thunderbird': [re.compile("^suite/")],
+    'thunderbird': [
+        re.compile('^CLOBBER'),
+        re.compile("^suite/")
+    ],
 }
 def isImportantForProduct(change, product):
     """Handles product specific handling of important files"""
@@ -466,7 +473,8 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                         slaves=None, resetHwClock=False, category=None,
                         stagePlatform=None, stageProduct=None,
                         mozharness=False, mozharness_python=None,
-                        mozharness_suite_config=None):
+                        mozharness_suite_config=None,
+                        mozharness_repo=None):
     builders = []
     pf = config['platforms'].get(platform, {})
     if slaves == None:
@@ -521,11 +529,11 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
         hg_bin = mozharness_suite_config.get('hg_bin', suites.get('hg_bin', 'hg'))
         factory = ScriptFactory(
             interpreter=mozharness_python,
-            scriptRepo=suites['mozharness_repo'],
+            scriptRepo=mozharness_repo,
             scriptName=suites['script_path'],
             hg_bin=hg_bin,
             extra_args=extra_args,
-            script_maxtime=suites.get('script_maxtime', 3600),
+            script_maxtime=suites.get('script_maxtime', 7200),
             reboot_command=reboot_command,
             platform=platform,
             log_eval_func=lambda c,s: regex_log_evaluator(c, s, (
@@ -1958,12 +1966,12 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                             assert 'linux' in platform, "buildbotcustom.misc: mozharness talos: unknown platform %s!" % platform
                             extra_args.extend(['--cfg', 'talos/linux_config.py'])
                         if factory_kwargs['fetchSymbols']:
-                            extra_args.append('--download-symbols')
+                            extra_args += ['--download-symbols', 'ondemand']
                         if factory_kwargs["talos_from_source_code"]:
                             extra_args.append('--use-talos-json')
                         factory = generateMozharnessTalosBuilder(
                          platform=platform,
-                         mozharness_repo=platform_config['mozharness_config']['mozharness_repo'],
+                         mozharness_repo=branch_config.get('mozharness_repo', platform_config['mozharness_config']['mozharness_repo']),
                          script_path="scripts/talos_script.py",
                          hg_bin=platform_config['mozharness_config']['hg_bin'],
                          mozharness_python=platform_config['mozharness_config']['mozharness_python'],
@@ -2097,6 +2105,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 "stageProduct": stage_product
                             }
                             if isinstance(suites, dict) and "mozharness_repo" in suites:
+                                test_builder_kwargs['mozharness_repo'] = branch_config.get('mozharness_repo', suites['mozharness_repo'])
                                 test_builder_kwargs['mozharness'] = True
                                 test_builder_kwargs['mozharness_python'] = platform_config['mozharness_config']['mozharness_python']
                                 if suites_name in branch_config['platforms'][platform][slave_platform].get('suite_config', {}):
@@ -2435,7 +2444,9 @@ def generateNanojitObjects(config, SLAVES):
 
 def generateSpiderMonkeyObjects(project, config, SLAVES):
     builders = []
-    branch = os.path.basename(config['repo_path'])
+    branch = config['branch']
+    assert branch == os.path.basename(config['repo_path']), "spidermonkey project object has mismatched branch and repo_path"
+    bconfig = config['branchconfig']
 
     PRETTY_NAME = '%s %s-%s build'
     prettyNames = {}
@@ -2457,13 +2468,21 @@ def generateSpiderMonkeyObjects(project, config, SLAVES):
             for a in factory_platform_args:
                 if a in pf:
                     factory_kwargs[a] = pf[a]
+            factory_kwargs['env'] = env
+
+            extra_args = [ '-r', WithProperties("%(revision)s") ]
+            for url in bconfig['base_mirror_urls']:
+                extra_args += [ '-m', "%s/%s" % (url, config['repo_path']) ]
+            for url in bconfig['base_bundle_urls']:
+                extra_args += [ '-b', "%s/%s.hg" % (url, config['repo_path']) ]
+            extra_args += [variant]
 
             f = ScriptFactory(
                     config['scripts_repo'],
                     'scripts/spidermonkey_builds/spidermonkey.sh',
                     interpreter=interpreter,
                     log_eval_func=rc_eval_func({1: WARNINGS}),
-                    extra_args=(variant,),
+                    extra_args=tuple(extra_args),
                     script_timeout=3600,
                     **factory_kwargs
                     )
@@ -2473,9 +2492,10 @@ def generateSpiderMonkeyObjects(project, config, SLAVES):
             base_name = pf['base_name'] % config
 
             prettyName = PRETTY_NAME % (base_name, project, variant)
+            name = prettyName
             prettyNames[platform] = prettyName
 
-            builder = {'name': prettyName,
+            builder = {'name': name,
                     'builddir': '%s_%s_spidermonkey-%s' % (branch, platform, variant),
                     'slavebuilddir': reallyShort('%s_%s_spidermonkey-%s' % (branch, platform, variant)),
                     'slavenames': pf['slaves'],
@@ -2486,6 +2506,8 @@ def generateSpiderMonkeyObjects(project, config, SLAVES):
                     'properties': {'branch': branch, 'platform': platform, 'product': 'spidermonkey'},
                     }
             builders.append(builder)
+            if not bconfig.get('enable_merging', True):
+                nomergeBuilders.append(name)
 
     def isImportant(change):
         if not shouldBuild(change):
@@ -2510,10 +2532,10 @@ def generateSpiderMonkeyObjects(project, config, SLAVES):
 
     scheduler = scheduler_class(
             name="%s_spidermonkey" % branch,
-            branch=config['repo_path'],
             treeStableTimer=None,
             builderNames=[b['name'] for b in builders],
             fileIsImportant=isImportant,
+            change_filter=ChangeFilter(branch=config['repo_path'], filter_fn=isImportant),
             **extra_args
             )
 

@@ -39,6 +39,10 @@ def incrementBuildID(buildID):
     return genBuildID(epoch+1)
 
 def reallyShort(name, product=None):
+    # FIXME: hacky workaround to fix thunderbird 17.0.2esr builds
+    if name == 'release-comm-esr17-win32_build':
+        return 'zzz'
+
     prefix = ''
     if product != None and 'thunderbird' in product:
         prefix = 'tb-'
