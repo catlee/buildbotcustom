@@ -353,7 +353,7 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
     (SUCCESS,WARNINGS)."""
 
     compare_attrs = ('name', 'branch', 'builderNames', 'properties',
-                     'upstreamBuilders', 'okResults')
+                     'upstreamBuilders', 'okResults', 'enable_service')
 
     def __init__(self, name, branch, builderNames, upstreamBuilders,
                  okResults=(SUCCESS, WARNINGS), properties={}):
