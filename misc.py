@@ -9,7 +9,6 @@ import random
 import re
 import sys
 import os
-import time
 from copy import deepcopy
 
 from twisted.python import log
@@ -443,7 +442,7 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                         mozharness_repo=None):
     builders = []
     pf = config['platforms'].get(platform, {})
-    if slaves == None:
+    if slaves is None:
         slavenames = config['platforms'][platform]['slaves']
     else:
         slavenames = slaves
@@ -704,29 +703,7 @@ def generateBranchObjects(config, name, secrets=None):
         pretty_name = PRETTY_NAME % values
         builder_id = NAME % values
 
-        if platform.endswith("-debug"):
-            builders.append(builder_id)
-            buildersByProduct.setdefault(
-                pf['stage_product'], []).append(builder_id)
-            prettyNames[platform] = pretty_name
-            # Debug unittests
-            if pf.get('enable_unittests'):
-                test_builders = []
-                if 'opt_base_name' in config['platforms'][platform]:
-                    base_name = config['platforms'][platform]['opt_base_name']
-                else:
-                    base_name = config['platforms'][
-                        platform.replace("-debug", "")]['base_name']
-                for suites_name, suites in config['unittest_suites']:
-                    unittestPrettyNames[platform] = '%s debug test' % base_name
-                    test_builders.extend(generateTestBuilderNames(
-                        '%s debug test' % base_name, suites_name, suites))
-                triggeredUnittestBuilders.append(('%s-%s-unittest' % (name, platform), test_builders, config.get('enable_merging', True)))
-            # Skip l10n, unit tests
-            # Skip nightlies for debug builds unless requested
-            if 'enable_nightly' not in pf:
-                continue
-        elif pf.get('enable_dep', True):
+        if pf.get('enable_dep', True):
             builders.append(builder_id)
             buildersByProduct.setdefault(
                 pf['stage_product'], []).append(builder_id)
@@ -1164,7 +1141,7 @@ def generateBranchObjects(config, name, secrets=None):
         # For the 'per-checkin' pgo strategy, we want PGO
         # enabled on what would be 'opt' builds.
         if platform in config['pgo_platforms']:
-            if config['pgo_strategy'] in ('periodic', 'try') or config['pgo_strategy'] == None:
+            if config['pgo_strategy'] in ('periodic', 'try') or config['pgo_strategy'] is None:
                 per_checkin_build_uses_pgo = False
             elif config['pgo_strategy'] == 'per-checkin':
                 per_checkin_build_uses_pgo = True
