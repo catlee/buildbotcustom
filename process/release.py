@@ -26,7 +26,7 @@ reload(release.info)
 
 from buildbotcustom.status.mail import ChangeNotifier
 from buildbotcustom.misc import get_l10n_repositories, \
-    generateTestBuilderNames, generateTestBuilder, _nextFastReservedSlave, \
+    generateTestBuilderNames, generateTestBuilder, _nextFastSlave, \
     changeContainsProduct, nomergeBuilders, changeContainsProperties
 from buildbotcustom.common import reallyShort
 from buildbotcustom.process.factory import StagingRepositorySetupFactory, \
@@ -469,7 +469,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'slavebuilddir': reallyShort(
                 builderPrefix('%s_tag' % releaseConfig['productName'])),
             'factory': tag_factory,
-            'nextSlave': _nextFastReservedSlave,
+            'nextSlave': _nextFastSlave,
             'env': tag_env,
             'properties': {
                 'builddir': builderPrefix(
@@ -544,7 +544,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                 '%s_source' % releaseConfig['productName']), releaseConfig['productName']),
                         'factory': source_factory,
                         'env': builder_env,
-                        'nextSlave': _nextFastReservedSlave,
+                        'nextSlave': _nextFastSlave,
                         'properties': {
                             'slavebuilddir': reallyShort(
                                 builderPrefix(
@@ -738,7 +738,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'builddir': builderPrefix('%s_build' % platform),
                 'slavebuilddir': reallyShort(builderPrefix('%s_build' % platform), releaseConfig['productName']),
                 'factory': build_factory,
-                'nextSlave': _nextFastReservedSlave,
+                'nextSlave': _nextFastSlave,
                 'env': builder_env,
                 'properties': {
                     'slavebuilddir': reallyShort(builderPrefix('%s_build' % platform), releaseConfig['productName']),
@@ -798,7 +798,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'category': builderPrefix(''),
                     'builddir': builderPrefix("standalone_repack", platform),
                     'factory': standalone_factory,
-                    'nextSlave': _nextFastReservedSlave,
+                    'nextSlave': _nextFastSlave,
                     'env': env,
                     'properties': {
                         'builddir': builderPrefix("standalone_repack", platform),
@@ -858,7 +858,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'builddir': builddir,
                     'slavebuilddir': reallyShort(builddir, releaseConfig['productName']),
                     'factory': repack_factory,
-                    'nextSlave': _nextFastReservedSlave,
+                    'nextSlave': _nextFastSlave,
                     'env': env,
                     'properties': {
                         'builddir': builddir,
@@ -1032,7 +1032,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'slavebuilddir': reallyShort(builderPrefix(
                     'partner_repack', platform), releaseConfig['productName']),
                 'factory': partner_repack_factory,
-                'nextSlave': _nextFastReservedSlave,
+                'nextSlave': _nextFastSlave,
                 'env': builder_env,
                 'properties': {
                     'slavebuilddir': reallyShort(builderPrefix('partner_repack', platform), releaseConfig['productName']),
@@ -1189,7 +1189,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'builddir': builderPrefix('updates'),
             'slavebuilddir': reallyShort(builderPrefix('updates'), releaseConfig['productName']),
             'factory': updates_factory,
-            'nextSlave': _nextFastReservedSlave,
+            'nextSlave': _nextFastSlave,
             'env': builder_env,
             'properties': {
                 'slavebuilddir': reallyShort(builderPrefix('updates'), releaseConfig['productName']),
@@ -1245,7 +1245,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'builddir': builddir,
                 'slavebuilddir': reallyShort(builddir, releaseConfig['productName']),
                 'factory': uv_factory,
-                'nextSlave': _nextFastReservedSlave,
+                'nextSlave': _nextFastSlave,
                 'env': env,
                 'properties': {'builddir': builddir,
                                'slavebuilddir': reallyShort(builddir, releaseConfig['productName']),
@@ -1455,7 +1455,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'builddir': builderPrefix('final_verification', platform),
             'slavebuilddir': reallyShort(builderPrefix('fnl_verf', platform), releaseConfig['productName']),
             'factory': final_verification_factory,
-            'nextSlave': _nextFastReservedSlave,
+            'nextSlave': _nextFastSlave,
             'env': builder_env,
             'properties': {
                 'slavebuilddir': reallyShort(builderPrefix('fnl_verf', platform), releaseConfig['productName']),
