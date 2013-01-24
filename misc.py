@@ -1708,32 +1708,6 @@ def generateBranchObjects(config, name, secrets=None):
             }
             branchObjects['builders'].append(mozilla2_l10n_dep_builder)
 
-        for suites_name, suites in config['unittest_suites']:
-            runA11y = True
-            if platform.startswith('macosx'):
-                runA11y = config['enable_mac_a11y']
-
-            # For the regular unittest build, run the a11y suite if
-            # enable_mac_a11y is set on mac
-            if not runA11y and 'mochitest-a11y' in suites:
-                suites = suites[:]
-                suites.remove('mochitest-a11y')
-
-            # Remove mochitest-a11y from other types of builds, since they're not
-            # built with a11y enabled
-            if platform.startswith("macosx") and 'mochitest-a11y' in suites:
-                # Create a new factory that doesn't have mochitest-a11y
-                suites = suites[:]
-                suites.remove('mochitest-a11y')
-
-            if pf.get('enable_opt_unittests'):
-                branchObjects['builders'].extend(generateTestBuilder(
-                    config, name, platform, "%s opt test" % pf['base_name'],
-                    "%s-%s-opt-unittest" % (name, platform),
-                    suites_name, suites, mochitestLeakThreshold,
-                    crashtestLeakThreshold, stagePlatform=stage_platform,
-                    stageProduct=pf['stage_product']))
-
         if config.get('enable_blocklist_update', False):
             if platform == 'linux':
                 blocklistBuilder = generateBlocklistBuilder(
