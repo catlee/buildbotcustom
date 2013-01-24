@@ -1085,26 +1085,14 @@ def generateBranchObjects(config, name, secrets=None):
         disableSymbols = pf.get('disable_symbols', False)
         packageTests = False
         talosMasters = pf.get('talos_masters', [])
-        unittestBranch = "%s-%s-opt-unittest" % (name, platform)
+        unittestBranch = "%s-%s-unittest" % (name, pf.get('unittest_platform', platform))
         # Generate the PGO branch even if it isn't on for dep builds
         # because we will still use it for nightlies... maybe
         pgoUnittestBranch = "%s-%s-pgo-unittest" % (name, platform)
         tinderboxBuildsDir = None
-        if platform.find('-debug') > -1:
-            # Some platforms can't run on the build host
-            leakTest = pf.get('enable_leaktests', True)
-            if not pf.get('enable_unittests'):
-                uploadPackages = pf.get('packageTests', False)
-            else:
-                packageTests = True
-            talosMasters = None
-            # Platform already has the -debug suffix
-            unittestBranch = "%s-%s-unittest" % (name, platform)
-            tinderboxBuildsDir = "%s-%s" % (name, platform)
-        else:
-            if pf.get('enable_opt_unittests'):
-                packageTests = True
-            leakTest = False
+
+        packageTests = pf.get('packageTests', False)
+        leakTest = pf.get('enable_leaktests', False)
 
         # Allow for test packages on platforms that can't be tested
         # on the same master.
