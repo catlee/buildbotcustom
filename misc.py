@@ -1056,8 +1056,6 @@ def generateBranchObjects(config, name, secrets=None):
         buildSpace = pf.get('build_space', config['default_build_space'])
         l10nSpace = config['default_l10n_space']
         clobberTime = pf.get('clobber_time', config['default_clobber_time'])
-        mochitestLeakThreshold = pf.get('mochitest_leak_threshold', None)
-        crashtestLeakThreshold = pf.get('crashtest_leak_threshold', None)
         checkTest = pf.get('enable_checktests', False)
         valgrindCheck = pf.get('enable_valgrind_checktests', False)
 
@@ -1245,27 +1243,7 @@ def generateBranchObjects(config, name, secrets=None):
                 branchObjects['builders'].append(pgo_builder)
 
         # skip nightlies for debug builds unless requested at platform level
-        if platform.find('debug') > -1:
-            if pf.get('enable_unittests'):
-                for suites_name, suites in config['unittest_suites']:
-                    if "macosx" in platform and 'mochitest-a11y' in suites:
-                        suites = suites[:]
-                        suites.remove('mochitest-a11y')
-
-                    if 'opt_base_name' in config['platforms'][platform]:
-                        base_name = config[
-                            'platforms'][platform]['opt_base_name']
-                    else:
-                        base_name = config['platforms'][
-                            platform.replace("-debug", "")]['base_name']
-
-                    branchObjects['builders'].extend(generateTestBuilder(
-                        config, name, platform, "%s debug test" % base_name,
-                        "%s-%s-unittest" % (name, platform),
-                        suites_name, suites, mochitestLeakThreshold,
-                        crashtestLeakThreshold, stagePlatform=stage_platform,
-                        stageProduct=pf['stage_product']))
-            if 'enable_nightly' not in pf:
+        if platform.endswith("-debug") and not pf.get('enable_nightly'):
                 continue
 
         if config['enable_nightly']:
