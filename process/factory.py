@@ -1404,6 +1404,7 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin):
             command=['cat', '%s\\toolkit\\library\\linker-vsize' % self.mozillaObjdir],
             extract_fn=get_linker_vsize,
             ))
+        self.addBuildInfoSteps()
         self.addStep(JSONPropertiesDownload(slavedest="properties.json"))
         gs_env = self.env.copy()
         gs_env['PYTHONPATH'] = WithProperties('%(toolsdir)s/lib/python')
@@ -4192,7 +4193,8 @@ class ReleaseUpdatesFactory(ReleaseFactory):
                  releaseNotesUrl=None, python='python',
                  testOlderPartials=False,
                  longVersion=None, schema=None,
-                 useBetaChannelForRelease=False, useChecksums=False, **kwargs):
+                 useBetaChannelForRelease=False, useChecksums=False,
+                 promptWaitTime=None, **kwargs):
         """patcherConfig: The filename of the patcher config file to bump,
                           and pass to patcher.
            mozRepoPath: The path for the Mozilla repo to hand patcher as the
@@ -4235,6 +4237,7 @@ class ReleaseUpdatesFactory(ReleaseFactory):
         self.useChecksums = useChecksums
         self.python = python
         self.configRepoPath = configRepoPath
+        self.promptWaitTime = promptWaitTime
 
         # The patcher config bumper needs to know the exact previous version
         self.previousVersion = str(
@@ -4324,6 +4327,8 @@ class ReleaseUpdatesFactory(ReleaseFactory):
             bumpCommand.extend(['--platform', platform])
         if self.useBetaChannelForRelease:
             bumpCommand.append('-u')
+        if self.promptWaitTime:
+            bumpCommand.extend(['--prompt-wait-time', self.promptWaitTime])
         if self.releaseNotesUrl:
             rnurl = self.releaseNotesUrl
             if self.use_mock:
@@ -6550,6 +6555,20 @@ class ScriptFactory(BuildFactory):
                      WithProperties('%(script_repo_revision:-default)s')],
             haltOnFailure=True,
             workdir='scripts'
+        ))
+        self.addStep(SetProperty(
+            name='get_script_repo_revision',
+            property='script_repo_revision',
+            command=['hg', 'id', '-i'],
+            workdir='scripts',
+            haltOnFailure=False,
+        ))
+        self.addStep(ShellCommand(
+            name='print_url_to_script_revision_used',
+            command=['echo', 'TinderboxPrint:',
+                "%s_revlink" % scriptRepo.split('/')[-1],
+                WithProperties("%s/rev/%%(script_repo_revision)s" % scriptRepo)],
+            haltOnFailure=False,
         ))
         self.runScript()
         self.reboot()
