@@ -642,19 +642,15 @@ def generateBranchObjects(config, name, secrets=None):
         secrets = {}
     builders = []
     buildersByProduct = {}
-    triggeredUnittestBuilders = []
     nightlyBuilders = []
     xulrunnerNightlyBuilders = []
     periodicPgoBuilders = []
         # Only used for the 'periodic' strategy. rename to perodicPgoBuilders?
     weeklyBuilders = []
-    coverageBuilders = []
     # prettyNames is a mapping to pass to the try_parser for validation
     PRETTY_NAME = '%(basename)s %(trystatus)sbuild'
     NAME = '%(basename)s build'
     prettyNames = {}
-    unittestPrettyNames = {}
-    unittestSuites = []
     # These dicts provides mapping between en-US dep and nightly scheduler names
     # to l10n dep and l10n nightly scheduler names. It's filled out just below
     # here.
@@ -750,13 +746,6 @@ def generateBranchObjects(config, name, secrets=None):
                     platform in config['valgrind_platforms']:
                 nightlyBuilders.append('%s valgrind' % base_name)
         # Optimized unittest builds
-        if pf.get('enable_opt_unittests'):
-            test_builders = []
-            for suites_name, suites in config['unittest_suites']:
-                unittestPrettyNames[platform] = '%s opt test' % base_name
-                test_builders.extend(generateTestBuilderNames(
-                    '%s opt test' % base_name, suites_name, suites))
-            triggeredUnittestBuilders.append(('%s-%s-opt-unittest' % (name, platform), test_builders, config.get('enable_merging', True)))
         if config.get('enable_blocklist_update', False) and platform in ('linux',):
             weeklyBuilders.append('%s blocklist update' % base_name)
         if pf.get('enable_xulrunner', config['enable_xulrunner']):
@@ -916,42 +905,6 @@ def generateBranchObjects(config, name, secrets=None):
             }
         ))
 
-    for scheduler_branch, test_builders, merge in triggeredUnittestBuilders:
-        scheduler_name = scheduler_branch
-        for test in test_builders:
-            unittestSuites.append(test.split(' ')[-1])
-        if not merge:
-            nomergeBuilders.extend(test_builders)
-        extra_args = {}
-        if config.get('enable_try'):
-            scheduler_class = BuilderChooserScheduler
-            extra_args['chooserFunc'] = tryChooser
-            extra_args['numberOfBuildsToTrigger'] = 1
-            extra_args['prettyNames'] = prettyNames
-            extra_args['unittestSuites'] = unittestSuites
-            extra_args['unittestPrettyNames'] = unittestPrettyNames
-            extra_args['buildbotBranch'] = name
-        else:
-            scheduler_class = Scheduler
-        branchObjects['schedulers'].append(scheduler_class(
-            name=scheduler_name,
-            branch=scheduler_branch,
-            builderNames=test_builders,
-            treeStableTimer=None,
-            **extra_args
-        ))
-
-        if not config.get('disable_tinderbox_mail'):
-            branchObjects['status'].append(TinderboxMailNotifier(
-                fromaddr="mozilla2.buildbot@build.mozilla.org",
-                tree=config['packaged_unittest_tinderbox_tree'],
-                extraRecipients=["tinderbox-daemon@tinderbox.mozilla.org"],
-                relayhost="mail.build.mozilla.org",
-                builders=test_builders,
-                logCompression="gzip",
-                errorparser="unittest"
-            ))
-
     # Now, setup the nightly en-US schedulers and maybe,
     # their downstream l10n ones
     if nightlyBuilders or xulrunnerNightlyBuilders:
@@ -1007,13 +960,13 @@ def generateBranchObjects(config, name, secrets=None):
                                                'localesURL', None)
                                                ))
 
-    if coverageBuilders or weeklyBuilders:
+    if weeklyBuilders:
         weekly_scheduler = Nightly(
             name='weekly-%s' % scheduler_name_prefix,
             branch=config['repo_path'],
             dayOfWeek=5,  # Saturday
             hour=[3], minute=[02],
-            builderNames=coverageBuilders + weeklyBuilders,
+            builderNames=weeklyBuilders,
         )
         branchObjects['schedulers'].append(weekly_scheduler)
 
