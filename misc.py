@@ -432,6 +432,44 @@ def makeMHFactory(config, pf, **kwargs):
     return factory
 
 
+def makeBundleObjects(config, name):
+    stageBasePath = '%s/%s' % (config['stage_base_path'],
+                               config['platforms']['linux']['stage_product'])
+    bundle_factory = ScriptFactory(
+        config['hgurl'] + config['build_tools_repo_path'],
+        'scripts/bundle/hg-bundle.sh',
+        interpreter='bash',
+        script_timeout=3600,
+        script_maxtime=3600,
+        extra_args=[
+            name,
+            config['repo_path'],
+            config['stage_server'],
+            config['stage_username'],
+            stageBasePath,
+            config['stage_ssh_key'],
+        ],
+    )
+    slaves = set()
+    for p in sorted(config['platforms'].keys()):
+        slaves.update(set(config['platforms'][p]['slaves']))
+    bundle_builder = {
+        'name': '%s hg bundle' % name,
+        'slavenames': list(slaves),
+        'builddir': '%s-bundle' % (name,),
+        'slavebuilddir': reallyShort('%s-bundle' % (name,)),
+        'factory': bundle_factory,
+        'category': name,
+        'nextSlave': _nextSlowSlave,
+        'properties': {'slavebuilddir': reallyShort('%s-bundle' % (name,)),
+                       'branch': name,
+                       'platform': None,
+                       'product': 'firefox',
+                       }
+    }
+    return bundle_builder
+
+
 def generateTestBuilder(config, branch_name, platform, name_prefix,
                         build_dir_prefix, suites_name, suites,
                         mochitestLeakThreshold, crashtestLeakThreshold,
@@ -749,8 +787,11 @@ def generateBranchObjects(config, name, secrets=None):
             weeklyBuilders.append('%s blocklist update' % base_name)
         if pf.get('enable_xulrunner', config['enable_xulrunner']):
             xulrunnerNightlyBuilders.append('%s xulrunner' % base_name)
+
     if config['enable_weekly_bundle']:
-        weeklyBuilders.append('%s hg bundle' % name)
+        bundle_builder = makeBundleObjects(config, name)
+        branchObjects['builders'].append(bundle_builder)
+        weeklyBuilders.append(bundle_builder['name'])
 
     # Try Server notifier
     if config.get('enable_mail_notifier'):
@@ -1704,43 +1745,6 @@ def generateBranchObjects(config, name, secrets=None):
             branchObjects['builders'].append(mozilla2_xulrunner_builder)
 
         # -- end of per-platform loop --
-
-    if config['enable_weekly_bundle']:
-        stageBasePath = '%s/%s' % (config['stage_base_path'],
-                                   pf['stage_product'])
-        bundle_factory = ScriptFactory(
-            config['hgurl'] + config['build_tools_repo_path'],
-            'scripts/bundle/hg-bundle.sh',
-            interpreter='bash',
-            script_timeout=3600,
-            script_maxtime=3600,
-            extra_args=[
-                name,
-                config['repo_path'],
-                config['stage_server'],
-                config['stage_username'],
-                stageBasePath,
-                config['stage_ssh_key'],
-            ],
-        )
-        slaves = set()
-        for p in sorted(config['platforms'].keys()):
-            slaves.update(set(config['platforms'][p]['slaves']))
-        bundle_builder = {
-            'name': '%s hg bundle' % name,
-            'slavenames': list(slaves),
-            'builddir': '%s-bundle' % (name,),
-            'slavebuilddir': reallyShort('%s-bundle' % (name,)),
-            'factory': bundle_factory,
-            'category': name,
-            'nextSlave': _nextSlowSlave,
-            'properties': {'slavebuilddir': reallyShort('%s-bundle' % (name,)),
-                           'branch': name,
-                           'platform': None,
-                           'product': 'firefox',
-                           }
-        }
-        branchObjects['builders'].append(bundle_builder)
 
     return branchObjects
 
