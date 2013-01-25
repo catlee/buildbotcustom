@@ -745,7 +745,6 @@ def generateBranchObjects(config, name, secrets=None):
             if config['enable_valgrind'] and \
                     platform in config['valgrind_platforms']:
                 nightlyBuilders.append('%s valgrind' % base_name)
-        # Optimized unittest builds
         if config.get('enable_blocklist_update', False) and platform in ('linux',):
             weeklyBuilders.append('%s blocklist update' % base_name)
         if pf.get('enable_xulrunner', config['enable_xulrunner']):
@@ -845,6 +844,7 @@ def generateBranchObjects(config, name, secrets=None):
     # for Try we have a custom scheduler that can accept a function to read commit comments
     # in order to know what to schedule
     extra_args = {}
+    extra_args['treeStableTimer'] = None
     if config.get('enable_try'):
         scheduler_class = makePropertiesScheduler(
             BuilderChooserScheduler, [buildUIDSchedFunc])
@@ -858,9 +858,8 @@ def generateBranchObjects(config, name, secrets=None):
 
     if not config.get('enable_merging', True):
         nomergeBuilders.extend(builders)
-    nomergeBuilders.extend(
-        periodicPgoBuilders)  # these should never, ever merge
-    extra_args['treeStableTimer'] = None
+    # these should never, ever merge
+    nomergeBuilders.extend(periodicPgoBuilders)
 
     if 'product_prefix' in config:
         scheduler_name_prefix = "%s_%s" % (config['product_prefix'], name)
