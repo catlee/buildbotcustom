@@ -200,6 +200,113 @@ def postUploadCmdPrefix(upload_dir=None,
         return WithProperties(' '.join(cmd))
 
 
+def makeHgtoolStep(repo_url, name='hg_update', wc=None, mirrors=None,
+                   bundles=None, env=None, clone_by_revision=False, rev=None,
+                   workdir='build', props_file=None, locks=None,
+                   haltOnFailure=True, flunkOnFailure=True,
+                   log_eval_func=None):
+    if not env:
+        env = {}
+
+    if props_file:
+        env = env.copy()
+        env['PROPERTIES_FILE'] = props_file
+
+    cmd = ['hgtool.py']
+
+    if clone_by_revision:
+        cmd.append('--clone-by-revision')
+
+    if mirrors:
+        for mirror in mirrors:
+            cmd.extend(['--mirror', mirror])
+
+    if bundles:
+        for bundle in bundles:
+            cmd.extend(['--bundle', bundle])
+
+    if rev:
+        cmd.extend(['--rev', rev])
+
+    cmd.append(repo_url)
+
+    if wc:
+        cmd.append(wc)
+
+    if locks is None:
+        locks = []
+
+    return RetryingShellCommand(
+        name=name,
+        command=cmd,
+        timeout=60 * 60,
+        env=env,
+        workdir=workdir,
+        haltOnFailure=haltOnFailure,
+        flunkOnFailure=flunkOnFailure,
+        log_eval_func=log_eval_func,
+        locks=locks,
+        retry=False,
+    )
+
+
+def makeGittoolStep(repo_url, name='git_update', wc=None, mirrors=None,
+                    bundles=None, env=None, rev=None, workdir='build',
+                    props_file=None, locks=None, haltOnFailure=True,
+                    flunkOnFailure=True, log_eval_func=None):
+    if not env:
+        env = {}
+
+    if props_file:
+        env = env.copy()
+        env['PROPERTIES_FILE'] = props_file
+
+    cmd = ['gittool.py']
+
+    if mirrors:
+        for mirror in mirrors:
+            cmd.extend(['--mirror', mirror])
+
+    if bundles:
+        for bundle in bundles:
+            cmd.extend(['--bundle', bundle])
+
+    if rev:
+        cmd.extend(['--rev', rev])
+
+    cmd.append(repo_url)
+
+    if wc:
+        cmd.append(wc)
+
+    if locks is None:
+        locks = []
+
+    return RetryingShellCommand(
+        name=name,
+        command=cmd,
+        timeout=60 * 60,
+        env=env,
+        workdir=workdir,
+        haltOnFailure=haltOnFailure,
+        flunkOnFailure=flunkOnFailure,
+        locks=locks,
+        log_eval_func=log_eval_func,
+        retry=False,
+    )
+
+
+def makeVCSStep(repo_url, *args, **kwargs):
+    if repo_url.startswith("hg+"):
+        repo_url = repo_url[3:]
+        return makeHgtoolStep(repo_url, *args, **kwargs)
+    elif repo_url.startswith("git+"):
+        repo_url = repo_url[4:]
+        return makeGittoolStep(repo_url, *args, **kwargs)
+    else:
+        raise ValueError("Don't know how to make a VCS step for %s" % repo_url)
+
+
 def parse_make_upload(rc, stdout, stderr):
     ''' This function takes the output and return code from running
     the upload make target and returns a dictionary of important
@@ -6542,12 +6649,12 @@ def extractProperties(rv, stdout, stderr):
 
 class ScriptFactory(BuildFactory):
 
-    def __init__(self, scriptRepo, scriptName, cwd=None, interpreter=None,
-                 extra_data=None, extra_args=None,
+    def __init__(self, scriptRepo, scriptName, scriptRev=None, cwd=None,
+                 interpreter=None, extra_data=None, extra_args=None,
                  script_timeout=1200, script_maxtime=None, log_eval_func=None,
                  reboot_command=None, hg_bin='hg', platform=None,
-                 use_mock=False, mock_target=None,
-                 mock_packages=None, mock_copyin_files=None, env={}):
+                 use_mock=False, mock_target=None, mock_packages=None,
+                 mock_copyin_files=None, env={}):
         BuildFactory.__init__(self)
         self.script_timeout = script_timeout
         self.log_eval_func = log_eval_func
@@ -6608,41 +6715,58 @@ class ScriptFactory(BuildFactory):
             command=['rm', '-rf', 'properties'],
             workdir=".",
         ))
-        self.addStep(ShellCommand(
-            name="clobber_scripts",
-            command=['rm', '-rf', 'scripts'],
-            workdir=".",
-            haltOnFailure=True,
-            log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
-        ))
-        self.addStep(MercurialCloneCommand(
-            name="clone_scripts",
-            command=[hg_bin, 'clone', scriptRepo, 'scripts'],
-            workdir=".",
-            haltOnFailure=True,
-            retry=False,
-            log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
-        ))
-        self.addStep(ShellCommand(
-            name="update_scripts",
-            command=[hg_bin, 'update', '-C', '-r',
-                     WithProperties('%(script_repo_revision:-default)s')],
-            haltOnFailure=True,
-            workdir='scripts'
-        ))
-        self.addStep(SetProperty(
-            name='get_script_repo_revision',
-            property='script_repo_revision',
-            command=[hg_bin, 'id', '-i'],
-            workdir='scripts',
-            haltOnFailure=False,
-        ))
-        self.addStep(OutputStep(
-            name='tinderboxprint_script_revlink',
-            data=WithProperties(
-                'TinderboxPrint: %s_revlink: %s/rev/%%(script_repo_revision)s' % \
-                        (scriptRepo.split('/')[-1], scriptRepo)),
-        ))
+
+        try:
+            if scriptRev:
+                rev = scriptRev
+            else:
+                rev = WithProperties('%(script_repo_revision)s')
+
+            self.addStep(makeVCSStep(
+                workdir='.',
+                wc='scripts',
+                haltOnFailure=True,
+                repo_url=scriptRepo,
+                rev=rev,
+                log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
+            ))
+        except ValueError:
+            # Fallback to old behaviour
+            self.addStep(ShellCommand(
+                name="clobber_scripts",
+                command=['rm', '-rf', 'scripts'],
+                workdir=".",
+                haltOnFailure=True,
+                log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
+            ))
+            self.addStep(MercurialCloneCommand(
+                name="clone_scripts",
+                command=[hg_bin, 'clone', scriptRepo, 'scripts'],
+                workdir=".",
+                haltOnFailure=True,
+                retry=False,
+                log_eval_func=rc_eval_func({0: SUCCESS, None: RETRY}),
+            ))
+            self.addStep(ShellCommand(
+                name="update_scripts",
+                command=[hg_bin, 'update', '-C', '-r',
+                         WithProperties('%(script_repo_revision:-default)s')],
+                haltOnFailure=True,
+                workdir='scripts'
+            ))
+            self.addStep(SetProperty(
+                name='get_script_repo_revision',
+                property='script_repo_revision',
+                command=[hg_bin, 'id', '-i'],
+                workdir='scripts',
+                haltOnFailure=False,
+            ))
+            self.addStep(OutputStep(
+                name='tinderboxprint_script_revlink',
+                data=WithProperties('TinderboxPrint: %s_revlink: '
+                                    '%s/rev/%%(script_repo_revision)s' %
+                                    (scriptRepo.split('/')[-1], scriptRepo)),
+            ))
         self.runScript()
         self.reboot()
 
