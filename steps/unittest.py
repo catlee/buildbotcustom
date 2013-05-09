@@ -32,21 +32,25 @@ from buildbot.status.builder import SUCCESS, WARNINGS, FAILURE, HEADER, worst_st
 
 from buildbotcustom.steps.base import ShellCommand
 
+
 def emphasizeFailureText(text):
     return '<em class="testfail">%s</em>' % text
 
 # Some test suites (like TUnit) may not (yet) have the knownFailCount feature.
 # Some test suites (like TUnit) may not (yet) have the crashed feature.
-# Expected values for leaked: False, no leak; True, leaked; None, report failure.
+# Expected values for leaked: False, no leak; True, leaked; None, report
+# failure.
+
+
 def summaryText(passCount, failCount, knownFailCount=None,
-        crashed=False, leaked=False):
+                crashed=False, leaked=False):
     # Format the tests counts.
     if passCount < 0 or failCount < 0 or \
-       (knownFailCount != None and knownFailCount < 0):
+            (knownFailCount != None and knownFailCount < 0):
         # Explicit failure case.
         summary = emphasizeFailureText("T-FAIL")
     elif passCount == 0 and failCount == 0 and \
-         (knownFailCount == None or knownFailCount == 0):
+            (knownFailCount == None or knownFailCount == 0):
         # Implicit failure case.
         summary = emphasizeFailureText("T-FAIL")
     else:
@@ -65,11 +69,14 @@ def summaryText(passCount, failCount, knownFailCount=None,
 
     # Format the leak status.
     if leaked != False:
-        summary += "&nbsp;%s" % emphasizeFailureText((leaked and "LEAK") or "L-FAIL")
+        summary += "&nbsp;%s" % emphasizeFailureText(
+            (leaked and "LEAK") or "L-FAIL")
 
     return summary
 
 # otherIdent can be None if the test suite does not have this feature (yet).
+
+
 def summarizeLog(name, log, successIdent, failureIdent, otherIdent, infoRe):
     # Counts and flags.
     successCount = -1
@@ -82,7 +89,7 @@ def summarizeLog(name, log, successIdent, failureIdent, otherIdent, infoRe):
     # Reuse 'infoRe'.
     infoRe = re.compile(infoRe)
     # Regular expression for crash and leak detections.
-    harnessErrorsRe = re.compile(r"TEST-UNEXPECTED-FAIL \| .* \| (Browser crashed \(minidump found\)|missing output line for total leaks!|negative leaks caught!|leaked \d+ bytes during test execution)")
+    harnessErrorsRe = re.compile(r"(?:TEST-UNEXPECTED-FAIL|PROCESS-CRASH) \| .* \| (application crashed|missing output line for total leaks!|negative leaks caught!|\d+ bytes leaked)")
     # Process the log.
     for line in log.readlines():
         # Set the counts.
@@ -102,7 +109,7 @@ def summarizeLog(name, log, successIdent, failureIdent, otherIdent, infoRe):
         m = harnessErrorsRe.match(line)
         if m:
             r = m.group(1)
-            if r == "Browser crashed (minidump found)":
+            if r == "application crashed":
                 crashed = True
             elif r == "missing output line for total leaks!":
                 leaked = None
@@ -112,11 +119,13 @@ def summarizeLog(name, log, successIdent, failureIdent, otherIdent, infoRe):
 
     # Return the summary.
     return "TinderboxPrint: %s<br/>%s\n" % (name,
-        summaryText(successCount, failureCount, otherCount, crashed, leaked))
+                                            summaryText(successCount, failureCount, otherCount, crashed, leaked))
+
 
 def summarizeLogMochitest(name, log):
     infoRe = r"\d+ INFO (Passed|Failed|Todo):\ +(\d+)"
-    # Support browser-chrome result summary format which differs from MozillaMochitest's.
+    # Support browser-chrome result summary format which differs from
+    # MozillaMochitest's.
     if name == 'mochitest-browser-chrome':
         infoRe = r"\t(Passed|Failed|Todo): (\d+)"
 
@@ -124,11 +133,12 @@ def summarizeLogMochitest(name, log):
         name, log, "Passed", "Failed", "Todo",
         infoRe)
 
+
 def summarizeLogRemoteMochitest(name, log):
-    keys    = ('Passed', 'Failed', 'Todo')
-    d       = {}
+    keys = ('Passed', 'Failed', 'Todo')
+    d = {}
     summary = ""
-    found   = False
+    found = False
 
     for s in keys:
         d[s] = '0'
@@ -143,21 +153,24 @@ def summarizeLogRemoteMochitest(name, log):
             if line.startswith('Browser Chrome Test Summary'):
                 found = True
     if found:
-        if d.has_key('Failed') and str(d['Failed']) != '0':
+        if 'Failed' in d and str(d['Failed']) != '0':
             d['Failed'] = emphasizeFailureText(d['Failed'])
         summary = "%(Passed)s/%(Failed)s/%(Todo)s" % d
     # Return the summary.
     return "TinderboxPrint: %s<br/>%s\n" % (name, summary)
+
 
 def summarizeLogReftest(name, log):
     return summarizeLog(
         name, log, "Successful", "Unexpected", "Known problems",
         r"REFTEST INFO \| (Successful|Unexpected|Known problems): (\d+) \(")
 
+
 def summarizeLogXpcshelltests(name, log):
     return summarizeLog(
         name, log, "Passed", "Failed", None,
         r"INFO \| (Passed|Failed): (\d+)")
+
 
 def summarizeLogJetpacktests(name, log):
     log = log.getText()
@@ -165,7 +178,7 @@ def summarizeLogJetpacktests(name, log):
     successCount = 0
     failCount = 0
     totalCount = 0
-    summary=""
+    summary = ""
     for line in log.splitlines():
         m = infoRe.match(line)
         if m:
@@ -181,6 +194,7 @@ def summarizeLogJetpacktests(name, log):
     # Return the summary.
     return "TinderboxPrint:%s<br/>%s\n" % (name, summary)
 
+
 def summarizeTUnit(name, log):
     # Counts and flags.
     passCount = 0
@@ -188,7 +202,7 @@ def summarizeTUnit(name, log):
     leaked = False
 
     # Regular expression for crash and leak detections.
-    harnessErrorsRe = re.compile(r"TEST-UNEXPECTED-FAIL \| .* \| (missing output line for total leaks!|negative leaks caught!|leaked \d+ bytes during test execution)")
+    harnessErrorsRe = re.compile(r"(?:TEST-UNEXPECTED-FAIL|PROCESS-CRASH) \| .* \| (application crashed|missing output line for total leaks!|negative leaks caught!|\d+ bytes leaked)")
     # Process the log.
     for line in log.readlines():
         if "TEST-PASS" in line:
@@ -210,7 +224,8 @@ def summarizeTUnit(name, log):
 
     # Return the summary.
     return "TinderboxPrint: %s<br/>%s\n" % (name,
-        summaryText(passCount, failCount, leaked = leaked))
+                                            summaryText(passCount, failCount, leaked=leaked))
+
 
 def evaluateMochitest(name, log, superResult):
     # When a unittest fails we mark it orange, indicating with the
@@ -224,17 +239,19 @@ def evaluateMochitest(name, log, superResult):
         return superResult
 
     failIdent = r"^\d+ INFO Failed: 0"
-    # Support browser-chrome result summary format which differs from MozillaMochitest's.
+    # Support browser-chrome result summary format which differs from
+    # MozillaMochitest's.
     if 'browser-chrome' in name:
         failIdent = r"^\tFailed: 0"
     # Assume that having the 'failIdent' line
     # means the tests run completed (successfully).
     # Also check for "^TEST-UNEXPECTED-" for harness errors.
     if not re.search(failIdent, log, re.MULTILINE) or \
-       re.search("^TEST-UNEXPECTED-", log, re.MULTILINE):
+            re.search("^TEST-UNEXPECTED-", log, re.MULTILINE):
         return worst_status(superResult, WARNINGS)
 
     return worst_status(superResult, SUCCESS)
+
 
 def evaluateRemoteMochitest(name, log, superResult):
     # When a unittest fails we mark it orange, indicating with the
@@ -248,17 +265,19 @@ def evaluateRemoteMochitest(name, log, superResult):
         return superResult
 
     failIdent = r"^\d+ INFO Failed: 0"
-    # Support browser-chrome result summary format which differs from MozillaMochitest's.
+    # Support browser-chrome result summary format which differs from
+    # MozillaMochitest's.
     if 'browser-chrome' in name:
         failIdent = r"^\tFailed: 0"
     # Assume that having the 'failIdent' line
     # means the tests run completed (successfully).
     # Also check for "^TEST-UNEXPECTED-" for harness errors.
     if not re.search(failIdent, log, re.MULTILINE) or \
-       re.search("^TEST-UNEXPECTED-", log, re.MULTILINE):
+            re.search("^TEST-UNEXPECTED-", log, re.MULTILINE):
         return worst_status(superResult, WARNINGS)
 
     return worst_status(superResult, SUCCESS)
+
 
 def evaluateReftest(log, superResult):
     # When a unittest fails we mark it orange, indicating with the
@@ -275,7 +294,7 @@ def evaluateReftest(log, superResult):
     # means the tests run completed (successfully).
     # Also check for "^TEST-UNEXPECTED-" for harness errors.
     if not re.search(r"^REFTEST INFO \| Unexpected: 0 \(", log, re.MULTILINE) or \
-       re.search("^TEST-UNEXPECTED-", log, re.MULTILINE):
+            re.search("^TEST-UNEXPECTED-", log, re.MULTILINE):
         return worst_status(superResult, WARNINGS)
 
     return worst_status(superResult, SUCCESS)
@@ -304,6 +323,36 @@ class MochitestMixin(object):
         superResult = self.super_class.evaluateCommand(self, cmd)
         return evaluateMochitest(self.name, cmd.logs['stdio'].getText(),
                                  superResult)
+
+
+class XPCShellMixin(object):
+    warnOnFailure = True
+    warnOnWarnings = True
+
+    def createSummary(self, log):
+        self.addCompleteLog(
+            'summary', summarizeLogXpcshelltests(self.name, log))
+
+    def evaluateCommand(self, cmd):
+        superResult = self.super_class.evaluateCommand(self, cmd)
+        # When a unittest fails we mark it orange, indicating with the
+        # WARNINGS status. Therefore, FAILURE needs to become WARNINGS
+        # However, we don't want to override EXCEPTION or RETRY, so we still
+        # need to use worst_status in further status decisions.
+        if superResult == FAILURE:
+            superResult = WARNINGS
+
+        if superResult != SUCCESS:
+            return superResult
+
+        # Assume that having the "Failed: 0" line
+        # means the tests run completed (successfully).
+        # Also check for "^TEST-UNEXPECTED-" for harness errors.
+        if not re.search(r"^INFO \| Failed: 0", cmd.logs["stdio"].getText(), re.MULTILINE) or \
+                re.search("^TEST-UNEXPECTED-", cmd.logs["stdio"].getText(), re.MULTILINE):
+            return worst_status(superResult, WARNINGS)
+
+        return worst_status(superResult, SUCCESS)
 
 
 class ReftestMixin(object):
@@ -357,13 +406,14 @@ class ChunkingMixin(object):
             ret.extend(['--chunk-by-dir', str(chunkByDir)])
         return ret
 
+
 class ShellCommandReportTimeout(ShellCommand):
     """We subclass ShellCommand so that we can bubble up the timeout errors
     to tinderbox that normally only get appended to the buildbot slave logs.
     """
-    def __init__(self, **kwargs):
+    def __init__(self, timeout=2 * 3600, maxTime=4 * 3600, **kwargs):
         self.my_shellcommand = ShellCommand
-        ShellCommand.__init__(self, **kwargs)
+        ShellCommand.__init__(self, timeout=timeout, maxTime=maxTime, **kwargs)
 
     def evaluateCommand(self, cmd):
         superResult = self.my_shellcommand.evaluateCommand(self, cmd)
@@ -377,10 +427,11 @@ class ShellCommandReportTimeout(ShellCommand):
 
         if cmd.rc != 0:
             self.addCompleteLog('error',
-              'Unknown Error: command finished with exit code: %d' % cmd.rc)
+                                'Unknown Error: command finished with exit code: %d' % cmd.rc)
             return worst_status(superResult, WARNINGS)
 
         return superResult
+
 
 class MozillaCheck(ShellCommandReportTimeout):
     warnOnFailure = True
@@ -402,7 +453,8 @@ class MozillaCheck(ShellCommandReportTimeout):
 
     def createSummary(self, log):
         if 'xpcshell' in self.name:
-            self.addCompleteLog('summary', summarizeLogXpcshelltests(self.name, log))
+            self.addCompleteLog(
+                'summary', summarizeLogXpcshelltests(self.name, log))
         else:
             self.addCompleteLog('summary', summarizeTUnit(self.name, log))
 
@@ -431,9 +483,8 @@ class MozillaCheck(ShellCommandReportTimeout):
 
         return worst_status(superResult, SUCCESS)
 
-class MozillaPackagedXPCShellTests(ShellCommandReportTimeout):
-    warnOnFailure = True
-    warnOnWarnings = True
+
+class MozillaPackagedXPCShellTests(XPCShellMixin, ShellCommandReportTimeout):
     name = "xpcshell"
 
     def __init__(self, platform, symbols_path=None, **kwargs):
@@ -446,12 +497,14 @@ class MozillaPackagedXPCShellTests(ShellCommandReportTimeout):
         if platform.startswith('win'):
             bin_extension = ".exe"
         script = " && ".join(["if [ ! -d %(exedir)s/plugins ]; then mkdir %(exedir)s/plugins; fi",
-                  "if [ ! -d %(exedir)s/components ]; then mkdir %(exedir)s/components; fi",
-                  "cp bin/xpcshell" + bin_extension + " %(exedir)s",
-                  "cp bin/ssltunnel" + bin_extension + " %(exedir)s",
-                  "cp -R bin/components/* %(exedir)s/components/",
-                  "cp -R bin/plugins/* %(exedir)s/plugins/",
-                  "python -u xpcshell/runxpcshelltests.py"])
+                              "if [ ! -d %(exedir)s/components ]; then mkdir %(exedir)s/components; fi",
+                              "cp bin/xpcshell" +
+                              bin_extension + " %(exedir)s",
+                              "cp bin/ssltunnel" +
+                              bin_extension + " %(exedir)s",
+                              "cp -R bin/components/* %(exedir)s/components/",
+                              "cp -R bin/plugins/* %(exedir)s/plugins/",
+                              "python -u xpcshell/runxpcshelltests.py"])
 
         if symbols_path:
             script += " --symbols-path=%s" % symbols_path
@@ -459,38 +512,14 @@ class MozillaPackagedXPCShellTests(ShellCommandReportTimeout):
 
         self.command = ['bash', '-c', WithProperties(script)]
 
-    def createSummary(self, log):
-        self.addCompleteLog('summary', summarizeLogXpcshelltests(self.name, log))
-
-    def evaluateCommand(self, cmd):
-        superResult = self.super_class.evaluateCommand(self, cmd)
-        # When a unittest fails we mark it orange, indicating with the
-        # WARNINGS status. Therefore, FAILURE needs to become WARNINGS
-        # However, we don't want to override EXCEPTION or RETRY, so we still
-        # need to use worst_status in further status decisions.
-        if superResult == FAILURE:
-            superResult = WARNINGS
-
-        if superResult != SUCCESS:
-            return superResult
-
-        # Assume that having the "Failed: 0" line
-        # means the tests run completed (successfully).
-        # Also check for "^TEST-UNEXPECTED-" for harness errors.
-        if not re.search(r"^INFO \| Failed: 0", cmd.logs["stdio"].getText(), re.MULTILINE) or \
-           re.search("^TEST-UNEXPECTED-", cmd.logs["stdio"].getText(), re.MULTILINE):
-            return worst_status(superResult, WARNINGS)
-
-        return worst_status(superResult, SUCCESS)
-
 
 # MochitestMixin overrides some methods that BuildStep calls
 # In order to make sure its are called, instead of ShellCommandReportTimeout's,
 # it needs to be listed first
 class MozillaPackagedMochitests(MochitestMixin, ChunkingMixin, ShellCommandReportTimeout):
     def __init__(self, variant='plain', symbols_path=None, leakThreshold=None,
-            chunkByDir=None, totalChunks=None, thisChunk=None, testPath=None,
-            **kwargs):
+                 chunkByDir=None, totalChunks=None, thisChunk=None, testPath=None,
+                 **kwargs):
         self.super_class = ShellCommandReportTimeout
         ShellCommandReportTimeout.__init__(self, **kwargs)
 
@@ -498,8 +527,8 @@ class MozillaPackagedMochitests(MochitestMixin, ChunkingMixin, ShellCommandRepor
             assert 1 <= thisChunk <= totalChunks
 
         self.addFactoryArguments(variant=variant, symbols_path=symbols_path,
-                leakThreshold=leakThreshold, chunkByDir=chunkByDir,
-                totalChunks=totalChunks, thisChunk=thisChunk, testPath=testPath)
+                                 leakThreshold=leakThreshold, chunkByDir=chunkByDir,
+                                 totalChunks=totalChunks, thisChunk=thisChunk, testPath=testPath)
 
         if totalChunks:
             self.name = 'mochitest-%s-%i' % (variant, thisChunk)
@@ -507,40 +536,43 @@ class MozillaPackagedMochitests(MochitestMixin, ChunkingMixin, ShellCommandRepor
             self.name = 'mochitest-%s' % variant
 
         self.command = ['python', 'mochitest/runtests.py',
-                WithProperties('--appname=%(exepath)s'), '--utility-path=bin',
-                WithProperties('--extra-profile-file=bin/plugins'),
-                '--certificate-path=certs', '--autorun', '--close-when-done',
-                '--console-level=INFO']
+                        WithProperties(
+                        '--appname=%(exepath)s'), '--utility-path=bin',
+                        WithProperties('--extra-profile-file=bin/plugins'),
+                        '--certificate-path=certs', '--autorun', '--close-when-done',
+                        '--console-level=INFO']
         if testPath:
             self.command.append("--test-path=%s" % testPath)
 
         if symbols_path:
-            self.command.append(WithProperties("--symbols-path=%s" % symbols_path))
+            self.command.append(
+                WithProperties("--symbols-path=%s" % symbols_path))
 
         if leakThreshold:
             self.command.append('--leak-threshold=%d' % leakThreshold)
 
         self.command.extend(self.getChunkOptions(totalChunks, thisChunk,
-                                                    chunkByDir))
+                                                 chunkByDir))
         self.command.extend(self.getVariantOptions(variant))
 
 
 class MozillaPackagedReftests(ReftestMixin, ShellCommandReportTimeout):
     def __init__(self, suite, symbols_path=None, leakThreshold=None,
-            **kwargs):
+                 **kwargs):
         self.super_class = ShellCommandReportTimeout
         ShellCommandReportTimeout.__init__(self, **kwargs)
 
         self.addFactoryArguments(suite=suite,
-                symbols_path=symbols_path, leakThreshold=leakThreshold)
+                                 symbols_path=symbols_path, leakThreshold=leakThreshold)
         self.name = suite
         self.command = ['python', 'reftest/runreftest.py',
-                WithProperties('--appname=%(exepath)s'),
-                '--utility-path=bin',
-                '--extra-profile-file=bin/plugins',
-                ]
+                        WithProperties('--appname=%(exepath)s'),
+                        '--utility-path=bin',
+                        '--extra-profile-file=bin/plugins',
+                        ]
         if symbols_path:
-            self.command.append(WithProperties("--symbols-path=%s" % symbols_path))
+            self.command.append(
+                WithProperties("--symbols-path=%s" % symbols_path))
         if leakThreshold:
             self.command.append('--leak-threshold=%d' % leakThreshold)
         self.command.extend(self.getSuiteOptions(suite))
@@ -555,17 +587,22 @@ class MozillaPackagedJetpackTests(ShellCommandReportTimeout):
         ShellCommandReportTimeout.__init__(self, **kwargs)
 
         self.addFactoryArguments(suite=suite, symbols_path=symbols_path,
-                leakThreshold=leakThreshold)
+                                 leakThreshold=leakThreshold)
 
         self.name = suite
 
-        self.command = ['python', WithProperties("%(toolsdir)s/buildfarm/utils/run_jetpack.py"), '-p', WithProperties("%(platform)s")]
+        self.command = [
+            'python', 'jetpack/bin/cfx',
+            WithProperties('--binary=%(exepath)s'),
+            '--parseable', 'testpkgs'
+        ]
 
         # TODO: When jetpack can handle symbols path and leak testing, add those
         # until then, we skip that.
 
     def createSummary(self, log):
-        self.addCompleteLog('summary', summarizeLogJetpacktests(self.name, log))
+        self.addCompleteLog(
+            'summary', summarizeLogJetpacktests(self.name, log))
 
     def evaluateCommand(self, cmd):
         superResult = self.super_class.evaluateCommand(self, cmd)
@@ -586,8 +623,8 @@ class RemoteMochitestStep(MochitestMixin, ChunkingMixin, ShellCommandReportTimeo
     def __init__(self, variant, symbols_path=None, testPath=None,
                  xrePath='../hostutils/xre', testManifest=None,
                  utilityPath='../hostutils/bin', certificatePath='certs',
-                 app='org.mozilla.fennec', consoleLevel='INFO', 
-                 totalChunks=None, thisChunk=None, slowTests=False, **kwargs):
+                 consoleLevel='INFO', totalChunks=None, thisChunk=None,
+                 slowTests=False, **kwargs):
         self.super_class = ShellCommandReportTimeout
         ShellCommandReportTimeout.__init__(self, **kwargs)
 
@@ -597,7 +634,7 @@ class RemoteMochitestStep(MochitestMixin, ChunkingMixin, ShellCommandReportTimeo
         self.addFactoryArguments(variant=variant, symbols_path=symbols_path,
                                  testPath=testPath, xrePath=xrePath,
                                  testManifest=testManifest, utilityPath=utilityPath,
-                                 certificatePath=certificatePath, app=app,
+                                 certificatePath=certificatePath,
                                  consoleLevel=consoleLevel, slowTests=slowTests,
                                  totalChunks=totalChunks, thisChunk=thisChunk)
 
@@ -607,22 +644,33 @@ class RemoteMochitestStep(MochitestMixin, ChunkingMixin, ShellCommandReportTimeo
                         '--xre-path', xrePath,
                         '--utility-path', utilityPath,
                         '--certificate-path', certificatePath,
-                        '--app', app,
+                        '--app', WithProperties("%(remoteProcessName)s"),
                         '--console-level', consoleLevel,
                         '--http-port', WithProperties('%(http_port)s'),
                         '--ssl-port', WithProperties('%(ssl_port)s'),
-                        '--pidfile', WithProperties('%(basedir)s/../runtestsremote.pid')
-                       ]
+                        '--pidfile', WithProperties(
+                            '%(basedir)s/../runtestsremote.pid')
+                        ]
         self.command.extend(self.getVariantOptions(variant))
+        self.slowTests = slowTests
         if testPath:
             self.command.extend(['--test-path', testPath])
         if testManifest:
             self.command.extend(['--run-only-tests', testManifest])
         if symbols_path:
-            self.command.append(WithProperties("--symbols-path=%s" % symbols_path))
-        if slowTests:
-            self.command.append(['--run-slower'])
+            self.command.append(
+                WithProperties("--symbols-path=%s" % symbols_path))
         self.command.extend(self.getChunkOptions(totalChunks, thisChunk))
+
+    def start(self):
+        properties = self.build.getProperties()
+        if callable(self.slowTests):
+            slowTests = properties.render(self.slowTests(self.build))
+        else:
+            slowTests = properties.render(self.slowTests)
+        if slowTests == str(True):
+            self.command.append(['--run-slower'])
+        self.super_class.start(self)
 
 
 class RemoteMochitestBrowserChromeStep(RemoteMochitestStep):
@@ -631,7 +679,8 @@ class RemoteMochitestBrowserChromeStep(RemoteMochitestStep):
         RemoteMochitestStep.__init__(self, **kwargs)
 
     def createSummary(self, log):
-        self.addCompleteLog('summary', summarizeLogRemoteMochitest(self.name, log))
+        self.addCompleteLog(
+            'summary', summarizeLogRemoteMochitest(self.name, log))
 
     def evaluateCommand(self, cmd):
         superResult = self.super_class.evaluateCommand(self, cmd)
@@ -641,13 +690,13 @@ class RemoteMochitestBrowserChromeStep(RemoteMochitestStep):
 
 class RemoteReftestStep(ReftestMixin, ChunkingMixin, ShellCommandReportTimeout):
     def __init__(self, suite, symbols_path=None, xrePath='../hostutils/xre',
-                 utilityPath='../hostutils/bin', app='org.mozilla.fennec',
-                 totalChunks=None, thisChunk=None, cmdOptions=None, extra_args=None, **kwargs):
+                 utilityPath='../hostutils/bin', totalChunks=None,
+                 thisChunk=None, cmdOptions=None, extra_args=None, **kwargs):
         self.super_class = ShellCommandReportTimeout
         ShellCommandReportTimeout.__init__(self, **kwargs)
         self.addFactoryArguments(suite=suite, xrePath=xrePath,
                                  symbols_path=symbols_path,
-                                 utilityPath=utilityPath, app=app,
+                                 utilityPath=utilityPath,
                                  totalChunks=totalChunks, thisChunk=thisChunk,
                                  cmdOptions=cmdOptions, extra_args=extra_args)
 
@@ -658,22 +707,56 @@ class RemoteReftestStep(ReftestMixin, ChunkingMixin, ShellCommandReportTimeout):
                         '--deviceIP', WithProperties('%(sut_ip)s'),
                         '--xre-path', xrePath,
                         '--utility-path', utilityPath,
-                        '--app', app,
+                        '--app', WithProperties("%(remoteProcessName)s"),
                         '--http-port', WithProperties('%(http_port)s'),
                         '--ssl-port', WithProperties('%(ssl_port)s'),
-                        '--pidfile', WithProperties('%(basedir)s/../remotereftest.pid'),
+                        '--pidfile', WithProperties(
+                            '%(basedir)s/../remotereftest.pid'),
                         '--enable-privilege'
-                       ]
+                        ]
         if suite == 'jsreftest' or suite == 'crashtest':
             self.command.append('--ignore-window-size')
         if extra_args:
-           self.command.append(extra_args)
+            self.command.append(extra_args)
 
         if cmdOptions:
-          self.command.extend(cmdOptions)
+            self.command.extend(cmdOptions)
         self.command.extend(self.getChunkOptions(totalChunks, thisChunk))
         self.command.extend(self.getSuiteOptions(suite))
 
         if symbols_path:
-            self.command.append(WithProperties("--symbols-path=%s" % symbols_path))
+            self.command.append(
+                WithProperties("--symbols-path=%s" % symbols_path))
 
+
+class RemoteXPCShellStep(XPCShellMixin, ChunkingMixin, ShellCommandReportTimeout):
+    def __init__(self, suite, symbols_path=None, xrePath='../hostutils/xre',
+                 totalChunks=None, thisChunk=None, cmdOptions=None, extra_args=None, **kwargs):
+        self.super_class = ShellCommandReportTimeout
+        ShellCommandReportTimeout.__init__(self, **kwargs)
+        self.addFactoryArguments(suite=suite, xrePath=xrePath,
+                                 symbols_path=symbols_path,
+                                 totalChunks=totalChunks, thisChunk=thisChunk,
+                                 cmdOptions=cmdOptions, extra_args=extra_args)
+
+        self.name = suite
+        if totalChunks:
+            self.name += '-%i' % thisChunk
+
+        self.command = ['python2.7', 'xpcshell/remotexpcshelltests.py',
+                        '--deviceIP', WithProperties('%(sut_ip)s'),
+                        '--xre-path', xrePath,
+                        '--manifest', 'xpcshell/tests/xpcshell_android.ini',
+                        '--build-info-json', 'xpcshell/mozinfo.json',
+                        '--testing-modules-dir', 'modules',
+                        '--local-lib-dir', WithProperties('../%(exedir)s'),
+                        '--apk', WithProperties('../%(build_filename)s'),
+                        '--no-logfiles']
+        if extra_args:
+            self.command.append(extra_args)
+
+        self.command.extend(self.getChunkOptions(totalChunks, thisChunk))
+
+        if symbols_path:
+            self.command.append(
+                WithProperties("--symbols-path=%s" % symbols_path))
