@@ -463,6 +463,16 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
         )
         q = db.quoteq(q)
 
+        # Take any builds that have finished from the later of 60 seconds before our
+        # lastCheck time, or lastReset. Sometimes the SQL updates for finished
+        # builds appear out of order according to complete_at. This can be due
+        # to clock skew on the masters, network lag, etc.
+        # lastCheck is the time of the last build that finished that we're
+        # watching. Offset by 60 seconds in the past to make sure we catch
+        # builds that finished around the same time, but whose updates arrived
+        # to the DB later.
+        # Don't look at builds before we last reset.
+        # c.f. bug 811708
         cutoff = max(lastCheck - 60, lastReset)
         t.execute(q, tuple(self.upstreamBuilders) + tuple(self.okResults) +
                   (cutoff,))

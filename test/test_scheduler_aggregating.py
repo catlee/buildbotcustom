@@ -176,7 +176,7 @@ class TestAggregatingScheduler(unittest.TestCase):
 
     def testFinishLag(self):
         # Make sure we can handle builds finishing slightly out of order in the
-        # DB
+        # DB. c.f. bug 811708
         s = AggregatingScheduler(name='s1', branch='b1', builderNames=['d1', 'd2'], upstreamBuilders=['u1', 'u2'])
         s.parent = mock.Mock()
         s.parent.db = self.dbc
