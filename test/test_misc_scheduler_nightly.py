@@ -272,4 +272,6 @@ class TestSpecificNightlyScheduler(unittest.TestCase):
                     """)
             self.assertEquals(len(req), 1)
 
+        d.addCallback(check)
+
         return d
