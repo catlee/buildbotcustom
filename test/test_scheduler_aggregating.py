@@ -236,4 +236,78 @@ class TestAggregatingScheduler(unittest.TestCase):
 
         return d
 
-    # TODO: Check that trigger() method works
+    def testTrigger(self):
+        # Test that we can reset the state of the scheduler via trigger()
+        s = AggregatingScheduler(name='s1', branch='b1', builderNames=['d1', 'd2'], upstreamBuilders=['u1', 'u2'])
+        s.parent = mock.Mock()
+        s.parent.db = self.dbc
+
+        d = self.dbc.addSchedulers([s])
+
+        def check(_):
+            requests = self.dbc.runQueryNow("SELECT * FROM buildrequests")
+            self.assertEquals(len(requests), 0)
+            schedulers = self.dbc.runQueryNow("SELECT name, state FROM schedulers")
+            self.assertEquals(len(schedulers), 1)
+            state = json.loads(schedulers[0][1])
+            self.assertEquals(state, {"remainingBuilders": ["u1", "u2"], "upstreamBuilders": ["u1", "u2"], "lastCheck": 123, "lastReset": 123})
+        d.addCallback(check)
+
+        def addFinishedBuild1(_):
+            self.dbc.runQueryNow("""
+                    INSERT into buildrequests
+                    (buildsetid, buildername, complete, complete_at, submitted_at, results) VALUES
+                    (0, 'u1', 1, 124, 0, 0)
+            """)
+            # Now run the scheduler
+            self._time.return_value = 200
+            return s.run()
+        d.addCallback(addFinishedBuild1)
+
+        def doTrigger(_):
+            # Check that we noticed the first build completed
+            schedulers = self.dbc.runQueryNow("SELECT name, state FROM schedulers")
+            self.assertEquals(len(schedulers), 1)
+            state = json.loads(schedulers[0][1])
+            self.assertEquals(state, {"remainingBuilders": ["u2"], "upstreamBuilders": ["u1", "u2"], "lastCheck": 124, "lastReset": 123})
+
+            self._time.return_value = 201
+            s.trigger(None)
+
+            schedulers = self.dbc.runQueryNow("SELECT name, state FROM schedulers")
+            self.assertEquals(len(schedulers), 1)
+            state = json.loads(schedulers[0][1])
+            self.assertEquals(state, {"remainingBuilders": ["u1", "u2"], "upstreamBuilders": ["u1", "u2"], "lastCheck": 201, "lastReset": 201})
+        d.addCallback(doTrigger)
+
+        return d
+
+    def testChangeConfiguration(self):
+        # Test that when we change the set of upstreams/downstreams, our state
+        # is adjusted. New builders should be added to remainingBuilders, and
+        # upstreamBuilders should be set to the new value
+        old_state = {"remainingBuilders": ["u1", "u3"], "upstreamBuilders": ["u1", "u2", "u3"], "lastCheck": 0, "lastReset": 0}
+        self.dbc.runQueryNow("""
+                INSERT into schedulers
+                (name, class_name, state) VALUES
+                ('s1', 'buildbotcustom.scheduler.AggregatingScheduler', '%s')
+        """ % self.dbc.quoteq(json.dumps(old_state)))
+
+        s = AggregatingScheduler(name='s1', branch='b1', builderNames=['d1', 'd2'], upstreamBuilders=['u1', 'u4'])
+        s.parent = mock.Mock()
+        s.parent.db = self.dbc
+
+        d = self.dbc.addSchedulers([s])
+
+        def check(_):
+            s.startService()
+
+            requests = self.dbc.runQueryNow("SELECT * FROM buildrequests")
+            self.assertEquals(len(requests), 0)
+            schedulers = self.dbc.runQueryNow("SELECT name, state FROM schedulers")
+            self.assertEquals(len(schedulers), 1)
+            state = json.loads(schedulers[0][1])
+            self.assertEquals(state, {"remainingBuilders": ["u1", "u4"], "upstreamBuilders": ["u1", "u4"], "lastCheck": 0, "lastReset": 0})
+        d.addCallback(check)
+
+        return d
