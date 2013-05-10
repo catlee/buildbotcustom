@@ -419,6 +419,11 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
                b not in state['remainingBuilders']:
                 state['remainingBuilders'].append(b)
         state['upstreamBuilders'] = self.upstreamBuilders
+        # Previous implentations of AggregatingScheduler didn't always set
+        # lastReset. We depend on it now in _run(), so make sure it's set to
+        # something
+        if 'lastReset' not in state:
+            state['lastReset'] = state['lastCheck']
         log.msg('%s: reloaded' % self.log_prefix)
         if old_state != state:
             log.msg('%s: old state: %s' % (self.log_prefix, old_state))
@@ -447,7 +452,12 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
 
         d = self.lock.acquire()
         d.addCallback(lambda _: self.parent.db.runInteraction(self._run))
-        d.addBoth(lambda _: self.lock.release())
+
+        def release(_):
+            self.lock.release()
+            return _
+
+        d.addBoth(release)
         return d
 
     def findNewBuilds(self, db, t, lastCheck, lastReset):

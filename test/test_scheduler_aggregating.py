@@ -286,7 +286,7 @@ class TestAggregatingScheduler(unittest.TestCase):
         # Test that when we change the set of upstreams/downstreams, our state
         # is adjusted. New builders should be added to remainingBuilders, and
         # upstreamBuilders should be set to the new value
-        old_state = {"remainingBuilders": ["u1", "u3"], "upstreamBuilders": ["u1", "u2", "u3"], "lastCheck": 0, "lastReset": 0}
+        old_state = {"remainingBuilders": ["u1", "u3"], "upstreamBuilders": ["u1", "u2", "u3"], "lastCheck": 0}
         self.dbc.runQueryNow("""
                 INSERT into schedulers
                 (name, class_name, state) VALUES
@@ -299,9 +299,12 @@ class TestAggregatingScheduler(unittest.TestCase):
 
         d = self.dbc.addSchedulers([s])
 
-        def check(_):
+        def start(_):
             s.startService()
+            return s.run()
+        d.addCallback(start)
 
+        def check(_):
             requests = self.dbc.runQueryNow("SELECT * FROM buildrequests")
             self.assertEquals(len(requests), 0)
             schedulers = self.dbc.runQueryNow("SELECT name, state FROM schedulers")
