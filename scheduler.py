@@ -393,6 +393,7 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
             "upstreamBuilders": self.upstreamBuilders,
             "remainingBuilders": self.upstreamBuilders,
             "lastCheck": now(),
+            "lastReset": now(),
         }
 
     def startService(self):
@@ -449,7 +450,7 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
         d.addBoth(lambda _: self.lock.release())
         return d
 
-    def findNewBuilds(self, db, t, lastCheck):
+    def findNewBuilds(self, db, t, lastCheck, lastReset):
         q = """SELECT buildername, id, complete_at FROM
                buildrequests WHERE
                buildername IN %s AND
@@ -461,8 +462,10 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
             db.parmlist(len(self.okResults)),
         )
         q = db.quoteq(q)
+
+        cutoff = max(lastCheck - 60, lastReset)
         t.execute(q, tuple(self.upstreamBuilders) + tuple(self.okResults) +
-                  (lastCheck,))
+                  (cutoff,))
         newBuilds = t.fetchall()
         if newBuilds:
             log.msg(
@@ -475,9 +478,10 @@ class AggregatingScheduler(BaseScheduler, Triggerable):
         state = self.get_state(t)
         # Check for new builds completed since lastCheck
         lastCheck = state['lastCheck']
+        lastReset = state['lastReset']
         remainingBuilders = state['remainingBuilders']
 
-        newBuilds = self.findNewBuilds(db, t, lastCheck)
+        newBuilds = self.findNewBuilds(db, t, lastCheck, lastReset)
 
         for builder, brid, complete_at in newBuilds:
             state['lastCheck'] = max(state['lastCheck'], complete_at)
