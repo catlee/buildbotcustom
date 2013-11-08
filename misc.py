@@ -10,6 +10,8 @@ import re
 import sys
 import os
 from copy import deepcopy
+import inspect
+from functools import wraps
 
 from twisted.python import log
 
@@ -17,7 +19,7 @@ from buildbot.scheduler import Nightly, Scheduler, Triggerable
 from buildbot.schedulers.filter import ChangeFilter
 from buildbot.steps.shell import WithProperties
 from buildbot.status.builder import SUCCESS, WARNINGS, FAILURE, EXCEPTION, RETRY
-from buildbot.process.buildstep import regex_log_evaluator
+from buildbot.util import now
 
 import buildbotcustom.common
 import buildbotcustom.changes.hgpoller
@@ -256,55 +258,190 @@ def _recentSort(builder):
     return sortfunc
 
 
-def _nextSlave(builder, available_slaves):
-    try:
-        # Choose the slow slave that was most recently on this builder
-        if available_slaves:
-            return sorted(available_slaves, _recentSort(builder))[-1]
+def safeNextSlave(func):
+    """Wrapper around nextSlave functions that catch exceptions , log them, and
+    choose a random slave instead"""
+    @wraps(func)
+    def _nextSlave(builder, available_slaves):
+        try:
+            return func(builder, available_slaves)
+        except Exception:
+            log.msg("Error choosing next slave for builder '%s', choosing randomly instead" % builder.name)
+            log.err()
+            return random.choice(available_slaves)
+    return _nextSlave
+
+
+def _getRetries(builder):
+    """Returns the pending build requests for this builder and the number of
+    previous builds for these build requests."""
+    frame = inspect.currentframe()
+    # Walk up the stack until we find 't'
+    # We need to commit this horrible crime because
+    # a) we're running in a thread
+    # b) so we can't use the db's sync query methods
+    # c) nor can we use deferreds (threads and deferreds don't play well
+    # together)
+    # d) there's no other way to get a db connection
+    while 't' not in frame.f_locals:
+        frame = frame.f_back
+    t = frame.f_locals['t']
+    del frame
+
+    requests = builder._getBuildable(t, None)
+    request_ids = [r.id for r in requests]
+    # Figure out if any of these requests have been retried
+    # Do this by looking for existing builds corresponding to these
+    # requests
+    q = "SELECT count(*) FROM builds WHERE brid IN " + \
+        builder.db.parmlist(len(request_ids))
+    retried = t.execute(q, request_ids).fetchone()[0]
+    return requests, retried
+
+
+def _classifyAWSSlaves(slaves):
+    """
+    Partitions slaves into three groups: inhouse, ondemand, spot according to
+    their name. Returns three lists:
+        inhouse, ondemand, spot
+    """
+    inhouse = []
+    ondemand = []
+    spot = []
+    for s in slaves:
+        name = s.slave.slavename
+        if 'spot' in name:
+            spot.append(s)
+        elif 'ec2' in name:
+            ondemand.append(s)
         else:
+            inhouse.append(s)
+
+    return inhouse, ondemand, spot
+
+
+def _nextAWSSlave(aws_wait=None, recentSort=False):
+    """
+    Pick the next available slave, with some special consideration for AWS
+    instances:
+        - If this builder has pending requests which look like they've been
+          retried, then pick an ondemand or inhouse instance.
+
+        - If the request is very new, wait for an ondemand or spot instance to
+          pick it up. Set aws_wait to the number of seconds to wait before
+          using an AWS instance. Set to None to disable this behaviour.
+
+        - Otherwise give the job to a spot instance
+
+    If recentSort is True then pick slaves that most recently did this type of
+    build. Otherwise pick randomly.
+
+    Returns a nextSlave function.
+    """
+
+    if recentSort:
+        def sorter(slaves, builder):
+            if not slaves:
+                return None
+            return sorted(slaves, _recentSort(builder))[-1]
+    else:
+        def sorter(slaves, builder):
+            if not slaves:
+                return None
+            return random.choice(slaves)
+
+    @safeNextSlave
+    def _nextSlave(builder, available_slaves):
+        # Partition the slaves into 3 groups:
+        # - inhouse slaves
+        # - ondemand slaves
+        # - spot slaves
+        # We always prefer to run on inhouse. We'll wait up to aws_wait
+        # seconds for one to show up!
+        # Next we look to see if the job has been previously retried. If it
+        # has, we won't use spot instances, just ondemand.
+        # If there are no retries, then prefer spot instances over ondemand
+        log.msg("XXX HERE")
+        inhouse, ondemand, spot = _classifyAWSSlaves(available_slaves)
+
+        # We need to look at our build requests if we have no inhouse slaves
+        if not inhouse:
+            requests, retried = _getRetries(builder)
+            oldestRequest = sorted(requests, key=lambda r: r.submittedAt)[0]
+
+        # Always prefer inhouse slaves
+        if inhouse:
+            log.msg("XXX Choosing inhouse")
+            return sorter(inhouse, builder)
+
+        # TODO: Wait here for aws_wait
+        if aws_wait and now() - oldestRequest.submittedAt < aws_wait:
+            log.msg("XXX Waiting for inhouse slaves to show up")
             return None
-    except:
-        log.msg("Error choosing next slave for builder '%s', choosing randomly instead" % builder.name)
-        log.err()
-        return random.choice(available_slaves)
+
+        # Get the requests for this builder so we cna figure out if any of them
+        # have been retried
+        requests, retried = _getRetries(builder)
+        log.msg("XXX Got %i retries" % retried)
+
+        # If we have retries, use ondemand
+        if retried > 0 and ondemand:
+            log.msg("XXX Choosing ondemand")
+            return sorter(ondemand, builder)
+        # No retries, so use spot if we have them
+        elif spot:
+            log.msg("XXX Choosing spot")
+            return sorter(spot, builder)
+        elif ondemand:
+            log.msg("XXX Choosing ondemand")
+            return sorter(ondemand, builder)
+        else:
+            log.msg("XXX No saves - returning None")
+            return None
+    return _nextSlave
+
+
+@safeNextSlave
+def _nextSlave(builder, available_slaves):
+    # Choose the slow slave that was most recently on this builder
+    if available_slaves:
+        return sorted(available_slaves, _recentSort(builder))[-1]
+    else:
+        return None
 
 
 def _nextIdleSlave(nReserved):
     """Return a nextSlave function that will only return a slave to run a build
     if there are at least nReserved slaves available."""
+    @safeNextSlave
     def _nextslave(builder, available_slaves):
         if len(available_slaves) <= nReserved:
             return None
         return sorted(available_slaves, _recentSort(builder))[-1]
     return _nextslave
 
-# XXX Bug 790698 hack for no android reftests on new tegras
-# Purge with fire when this is no longer needed
 
-
+@safeNextSlave
 def _nextOldTegra(builder, available_slaves):
-    try:
-        valid = []
-        for s in available_slaves:
-            if 'panda-' in s.slave.slavename:
-                # excempt Panda's from this foolishness
-                valid.append(s)
-                continue
+    # XXX Bug 790698 hack for no android reftests on new tegras
+    # Purge with fire when this is no longer needed
+    valid = []
+    for s in available_slaves:
+        if 'panda-' in s.slave.slavename:
+            # excempt Panda's from this foolishness
+            valid.append(s)
+            continue
 
-            number = s.slave.slavename.replace('tegra-', '')
-            try:
-                if int(number) < 286:
-                    valid.append(s)
-            except ValueError:
-                log.msg("Error parsing number out of '%s', discarding from old list" % s.slave.slavename)
-                continue
-        if valid:
-            return random.choice(valid)
-        return None
-    except:
-        log.msg("Error choosing old tegra for builder '%s', choosing randomly instead" % builder.name)
-        log.err()
-        return random.choice(available_slaves)
+        number = s.slave.slavename.replace('tegra-', '')
+        try:
+            if int(number) < 286:
+                valid.append(s)
+        except ValueError:
+            log.msg("Error parsing number out of '%s', discarding from old list" % s.slave.slavename)
+            continue
+    if valid:
+        return random.choice(valid)
+    return None
 
 nomergeBuilders = []
 
