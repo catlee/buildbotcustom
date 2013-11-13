@@ -90,6 +90,12 @@ class TestNextAWSSlave(unittest.TestCase):
             # _getRetries shouldn't get called either
             self.assertEquals(_getRetries.called, 0)
 
+            # _getRetries shouldn't get called if we only have ondemand
+            # instances either
+            self.assertEquals("slave-ec2",
+                              f(self.builder, ondemand).slave.slavename)
+            self.assertEquals(_getRetries.called, 0)
+
             # Spot instances should be preferred if there are no retries
             self.assertEquals("slave-spot",
                               f(self.builder, spot + ondemand).slave.slavename)
