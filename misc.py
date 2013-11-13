@@ -325,21 +325,20 @@ def _classifyAWSSlaves(slaves):
 
 def _nextAWSSlave(aws_wait=None, recentSort=False):
     """
-    Pick the next available slave, with some special consideration for AWS
-    instances:
+    Returns a nextSlave function that pick the next available slave, with some
+    special consideration for AWS instances:
         - If this builder has pending requests which look like they've been
           retried, then pick an ondemand or inhouse instance.
 
-        - If the request is very new, wait for an ondemand or spot instance to
-          pick it up. Set aws_wait to the number of seconds to wait before
-          using an AWS instance. Set to None to disable this behaviour.
+        - If the request is very new, wait for an inhouse instance to pick it
+          up. Set aws_wait to the number of seconds to wait before using an AWS
+          instance. Set to None to disable this behaviour.
 
         - Otherwise give the job to a spot instance
 
     If recentSort is True then pick slaves that most recently did this type of
     build. Otherwise pick randomly.
 
-    Returns a nextSlave function.
     """
 
     if recentSort:
@@ -364,6 +363,11 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
         # Next we look to see if the job has been previously retried. If it
         # has, we won't use spot instances, just ondemand.
         # If there are no retries, then prefer spot instances over ondemand
+
+        # Easy! If there are no available slaves, don't return any!
+        if not available_slaves:
+            return None
+
         inhouse, ondemand, spot = _classifyAWSSlaves(available_slaves)
 
         # We need to look at our build requests if we have no inhouse slaves
