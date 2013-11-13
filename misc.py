@@ -266,9 +266,12 @@ def safeNextSlave(func):
         try:
             return func(builder, available_slaves)
         except Exception:
-            log.msg("Error choosing next slave for builder '%s', choosing randomly instead" % builder.name)
+            log.msg("Error choosing next slave for builder '%s', choosing"
+                    " randomly instead" % builder.name)
             log.err()
-            return random.choice(available_slaves)
+            if available_slaves:
+                return random.choice(available_slaves)
+            return None
     return _nextSlave
 
 
@@ -361,7 +364,6 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
         # Next we look to see if the job has been previously retried. If it
         # has, we won't use spot instances, just ondemand.
         # If there are no retries, then prefer spot instances over ondemand
-        log.msg("XXX HERE")
         inhouse, ondemand, spot = _classifyAWSSlaves(available_slaves)
 
         # We need to look at our build requests if we have no inhouse slaves
@@ -371,32 +373,35 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
 
         # Always prefer inhouse slaves
         if inhouse:
-            log.msg("XXX Choosing inhouse")
+            log.msg("nextAWSSlave: Choosing inhouse")
             return sorter(inhouse, builder)
 
-        # TODO: Wait here for aws_wait
         if aws_wait and now() - oldestRequest.submittedAt < aws_wait:
-            log.msg("XXX Waiting for inhouse slaves to show up")
+            log.msg("nextAWSSlave: Waiting for inhouse slaves to show up")
             return None
 
         # Get the requests for this builder so we cna figure out if any of them
         # have been retried
         requests, retried = _getRetries(builder)
-        log.msg("XXX Got %i retries" % retried)
+        log.msg("nextAWSSlave: %i retries for %s" % (retried, builder.name))
 
         # If we have retries, use ondemand
-        if retried > 0 and ondemand:
-            log.msg("XXX Choosing ondemand")
-            return sorter(ondemand, builder)
+        if retried > 0:
+            if ondemand:
+                log.msg("nextAWSSlave: Choosing ondemand")
+                return sorter(ondemand, builder)
+            log.msg("nextAWSSlave: No slaves appropriate for retried job -"
+                    " returning None")
+            return None
         # No retries, so use spot if we have them
         elif spot:
-            log.msg("XXX Choosing spot")
+            log.msg("nextAWSSlave: Choosing spot")
             return sorter(spot, builder)
         elif ondemand:
-            log.msg("XXX Choosing ondemand")
+            log.msg("nextAWSSlave: Choosing ondemand")
             return sorter(ondemand, builder)
         else:
-            log.msg("XXX No saves - returning None")
+            log.msg("nextAWSSlave: No slaves - returning None")
             return None
     return _nextSlave
 
