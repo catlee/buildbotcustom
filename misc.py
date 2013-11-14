@@ -298,7 +298,8 @@ def _getRetries(builder):
     # requests
     q = "SELECT count(*) FROM builds WHERE brid IN " + \
         builder.db.parmlist(len(request_ids))
-    retried = t.execute(q, request_ids).fetchone()[0]
+    t.execute(q, request_ids)
+    retried = t.fetchone()[0]
     return requests, retried
 
 
@@ -372,7 +373,7 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
 
         # Always prefer inhouse slaves
         if inhouse:
-            log.msg("nextAWSSlave: Choosing inhouse")
+            log.msg("nextAWSSlave: Choosing inhouse because it's the best!")
             return sorter(inhouse, builder)
 
         # We need to look at our build requests if we need to know # of
@@ -394,17 +395,17 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
         # If we have retries, use ondemand
         if retried > 0:
             if ondemand:
-                log.msg("nextAWSSlave: Choosing ondemand")
+                log.msg("nextAWSSlave: Choosing ondemand because of retries")
                 return sorter(ondemand, builder)
             log.msg("nextAWSSlave: No slaves appropriate for retried job -"
                     " returning None")
             return None
         # No retries, so use spot if we have them
         elif spot:
-            log.msg("nextAWSSlave: Choosing spot")
+            log.msg("nextAWSSlave: Choosing spot since there aren't any retries")
             return sorter(spot, builder)
         elif ondemand:
-            log.msg("nextAWSSlave: Choosing ondemand")
+            log.msg("nextAWSSlave: Choosing ondemand since there aren't any spot available")
             return sorter(ondemand, builder)
         else:
             log.msg("nextAWSSlave: No slaves - returning None")
