@@ -1165,7 +1165,7 @@ def generateBranchObjects(config, name, secrets=None):
             }
             if pf.get('enable_dep', True):
                 branchObjects['builders'].append(builder)
-            elif pf.get('enable_periodic', True):
+            elif pf.get('enable_periodic', False):
                 builder['name'] = '%s_periodic' % pf['base_name']
                 branchObjects['builders'].append(builder)
 
