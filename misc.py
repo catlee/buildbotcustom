@@ -315,7 +315,9 @@ class JacuzziAllocator(object):
             cache_time, slaves = c
             # If the cache is still fresh, return it
             if cache_time > time.time():
-                return slaves
+                if slaves:
+                    return [s for s in available_slaves if s.slave.slavename in slaves]
+                return None
 
         url = "%s/%s" % (self.BASE_URL, buildername)
         for _ in range(self.MAX_TRIES):
@@ -323,7 +325,7 @@ class JacuzziAllocator(object):
                 data = json.load(urllib2.urlopen(url))
                 slaves = set(data['machines'])
                 self.cache[buildername] = (time.time() + self.CACHE_MAXAGE, slaves)
-                return slaves
+                return [s for s in available_slaves if s.slave.slavename in slaves]
             except urllib2.HTTPError, e:
                 if e.code == 404:
                     try:
