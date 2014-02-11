@@ -284,7 +284,7 @@ class JacuzziAllocator(object):
     BASE_URL = "http://cruncher.srv.releng.scl3.mozilla.com/~bhearsum/jacuzzis/v1"
     CACHE_MAXAGE = 300  # 5 minutes
     CACHE_FAIL_MAXAGE = 30  # Cache failures for 30 seconds
-    MAX_TRIES = 5  # Try up to 5 times
+    MAX_TRIES = 3  # Try up to 3 times
     SLEEP_TIME = 10  # Wait 10s between tries
 
     # TODO: Logging!
@@ -296,52 +296,82 @@ class JacuzziAllocator(object):
         # Cache of pool name -> (timestamp, set of slavenames)
         self.allocated_cache = {}
 
+        self.log("created")
+
+    def log(self, msg, exc_info=False):
+        if exc_info:
+            log.err("Jacuzzi %i: %s" % (id(self), msg))
+        else:
+            log.msg("Jacuzzi %i: %s" % (id(self), msg))
+
     def get_allocated_slaves(self, pool):
+        self.log("checking cache for pool %s" % pool)
         c = self.allocated_cache.get(pool)
         if c:
+            self.log("cache hit")
             cache_time, slaves = c
             if cache_time > time.time():
+                # TODO: This could get spammy
+                self.log("fresh cache: %s" % slaves)
                 return slaves
+            else:
+                self.log("expired cache")
 
         url = "%s/allocated/%s" % (self.BASE_URL, pool)
+        self.log("fetching %s" % url)
         data = json.load(urllib2.urlopen((url)))
         slaves = set(data['machines'])
+        # TODO: This could get spammy
+        self.log("allocated: %s" % slaves)
         self.allocated_cache[pool] = (time.time() + self.CACHE_MAXAGE, slaves)
         return slaves
 
     def get_slaves(self, buildername, available_slaves, pool):
+        self.log("checking cache for builder %s" % buildername)
         c = self.cache.get(buildername)
         if c:
+            self.log("cache hit")
             cache_time, slaves = c
             # If the cache is still fresh, return it
             if cache_time > time.time():
+                # TODO: This could get spammy
+                self.log("fresh cache: %s" % slaves)
                 if slaves:
                     return [s for s in available_slaves if s.slave.slavename in slaves]
                 return None
+            self.log("expired cache")
 
         url = "%s/%s" % (self.BASE_URL, buildername)
-        for _ in range(self.MAX_TRIES):
+        for i in range(self.MAX_TRIES):
             try:
+                self.log("fetching %s" % url)
                 data = json.load(urllib2.urlopen(url))
                 slaves = set(data['machines'])
+                # TODO: This could get spammy
+                self.log("slaves: %s" % slaves)
                 self.cache[buildername] = (time.time() + self.CACHE_MAXAGE, slaves)
                 return [s for s in available_slaves if s.slave.slavename in slaves]
             except urllib2.HTTPError, e:
+                self.log("http error %s" % e.code, exc_info=True)
                 if e.code == 404:
                     try:
+                        self.log("falling back to looking for allocated slaves")
                         allocated_slaves = self.get_allocated_slaves(pool)
                         return [s for s in available_slaves if s.slave.slavename not in allocated_slaves]
                     except Exception:
+                        self.log("unhandled exception getting allocated slaves", exc_info=True)
                         pass
             except Exception:
                 # Ignore other exceptions for now
-                pass
+                self.log("unhandled exception", exc_info=True)
 
-            if _ < self.MAX_TRIES:
+            if i < self.MAX_TRIES:
+                self.log("try %i/%i; sleeping %i and tring again" % (i + 1, self.MAX_TRIES, self.SLEEP_TIME))
                 time.sleep(self.SLEEP_TIME)
 
         # We couldn't get a good answer. Cache the failure so we're not
         # hammering the service all the time, and then return None
+        self.log("gave up, returning None")
         self.cache[buildername] = (time.time() + self.CACHE_FAIL_MAXAGE, None)
         return None
 
