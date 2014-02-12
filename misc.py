@@ -286,13 +286,14 @@ class JacuzziAllocator(object):
     CACHE_FAIL_MAXAGE = 30  # Cache failures for 30 seconds
     MAX_TRIES = 3  # Try up to 3 times
     SLEEP_TIME = 10  # Wait 10s between tries
+    HTTP_TIMEOUT = 10  # Timeout http fetches in 10s
 
     def __init__(self):
         # Cache of builder name -> (timestamp, set of slavenames)
         self.cache = {}
 
-        # Cache of pool name -> (timestamp, set of slavenames)
-        self.allocated_cache = {}
+        # (timestamp, set of slavenames)
+        self.allocated_cache = None
 
         # Cache of builder name -> timestamp
         self.missing_cache = {}
@@ -306,12 +307,10 @@ class JacuzziAllocator(object):
         else:
             log.msg("Jacuzzi %i: %s" % (id(self), msg))
 
-    def get_allocated_slaves(self, pool):
-        self.log("checking cache for pool %s" % pool)
-        c = self.allocated_cache.get(pool)
-        if c:
-            self.log("cache hit")
-            cache_time, slaves = c
+    def get_allocated_slaves(self):
+        self.log("checking cache allocated slaves")
+        if self.allocated_cache:
+            cache_time, slaves = self.allocated_cache
             if cache_time > time.time():
                 # TODO: This could get spammy
                 self.log("fresh cache: %s" % slaves)
@@ -319,17 +318,16 @@ class JacuzziAllocator(object):
             else:
                 self.log("expired cache")
 
-        url = "%s/allocated/%s" % (self.BASE_URL, pool)
+        url = "%s/allocated/all" % self.BASE_URL
         self.log("fetching %s" % url)
-        # TODO: Set timeout
-        data = json.load(urllib2.urlopen((url)))
+        data = json.load(urllib2.urlopen(url, timeout=self.HTTP_TIMEOUT))
         slaves = set(data['machines'])
         # TODO: This could get spammy
         self.log("already allocated: %s" % slaves)
-        self.allocated_cache[pool] = (time.time() + self.CACHE_MAXAGE, slaves)
+        self.allocated_cache = (time.time() + self.CACHE_MAXAGE, slaves)
         return slaves
 
-    def get_slaves(self, buildername, available_slaves, pool):
+    def get_slaves(self, buildername, available_slaves):
         self.log("checking cache for builder %s" % buildername)
         c = self.cache.get(buildername)
         if c:
@@ -356,8 +354,7 @@ class JacuzziAllocator(object):
                     raise urllib2.HTTPError(url, 404, "fake", {}, None)
 
                 self.log("fetching %s" % url)
-                # TODO: Set timeout
-                data = json.load(urllib2.urlopen(url))
+                data = json.load(urllib2.urlopen(url, timeout=self.HTTP_TIMEOUT))
                 slaves = set(data['machines'])
                 # TODO: This could get spammy
                 self.log("slaves: %s" % slaves)
@@ -370,7 +367,7 @@ class JacuzziAllocator(object):
                     try:
                         if not fake_404:
                             self.log("got 404; falling back to looking for allocated slaves")
-                        allocated_slaves = self.get_allocated_slaves(pool)
+                        allocated_slaves = self.get_allocated_slaves()
                         slaves = [s for s in available_slaves if s.slave.slavename not in allocated_slaves]
                         self.log("slaves: %s" % [s.slave.slavename for s in slaves])
                         if not fake_404:
@@ -395,18 +392,15 @@ class JacuzziAllocator(object):
         self.cache[buildername] = (time.time() + self.CACHE_FAIL_MAXAGE, None)
         return None
 
+
     def __call__(self, func):
         """
         Decorator for nextSlave functions that will contact the allocator
         thingy and trim list of available slaves
-
-        TODO: get pool from somewhere
         """
         @wraps(func)
         def _nextSlave(builder, available_slaves):
-            # TODO: this is hardcoded!
-            pool = "bld-linux64"
-            my_available_slaves = self.get_slaves(builder.name, available_slaves, pool)
+            my_available_slaves = self.get_slaves(builder.name, available_slaves)
             # Something went wrong; fallback to using any available machine
             if my_available_slaves is None:
                 return func(builder, available_slaves)
@@ -414,6 +408,7 @@ class JacuzziAllocator(object):
         return _nextSlave
 
 J = JacuzziAllocator()
+
 
 def _getRetries(builder):
     """Returns the pending build requests for this builder and the number of
