@@ -296,11 +296,15 @@ class JacuzziAllocator(object):
         # Cache of pool name -> (timestamp, set of slavenames)
         self.allocated_cache = {}
 
+        # Cache of builder name -> timestamp
+        self.missing_cache = {}
+
         self.log("created")
 
     def log(self, msg, exc_info=False):
         if exc_info:
-            log.err("Jacuzzi %i: %s" % (id(self), msg))
+            log.err()
+            log.msg("Jacuzzi %i: %s" % (id(self), msg))
         else:
             log.msg("Jacuzzi %i: %s" % (id(self), msg))
 
@@ -319,10 +323,11 @@ class JacuzziAllocator(object):
 
         url = "%s/allocated/%s" % (self.BASE_URL, pool)
         self.log("fetching %s" % url)
+        # TODO: Set timeout
         data = json.load(urllib2.urlopen((url)))
         slaves = set(data['machines'])
         # TODO: This could get spammy
-        self.log("allocated: %s" % slaves)
+        self.log("already allocated: %s" % slaves)
         self.allocated_cache[pool] = (time.time() + self.CACHE_MAXAGE, slaves)
         return slaves
 
@@ -339,12 +344,21 @@ class JacuzziAllocator(object):
                 if slaves:
                     return [s for s in available_slaves if s.slave.slavename in slaves]
                 return None
-            self.log("expired cache")
+            else:
+                self.log("expired cache")
 
         url = "%s/%s" % (self.BASE_URL, buildername)
         for i in range(self.MAX_TRIES):
+            fake_404 = False
             try:
+                if self.missing_cache.get(buildername, 0) > time.time():
+                    self.log("skipping %s since we 404'ed last time" % url)
+                    # Fake a 404
+                    fake_404 = True
+                    raise urllib2.HTTPError(url, 404, "fake", {}, None)
+
                 self.log("fetching %s" % url)
+                # TODO: Set timeout
                 data = json.load(urllib2.urlopen(url))
                 slaves = set(data['machines'])
                 # TODO: This could get spammy
@@ -352,15 +366,23 @@ class JacuzziAllocator(object):
                 self.cache[buildername] = (time.time() + self.CACHE_MAXAGE, slaves)
                 return [s for s in available_slaves if s.slave.slavename in slaves]
             except urllib2.HTTPError, e:
-                self.log("http error %s" % e.code, exc_info=True)
                 if e.code == 404:
+                    # TODO: Cache this 404 result for a bit so we can avoid
+                    # doing the lookup above over and over
                     try:
-                        self.log("falling back to looking for allocated slaves")
+                        if not fake_404:
+                            self.log("got 404; falling back to looking for allocated slaves")
                         allocated_slaves = self.get_allocated_slaves(pool)
-                        return [s for s in available_slaves if s.slave.slavename not in allocated_slaves]
+                        slaves = [s for s in available_slaves if s.slave.slavename not in allocated_slaves]
+                        self.log("slaves: %s" % [s.slave.slavename for s in slaves])
+                        if not fake_404:
+                            self.log("remembering 404 result for %is" % self.CACHE_MAXAGE)
+                            self.missing_cache[buildername] = time.time() + self.CACHE_MAXAGE
+                        return slaves
                     except Exception:
                         self.log("unhandled exception getting allocated slaves", exc_info=True)
                         pass
+                self.log("unhandled http error %s" % e.code, exc_info=True)
             except Exception:
                 # Ignore other exceptions for now
                 self.log("unhandled exception", exc_info=True)
