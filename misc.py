@@ -287,8 +287,6 @@ class JacuzziAllocator(object):
     MAX_TRIES = 3  # Try up to 3 times
     SLEEP_TIME = 10  # Wait 10s between tries
 
-    # TODO: Logging!
-
     def __init__(self):
         # Cache of builder name -> (timestamp, set of slavenames)
         self.cache = {}
@@ -347,7 +345,7 @@ class JacuzziAllocator(object):
             else:
                 self.log("expired cache")
 
-        url = "%s/%s" % (self.BASE_URL, buildername)
+        url = "%s/builders/%s" % (self.BASE_URL, buildername)
         for i in range(self.MAX_TRIES):
             fake_404 = False
             try:
