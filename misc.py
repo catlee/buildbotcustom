@@ -383,7 +383,7 @@ class JacuzziAllocator(object):
                 self.log("unhandled exception", exc_info=True)
 
             if i < self.MAX_TRIES:
-                self.log("try %i/%i; sleeping %i and tring again" % (i + 1, self.MAX_TRIES, self.SLEEP_TIME))
+                self.log("try %i/%i; sleeping %i and trying again" % (i + 1, self.MAX_TRIES, self.SLEEP_TIME))
                 time.sleep(self.SLEEP_TIME)
 
         # We couldn't get a good answer. Cache the failure so we're not
