@@ -504,8 +504,6 @@ def _nextAWSSlave(aws_wait=None, recentSort=False, skip_spot=False):
                 return None
             return random.choice(slaves)
 
-    @safeNextSlave
-    @J
     def _nextSlave(builder, available_slaves):
         # Partition the slaves into 3 groups:
         # - inhouse slaves
@@ -576,10 +574,10 @@ def _nextAWSSlave(aws_wait=None, recentSort=False, skip_spot=False):
             return None
     return _nextSlave
 
-_nextAWSSlave_wait_sort = _nextAWSSlave(aws_wait=60, recentSort=True)
-_nextAWSSlave_wait_sort_skip_spot = _nextAWSSlave(aws_wait=60, recentSort=True,
-                                                  skip_spot=True)
-_nextAWSSlave_nowait = _nextAWSSlave()
+_nextAWSSlave_wait_sort = safeNextSlave(J(_nextAWSSlave(aws_wait=60, recentSort=True)))
+_nextAWSSlave_wait_sort_skip_spot = safeNextSlave(J(_nextAWSSlave(aws_wait=60, recentSort=True,
+                                                    skip_spot=True)))
+_nextAWSSlave_nowait = safeNextSlave(_nextAWSSlave())
 
 
 @safeNextSlave
