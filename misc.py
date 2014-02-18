@@ -1303,6 +1303,7 @@ def generateBranchObjects(config, name, secrets=None):
             builder = {
                 'name': '%s_dep' % pf['base_name'],
                 'slavenames': pf['slaves'],
+                'nextSlave': _nextAWSSlave_wait_sort,
                 'builddir': '%s_dep' % pf['base_name'],
                 'slavebuilddir': normalizeName('%s_dep' % pf['base_name']),
                 'factory': factory,
@@ -1338,6 +1339,7 @@ def generateBranchObjects(config, name, secrets=None):
                 nightly_builder = {
                     'name': '%s_nightly' % pf['base_name'],
                     'slavenames': pf['slaves'],
+                    'nextSlave': _nextAWSSlave_wait_sort,
                     'builddir': '%s_nightly' % pf['base_name'],
                     'slavebuilddir': normalizeName('%s_nightly' % pf['base_name']),
                     'factory': factory,
