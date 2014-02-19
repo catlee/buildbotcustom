@@ -371,7 +371,7 @@ class JacuzziAllocator(object):
             returns a list of slaves to use
         """
         # Check the cache for this builder
-        self.log("checking cache for builder %s" % buildername)
+        self.log("checking cache for builder %s" % str(buildername))
         c = self.cache.get(buildername)
         if c:
             self.log("cache hit")
@@ -424,7 +424,7 @@ class JacuzziAllocator(object):
                             # this for next time. We'll avoid doing the
                             # per-builder lookup for CACHE_MAXAGE seconds, and
                             # fall back to looking at all the allocated slaves
-                            self.log("remembering 404 result for %is" % self.CACHE_MAXAGE)
+                            self.log("remembering 404 result for %s seconds" % self.CACHE_MAXAGE)
                             self.missing_cache[buildername] = time.time() + self.CACHE_MAXAGE
                         return slaves
                     except Exception:
