@@ -334,8 +334,9 @@ class JacuzziAllocator(object):
         else:
             log.msg("JacuzziAllocator %i: %s" % (id(self), msg))
 
-    def get_allocated_slaves(self):
-        """Returns the set of allocated slaves from the service.
+    def get_unallocated_slaves(self, available_slaves):
+        """Filters available_slaves by the list of slaves not currently
+        allocated to a jacuzzi.
 
         This can return cached results.
         """
@@ -358,7 +359,7 @@ class JacuzziAllocator(object):
         # TODO: This could get spammy
         self.log("already allocated: %s" % slaves)
         self.allocated_cache = (time.time() + self.CACHE_MAXAGE, slaves)
-        return slaves
+        return [s for s in available_slaves if s.slave.slavename not in slaves]
 
     def get_slaves(self, buildername, available_slaves):
         """Returns which slaves are suitable for building this builder
@@ -393,15 +394,11 @@ class JacuzziAllocator(object):
 
         url = "%s/builders/%s" % (self.BASE_URL, buildername)
         for i in range(self.MAX_TRIES):
-            # Sometimes we need to pretend like we got a 404
-            fake_404 = False
             try:
                 if self.missing_cache.get(buildername, 0) > time.time():
                     self.log("skipping %s since we 404'ed last time" % url)
-                    # Fake a 404 to ourselves so we get into the except block
-                    # below
-                    fake_404 = True
-                    raise urllib2.HTTPError(url, 404, "fake", {}, None)
+                    # Use unallocted slaves instead
+                    return self.get_unallocated_slaves(available_slaves)
 
                 self.log("fetching %s" % url)
                 data = json.load(urllib2.urlopen(url, timeout=self.HTTP_TIMEOUT))
@@ -418,21 +415,17 @@ class JacuzziAllocator(object):
                 # of our list of available slaves
                 if e.code == 404:
                     try:
-                        if not fake_404:
-                            self.log("got 404; falling back to looking for allocated slaves")
-                        allocated_slaves = self.get_allocated_slaves()
-                        slaves = [s for s in available_slaves if s.slave.slavename not in allocated_slaves]
+                        slaves = self.get_unallocated_slaves()
                         self.log("slaves: %s" % [s.slave.slavename for s in slaves])
-                        if not fake_404:
-                            # We hit an actual 404 error, so we should remember
-                            # this for next time. We'll avoid doing the
-                            # per-builder lookup for CACHE_MAXAGE seconds, and
-                            # fall back to looking at all the allocated slaves
-                            self.log("remembering 404 result for %s seconds" % self.CACHE_MAXAGE)
-                            self.missing_cache[buildername] = time.time() + self.CACHE_MAXAGE
+                        # We hit a 404 error, so we should remember
+                        # this for next time. We'll avoid doing the
+                        # per-builder lookup for CACHE_MAXAGE seconds, and
+                        # fall back to looking at all the allocated slaves
+                        self.log("remembering 404 result for %s seconds" % self.CACHE_MAXAGE)
+                        self.missing_cache[buildername] = time.time() + self.CACHE_MAXAGE
                         return slaves
                     except Exception:
-                        self.log("unhandled exception getting allocated slaves", exc_info=True)
+                        self.log("unhandled exception getting unallocated slaves", exc_info=True)
                 else:
                     self.log("unhandled http error %s" % e.code, exc_info=True)
             except Exception:
