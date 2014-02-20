@@ -415,7 +415,7 @@ class JacuzziAllocator(object):
                 # of our list of available slaves
                 if e.code == 404:
                     try:
-                        slaves = self.get_unallocated_slaves()
+                        slaves = self.get_unallocated_slaves(available_slaves)
                         self.log("slaves: %s" % [s.slave.slavename for s in slaves])
                         # We hit a 404 error, so we should remember
                         # this for next time. We'll avoid doing the
