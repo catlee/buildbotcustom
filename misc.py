@@ -330,9 +330,9 @@ class JacuzziAllocator(object):
         """
         if exc_info:
             log.err()
-            log.msg("Jacuzzi %i: %s" % (id(self), msg))
+            log.msg("JacuzziAllocator %i: %s" % (id(self), msg))
         else:
-            log.msg("Jacuzzi %i: %s" % (id(self), msg))
+            log.msg("JacuzziAllocator %i: %s" % (id(self), msg))
 
     def get_allocated_slaves(self):
         """Returns the set of allocated slaves from the service.
@@ -348,6 +348,8 @@ class JacuzziAllocator(object):
                 return slaves
             else:
                 self.log("expired cache")
+        else:
+            self.log("cache miss")
 
         url = "%s/allocated/all" % self.BASE_URL
         self.log("fetching %s" % url)
@@ -374,11 +376,11 @@ class JacuzziAllocator(object):
         self.log("checking cache for builder %s" % str(buildername))
         c = self.cache.get(buildername)
         if c:
-            self.log("cache hit")
             cache_time, slaves = c
             # If the cache is still fresh, use the builder's allocated slaves
             # to filter our list of available slaves
             if cache_time > time.time():
+                self.log("cache hit")
                 # TODO: This could get spammy
                 self.log("fresh cache: %s" % slaves)
                 if slaves:
@@ -386,6 +388,8 @@ class JacuzziAllocator(object):
                 return None
             else:
                 self.log("expired cache")
+        else:
+            self.log("cache miss")
 
         url = "%s/builders/%s" % (self.BASE_URL, buildername)
         for i in range(self.MAX_TRIES):
