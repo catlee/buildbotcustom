@@ -346,7 +346,7 @@ class JacuzziAllocator(object):
             if cache_time > time.time():
                 # TODO: This could get spammy
                 self.log("fresh cache: %s" % slaves)
-                return slaves
+                return [s for s in available_slaves if s.slave.slavename not in slaves]
             else:
                 self.log("expired cache")
         else:
