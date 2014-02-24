@@ -342,8 +342,8 @@ class JacuzziAllocator(object):
         """
         self.log("checking cache allocated slaves")
         if self.allocated_cache:
-            cache_time, slaves = self.allocated_cache
-            if cache_time > time.time():
+            cache_expiry_time, slaves = self.allocated_cache
+            if cache_expiry_time > time.time():
                 # TODO: This could get spammy
                 self.log("fresh cache: %s" % slaves)
                 return [s for s in available_slaves if s.slave.slavename not in slaves]
@@ -377,10 +377,10 @@ class JacuzziAllocator(object):
         self.log("checking cache for builder %s" % str(buildername))
         c = self.cache.get(buildername)
         if c:
-            cache_time, slaves = c
+            cache_expiry_time, slaves = c
             # If the cache is still fresh, use the builder's allocated slaves
             # to filter our list of available slaves
-            if cache_time > time.time():
+            if cache_expiry_time > time.time():
                 self.log("cache hit")
                 # TODO: This could get spammy
                 self.log("fresh cache: %s" % slaves)
