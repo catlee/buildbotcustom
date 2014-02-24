@@ -300,7 +300,7 @@ class JacuzziAllocator(object):
         HTTP_TIMEOUT (int): How long to wait for a response from the service,
             in seconds, defaults to 10
     """
-    BASE_URL = "http://cruncher.srv.releng.scl3.mozilla.com/~bhearsum/jacuzzis/v1"
+    BASE_URL = "https://jacuzzi-allocator.pub.build.mozilla.org/v1"
     CACHE_MAXAGE = 300  # 5 minutes
     CACHE_FAIL_MAXAGE = 30  # Cache failures for 30 seconds
     MAX_TRIES = 3  # Try up to 3 times
