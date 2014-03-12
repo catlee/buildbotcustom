@@ -53,12 +53,12 @@ class GetInstanceMetadata(_TransferBuildStep):
         return "/etc/instance_metadata.json"
 
     def start(self):
-        # Create a temporary file we can write to
+        # Create a temporary file object we can write to
         self.fp = StringIO()
 
         # Where on the slave should we read from?
         srcpath = self.metadata_path or self.guess_path()
-        log.msg("reading %s to %s" % (srcpath, self.fp))
+        log.msg("reading %s from slave" % (srcpath,))
 
         # Create write object that will receive remote_write calls from the
         # slave
