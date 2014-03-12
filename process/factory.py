@@ -6377,15 +6377,6 @@ def extractProperties(rv, stdout, stderr):
     return props
 
 
-def extractJSONProperties(rv, stdout, stderr):
-    props = {}
-    try:
-        stdout = stdout.strip()
-        props.update(json.loads(stdout))
-    finally:
-        return props
-
-
 class ScriptFactory(RequestSortingBuildFactory):
 
     def __init__(self, scriptRepo, scriptName, cwd=None, interpreter=None,
