@@ -489,6 +489,7 @@ class MozillaBuildFactory(RequestSortingBuildFactory, MockMixin):
             name='set_instance_metadata',
             extract_fn=extractJSONProperties,
             command=['python', 'tools/buildfarm/maintenance/get_instance_metadata.py'],
+            workdir='.',
             haltOnFailure=False,
             warnOnFailure=False,
         ))
