@@ -9,7 +9,7 @@ from twisted.spread import pb
 from twisted.python import log
 from twisted.python.failure import Failure
 
-import tempfile
+from cStringIO import StringIO
 
 
 class _Writer(pb.Referenceable):
@@ -54,7 +54,7 @@ class GetInstanceMetadata(_TransferBuildStep):
 
     def start(self):
         # Create a temporary file we can write to
-        self.fp = tempfile.TemporaryFile()
+        self.fp = StringIO()
 
         # Where on the slave should we read from?
         srcpath = self.metadata_path or self.guess_path()
