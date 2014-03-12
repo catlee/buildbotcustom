@@ -29,7 +29,6 @@ import buildbotcustom.steps.talos
 import buildbotcustom.steps.unittest
 import buildbotcustom.steps.signing
 import buildbotcustom.steps.mock
-import buildbotcustom.steps.metadata
 import buildbotcustom.env
 import buildbotcustom.misc_scheduler
 import build.paths
@@ -46,7 +45,6 @@ reload(buildbotcustom.steps.talos)
 reload(buildbotcustom.steps.unittest)
 reload(buildbotcustom.steps.signing)
 reload(buildbotcustom.steps.mock)
-reload(buildbotcustom.steps.metadata)
 reload(buildbotcustom.env)
 reload(build.paths)
 reload(release.info)
@@ -72,7 +70,6 @@ from buildbotcustom.common import getSupportedPlatforms, getPlatformFtpDir, \
 from buildbotcustom.steps.mock import MockReset, MockInit, MockCommand, \
     MockInstall, MockMozillaCheck, MockProperty, RetryingMockProperty, \
     RetryingMockCommand
-from buildbotcustom.steps.metadata import GetInstanceMetadata
 
 import buildbotcustom.steps.unittest as unittest_steps
 
@@ -446,9 +443,6 @@ class MozillaBuildFactory(RequestSortingBuildFactory, MockMixin):
         self.addInitialSteps()
 
     def addInitialSteps(self):
-        # Set properties for metadata about this slave
-        self.addStep(GetInstanceMetadata())
-
         self.addStep(SetProperty(
             name='set_basedir',
             command=['bash', '-c', 'pwd'],
@@ -489,6 +483,14 @@ class MozillaBuildFactory(RequestSortingBuildFactory, MockMixin):
             command=['bash', '-c', 'pwd'],
             property='toolsdir',
             workdir='tools',
+        ))
+        # Set properties for metadata about this slave
+        self.addStep(SetProperty(
+            name='set_instance_metadata',
+            extract_fn=extractJSONProperties,
+            command=['python', 'tools/buildfarm/maintenance/get_instance_metadata.py'],
+            haltOnFailure=False,
+            warnOnFailure=False,
         ))
 
         if self.clobberURL is not None:
@@ -6378,6 +6380,15 @@ def extractProperties(rv, stdout, stderr):
         if len(e) == 2:
             props[e[0]] = e[1].strip()
     return props
+
+
+def extractJSONProperties(rv, stdout, stderr):
+    props = {}
+    try:
+        stdout = stdout.strip()
+        props.update(json.loads(stdout))
+    finally:
+        return props
 
 
 class ScriptFactory(RequestSortingBuildFactory):
