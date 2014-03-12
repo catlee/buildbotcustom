@@ -149,6 +149,7 @@ _product_excludes = {
     ],
     'thunderbird': [
         re.compile('^CLOBBER'),
+        re.compile("^im/"),
         re.compile("^suite/")
     ],
 }
@@ -512,6 +513,8 @@ def _classifyAWSSlaves(slaves):
     ondemand = []
     spot = []
     for s in slaves:
+        if not s.slave:
+            continue
         name = s.slave.slavename
         if is_spot(name):
             spot.append(s)
@@ -1602,7 +1605,7 @@ def generateBranchObjects(config, name, secrets=None):
                     'slavebuilddir': normalizeName('%s-%s-pgo' % (name, platform), pf['stage_product']),
                     'factory': pgo_factory,
                     'category': name,
-                    'nextSlave': _nextAWSSlave_wait_sort_skip_spot,
+                    'nextSlave': _nextAWSSlave_wait_sort,
                     'properties': {'branch': name,
                                    'platform': platform,
                                    'stage_platform': stage_platform + '-pgo',
@@ -1628,7 +1631,7 @@ def generateBranchObjects(config, name, secrets=None):
                     'slavebuilddir': normalizeName('%s-%s-nonunified' % (name, platform), pf['stage_product']),
                     'factory': factory,
                     'category': name,
-                    'nextSlave': _nextAWSSlave_wait_sort_skip_spot,
+                    'nextSlave': _nextAWSSlave_wait_sort,
                     'properties': {'branch': name,
                                    'platform': platform,
                                    'stage_platform': stage_platform + '-nonunified',
@@ -1656,7 +1659,7 @@ def generateBranchObjects(config, name, secrets=None):
                     'slavebuilddir': normalizeName('%s-%s-noprofiling' % (name, platform), pf['stage_product']),
                     'factory': factory,
                     'category': name,
-                    'nextSlave': _nextAWSSlave_wait_sort_skip_spot,
+                    'nextSlave': _nextAWSSlave_wait_sort,
                     'properties': {'branch': name,
                                    'platform': platform,
                                    'stage_platform': stage_platform + '-noprofiling',
@@ -1871,7 +1874,7 @@ def generateBranchObjects(config, name, secrets=None):
                 'slavebuilddir': normalizeName('%s-%s-nightly' % (name, platform), pf['stage_product']),
                 'factory': mozilla2_nightly_factory,
                 'category': name,
-                'nextSlave': _nextAWSSlave_wait_sort_skip_spot,
+                'nextSlave': _nextAWSSlave_wait_sort,
                 'properties': {'branch': name,
                                'platform': platform,
                                'stage_platform': stage_platform,
