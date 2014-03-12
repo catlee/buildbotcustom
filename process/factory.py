@@ -446,6 +446,9 @@ class MozillaBuildFactory(RequestSortingBuildFactory, MockMixin):
         self.addInitialSteps()
 
     def addInitialSteps(self):
+        # Set properties for metadata about this slave
+        self.addStep(GetInstanceMetadata())
+
         self.addStep(SetProperty(
             name='set_basedir',
             command=['bash', '-c', 'pwd'],
@@ -487,9 +490,6 @@ class MozillaBuildFactory(RequestSortingBuildFactory, MockMixin):
             property='toolsdir',
             workdir='tools',
         ))
-
-        # Set properties for metadata about this slave
-        self.addStep(GetInstanceMetadata())
 
         if self.clobberURL is not None:
             self.addStep(MozillaClobberer(
