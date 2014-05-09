@@ -27,7 +27,7 @@ def makeBuilder(name):
 class TestMergeRequsets(unittest.TestCase):
     def setUp(self):
         # This is basically copied from misc.py
-        misc.nomergeBuilders = []
+        misc.nomergeBuilders = set()
         misc.builderMergeLimits = collections.defaultdict(lambda: 3)
         misc._mergeCount = 0
         misc._mergeId = None
@@ -37,13 +37,13 @@ class TestMergeRequsets(unittest.TestCase):
         b1 = makeBuilder("b1")
         r1 = makeRequest(b1)
         r2 = makeRequest(b1)
-        misc.nomergeBuilders = []
+        misc.nomergeBuilders = set()
 
         # b1 isn't in nomergeBuilders, so we can merge the requests
         self.assertTrue(misc.mergeRequests(b1, r1, r2))
 
         # When b1 is in nomergeBuilders, they're not mergeable
-        misc.nomergeBuilders = ["b1"]
+        misc.nomergeBuilders = set(["b1"])
         self.assertFalse(misc.mergeRequests(b1, r1, r2))
 
     def testMergeLimits(self):
