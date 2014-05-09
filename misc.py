@@ -675,6 +675,10 @@ def mergeRequests(builder, req1, req2):
         # it
         return False
 
+    if not req1.canBeMergedWith(req2):
+        # The requests are inherently unmergeable; e.g. on different branches
+        return False
+
     # We're merging a different request now; reset the state
     # This works because buildbot calls this function with the same req1 for
     # all pending requests for the builder, only req2 varies between calls.
@@ -685,16 +689,16 @@ def mergeRequests(builder, req1, req2):
         # got 2 requests we're considering merging.
         _mergeCount = 2
         _mergeId = req1.id
+    else:
+        _mergeCount += 1
 
-    if _mergeCount >= builderMergeLimits[builder.name]:
+    if _mergeCount > builderMergeLimits[builder.name]:
         # This request has already been merged with too many requests
-        log.msg("%s: not merging any more requests" % builder.name)
+        log.msg("%s: exceeded builderMergeLimits (%i); not merging any more requests" %
+                (builder.name, builderMergeLimits[builder.name]))
         return False
 
-    if req1.canBeMergedWith(req2):
-        _mergeCount += 1
-        return True
-    return False
+    return True
 
 
 def mergeBuildObjects(d1, d2):
