@@ -640,17 +640,61 @@ def _nextOldTegra(builder, available_slaves):
         return random.choice(valid)
     return None
 
+
+# Globals for mergeRequests
 nomergeBuilders = []
+# Default to max of 3 merged requests.
+builderMergeLimits = collections.defaultdict(lambda: 3)
+# For tracking state in mergeRequests below
+_mergeCount = 0
+_mergeId = None
 
 
 def mergeRequests(builder, req1, req2):
+    """
+    Returns True if req1 and req2 are mergeable requests, False otherwise.
+
+    This is called by buildbot to determine if pairs of buildrequests can be
+    merged together for a build.
+
+    Args:
+        builder (buildbot builder object): which builder is being considered
+        req1 (buildbot request object): first request being considered.
+            This stays constant for a given build being constructed.
+        req2 (buildbot request object): second request being considered.
+            This changes as the buildbot master considers all pending requests
+            for the build.
+    """
+    global _mergeCount, _mergeId
+    # Merging is disallowed on these builders
     if builder.name in nomergeBuilders:
         return False
+
     if 'Self-serve' in req1.reason or 'Self-serve' in req2.reason:
         # A build was explicitly requested on this revision, so don't coalesce
         # it
         return False
-    return req1.canBeMergedWith(req2)
+
+    # We're merging a different request now; reset the state
+    # This works because buildbot calls this function with the same req1 for
+    # all pending requests for the builder, only req2 varies between calls.
+    # Once req1 changes we know we're in the middle of creating a different
+    # build.
+    if req1.id != _mergeId:
+        # Start counting at 2 here, since if we're being called, we've already
+        # got 2 requests we're considering merging.
+        _mergeCount = 2
+        _mergeId = req1.id
+
+    if _mergeCount >= builderMergeLimits[builder.name]:
+        # This request has already been merged with too many requests
+        log.msg("%s: not merging any more requests" % builder.name)
+        return False
+
+    if req1.canBeMergedWith(req2):
+        _mergeCount += 1
+        return True
+    return False
 
 
 def mergeBuildObjects(d1, d2):
