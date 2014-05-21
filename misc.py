@@ -2445,19 +2445,52 @@ def generateBranchObjects(config, name, secrets=None):
     return branchObjects
 
 
-def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
-                               ACTIVE_UNITTEST_PLATFORMS, factory_class=TalosFactory):
-    branchObjects = {'schedulers': [], 'builders': [], 'status': [],
-                     'change_source': []}
-    # prettyNames is a mapping to pass to the try_parser for validation
-    prettyNames = {}
+def _makeGenerateMozharnessTalosBuilderArgs(suite, talos_branch, platform,
+                                            factory_kwargs, branch_config, platform_config):
+    mh_conf = platform_config['mozharness_config']
 
-    # We only understand a couple PGO strategies
-    assert branch_config['pgo_strategy'] in ('per-checkin', 'periodic', 'try', None), \
-        "%s is not an understood PGO strategy" % branch_config[
-        'pgo_strategy']
+    extra_args = []
+    if 'android' not in platform:
+        extra_args = ['--suite', suite,
+                      '--add-option',
+                      ','.join(['--webServer', 'localhost']),
+                      '--branch-name', talos_branch,
+                      '--system-bits', mh_conf['system_bits'],
+                      '--cfg', mh_conf['config_file']]
+        if factory_kwargs['fetchSymbols']:
+            extra_args += ['--download-symbols', 'ondemand']
+        if factory_kwargs["talos_from_source_code"]:
+            extra_args.append('--use-talos-json')
+        scriptpath = "scripts/talos_script.py"
+    else:
+        extra_args.extend(['--talos-suite', suite, '--cfg', 'android/android_panda_talos_releng.py', '--branch-name', talos_branch])
+        scriptpath = "scripts/android_panda_talos.py"
+    # add branch config specification if blobber is enabled
+    if branch_config.get('blob_upload'):
+        extra_args.extend(['--blob-upload-branch', talos_branch])
+    args = {
+        'platform': platform,
+        'mozharness_repo': branch_config['mozharness_repo'],
+        'script_path': scriptpath,
+        'hg_bin': platform_config[
+            'mozharness_config']['hg_bin'],
+        'mozharness_python': platform_config[
+            'mozharness_config']['mozharness_python'],
+        'extra_args': extra_args,
+        'script_timeout': platform_config['mozharness_config'].get('script_timeout', 3600),
+        'script_maxtime': (platform_config['mozharness_config'].get('talos_script_maxtime', platform_config['mozharness_config'].get('script_maxtime', 7200))),
+        'reboot_command': platform_config[
+            'mozharness_config'].get('reboot_command'),
+    }
+    return args
+
+
+def _generateTalosObjects(branch, branch_config, PLATFORMS, SUITES):
+    buildObjects = {'schedulers': [], 'builders': []}
 
     buildBranch = branch_config['build_branch']
+
+    prettyNames = collections.defaultdict(list)
 
     for platform, platform_config in PLATFORMS.items():
         if 'platforms' in branch_config and \
@@ -2512,7 +2545,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                 platformPrettyName = platform_name
                 if not slave_platform_try_default:
                     platformPrettyName += ' try-nondefault'
-                prettyNames.setdefault(platform, []).append(platformPrettyName)
+                prettyNames[platform].append(platformPrettyName)
                 for suite, talosConfig in SUITES.items():
                     tests, merge, extra, platforms = branch_config[
                         '%s_tests' % suite]
@@ -2560,46 +2593,6 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                         'slavebuilddir': slavebuilddir,
                     }
 
-                    def _makeGenerateMozharnessTalosBuilderArgs(suite, talos_branch, platform,
-                                                               factory_kwargs, branch_config, platform_config):
-                        mh_conf = platform_config['mozharness_config']
-
-                        extra_args = []
-                        if 'android' not in platform:
-                            extra_args = ['--suite', suite,
-                                         '--add-option',
-                                         ','.join(['--webServer', 'localhost']),
-                                         '--branch-name', talos_branch,
-                                         '--system-bits', mh_conf['system_bits'],
-                                         '--cfg', mh_conf['config_file']]
-                            if factory_kwargs['fetchSymbols']:
-                                extra_args += ['--download-symbols', 'ondemand']
-                            if factory_kwargs["talos_from_source_code"]:
-                                extra_args.append('--use-talos-json')
-                            scriptpath = "scripts/talos_script.py"
-                        else:
-                            extra_args.extend (['--talos-suite', suite, '--cfg', 'android/android_panda_talos_releng.py', '--branch-name', talos_branch])
-                            scriptpath = "scripts/android_panda_talos.py"
-                        # add branch config specification if blobber is enabled
-                        if branch_config.get('blob_upload'):
-                            extra_args.extend(['--blob-upload-branch', talos_branch])
-                        args = {
-                            'platform': platform,
-                            'mozharness_repo': branch_config['mozharness_repo'],
-                            'script_path': scriptpath,
-                            'hg_bin': platform_config[
-                                'mozharness_config']['hg_bin'],
-                            'mozharness_python': platform_config[
-                                'mozharness_config']['mozharness_python'],
-                            'extra_args': extra_args,
-                            'script_timeout': platform_config['mozharness_config'].get('script_timeout', 3600),
-                            'script_maxtime': (platform_config['mozharness_config'].get('talos_script_maxtime', platform_config['mozharness_config'].get('script_maxtime', 7200))),
-                            'reboot_command': platform_config[
-                                'mozharness_config'].get('reboot_command'),
-                        }
-                        return args
-                        # end of _makeGenerateMozharnessTalosBuilderArgs
-
                     if branch_config.get('mozharness_talos', True) and platform_config[slave_platform].get('mozharness_talos', True):
                         args = _makeGenerateMozharnessTalosBuilderArgs(suite, opt_talos_branch, platform,
                                                                        factory_kwargs, branch_config, platform_config)
@@ -2607,7 +2600,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                         properties['script_repo_revision'] = branch_config['mozharness_tag']
                         properties['repo_path'] = branch_config['repo_path']
                     else:
-                        factory = factory_class(**factory_kwargs)
+                        factory = TalosFactory(**factory_kwargs)
 
                     builder = {
                         'name': "%s %s talos %s" % (platform_name, branch, suite),
@@ -2625,7 +2618,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
 
                     talos_builders.setdefault(
                         tests, []).append(builder['name'])
-                    branchObjects['builders'].append(builder)
+                    buildObjects['builders'].append(builder)
 
                     if create_pgo_builders:
                         properties = {
@@ -2645,7 +2638,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                             pgo_factory_kwargs = factory_kwargs.copy()
                             pgo_factory_kwargs['branchName'] = branchName
                             pgo_factory_kwargs['talosBranch'] = talosBranch
-                            pgo_factory = factory_class(**pgo_factory_kwargs)
+                            pgo_factory = TalosFactory(**pgo_factory_kwargs)
 
                         pgo_builder = {
                             'name': "%s %s pgo talos %s" % (platform_name, branch, suite),
@@ -2659,9 +2652,112 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
 
                         if not merge:
                             nomergeBuilders.add(pgo_builder['name'])
-                        branchObjects['builders'].append(pgo_builder)
+                        buildObjects['builders'].append(pgo_builder)
                         talos_pgo_builders.setdefault(
                             tests, []).append(pgo_builder['name'])
+
+            # Create one scheduler per # of tests to run
+            for tests, builder_names in talos_builders.items():
+                extra_args = {}
+                if tests == 1:
+                    scheduler_class = Scheduler
+                    name = 'tests-%s-%s-talos' % (branch, platform)
+                else:
+                    scheduler_class = MultiScheduler
+                    name = 'tests-%s-%s-talos-x%s' % (branch, platform, tests)
+                    extra_args['numberOfBuildsToTrigger'] = tests
+
+                if branch_config.get('enable_try'):
+                    scheduler_class = BuilderChooserScheduler
+                    extra_args['chooserFunc'] = tryChooser
+                    extra_args['prettyNames'] = prettyNames
+                    extra_args['talosSuites'] = SUITES.keys()
+                    extra_args['numberOfBuildsToTrigger'] = tests
+                    extra_args['buildbotBranch'] = branch
+
+                s = scheduler_class(
+                    name=name,
+                    branch='%s-%s-talos' % (branch, platform),
+                    treeStableTimer=None,
+                    builderNames=builder_names,
+                    **extra_args
+                )
+                buildObjects['schedulers'].append(s)
+            # PGO Schedulers
+            for tests, builder_names in talos_pgo_builders.items():
+                extra_args = {}
+                if tests == 1:
+                    scheduler_class = Scheduler
+                    name = 'tests-%s-%s-pgo-talos' % (branch, platform)
+                else:
+                    scheduler_class = MultiScheduler
+                    name = 'tests-%s-%s-pgo-talos-x%s' % (
+                        branch, platform, tests)
+                    extra_args['numberOfBuildsToTrigger'] = tests
+
+                if branch_config.get('enable_try'):
+                    scheduler_class = BuilderChooserScheduler
+                    extra_args['chooserFunc'] = tryChooser
+                    extra_args['prettyNames'] = prettyNames
+                    extra_args['talosSuites'] = SUITES.keys()
+                    extra_args['numberOfBuildsToTrigger'] = tests
+                    extra_args['buildbotBranch'] = branch
+
+                s = scheduler_class(
+                    name=name,
+                    branch='%s-%s-pgo-talos' % (branch, platform),
+                    treeStableTimer=None,
+                    builderNames=builder_names,
+                    **extra_args
+                )
+                buildObjects['schedulers'].append(s)
+
+    return buildObjects
+
+
+def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_PLATFORMS):
+    buildObjects = {'schedulers': [], 'builders': []}
+    prettyNames = collections.defaultdict(list)
+    for platform, platform_config in PLATFORMS.items():
+        if 'platforms' in branch_config and \
+           platform in branch_config['platforms'] and \
+           not branch_config['platforms'][platform].get('enable_talos', True):
+            continue
+
+        stage_platform = platform_config.get('stage_platform', platform)
+        stage_product = platform_config['stage_product']
+
+        # Decide whether this platform should have PGO builders created
+        if branch_config['pgo_strategy'] and platform in branch_config['pgo_platforms']:
+            create_pgo_builders = True
+        else:
+            create_pgo_builders = False
+
+        # if platform is in the branch config check for overriding slave_platforms at the branch level
+        # before creating the builders & schedulers
+        if branch_config['platforms'].get(platform):
+            slave_platforms = branch_config['platforms'][platform].get(
+                'slave_platforms', platform_config.get('slave_platforms', []))
+            talos_slave_platforms = branch_config['platforms'][platform].get(
+                'talos_slave_platforms', platform_config.get('talos_slave_platforms', []))
+
+            try_default = True
+            if not branch_config['platforms'][platform].get('try_by_default', True):
+                try_default = False
+            elif not platform_config.get('try_by_default', True):
+                try_default = False
+
+            for slave_platform in set(slave_platforms + talos_slave_platforms):
+                platform_name = platform_config[slave_platform]['name']
+                # this is to handle how a platform has more than one slave
+                # platform
+                slave_platform_try_default = try_default
+                if not platform_config[slave_platform].get('try_by_default', True):
+                    slave_platform_try_default = False
+                platformPrettyName = platform_name
+                if not slave_platform_try_default:
+                    platformPrettyName += ' try-nondefault'
+                prettyNames[platform].append(platformPrettyName)
 
                 # Skip talos only platforms, not active platforms, branches
                 # with disabled unittests
@@ -2777,7 +2873,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 if suites.get('totalChunks'):
                                     test_builder_chunks = suites['totalChunks']
 
-                            branchObjects['builders'].extend(
+                            buildObjects['builders'].extend(
                                 generateChunkedUnittestBuilders(
                                     test_builder_chunks,
                                     platform_name,
@@ -2806,7 +2902,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 extra_args['buildbotBranch'] = branch
                             else:
                                 scheduler_class = Scheduler
-                            branchObjects['schedulers'].append(scheduler_class(
+                            buildObjects['schedulers'].append(scheduler_class(
                                 name=scheduler_name,
                                 branch=scheduler_branch,
                                 builderNames=test_builders,
@@ -2830,7 +2926,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 extra_args['buildbotBranch'] = branch
                             else:
                                 scheduler_class = Scheduler
-                            branchObjects['schedulers'].append(scheduler_class(
+                            buildObjects['schedulers'].append(scheduler_class(
                                 name=scheduler_name,
                                 branch=scheduler_branch,
                                 builderNames=pgo_builders,
@@ -2838,72 +2934,33 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 **extra_args
                             ))
 
-            # Create one scheduler per # of tests to run
-            for tests, builder_names in talos_builders.items():
-                extra_args = {}
-                if tests == 1:
-                    scheduler_class = Scheduler
-                    name = 'tests-%s-%s-talos' % (branch, platform)
-                else:
-                    scheduler_class = MultiScheduler
-                    name = 'tests-%s-%s-talos-x%s' % (branch, platform, tests)
-                    extra_args['numberOfBuildsToTrigger'] = tests
+    return buildObjects
 
-                if branch_config.get('enable_try'):
-                    scheduler_class = BuilderChooserScheduler
-                    extra_args['chooserFunc'] = tryChooser
-                    extra_args['prettyNames'] = prettyNames
-                    extra_args['talosSuites'] = SUITES.keys()
-                    extra_args['numberOfBuildsToTrigger'] = tests
-                    extra_args['buildbotBranch'] = branch
 
-                s = scheduler_class(
-                    name=name,
-                    branch='%s-%s-talos' % (branch, platform),
-                    treeStableTimer=None,
-                    builderNames=builder_names,
-                    **extra_args
-                )
-                branchObjects['schedulers'].append(s)
-            # PGO Schedulers
-            for tests, builder_names in talos_pgo_builders.items():
-                extra_args = {}
-                if tests == 1:
-                    scheduler_class = Scheduler
-                    name = 'tests-%s-%s-pgo-talos' % (branch, platform)
-                else:
-                    scheduler_class = MultiScheduler
-                    name = 'tests-%s-%s-pgo-talos-x%s' % (
-                        branch, platform, tests)
-                    extra_args['numberOfBuildsToTrigger'] = tests
+def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
+                               ACTIVE_UNITTEST_PLATFORMS):
+    branchObjects = {'schedulers': [], 'builders': [], 'status': [],
+                     'change_source': []}
 
-                if branch_config.get('enable_try'):
-                    scheduler_class = BuilderChooserScheduler
-                    extra_args['chooserFunc'] = tryChooser
-                    extra_args['prettyNames'] = prettyNames
-                    extra_args['talosSuites'] = SUITES.keys()
-                    extra_args['numberOfBuildsToTrigger'] = tests
-                    extra_args['buildbotBranch'] = branch
+    # We only understand a couple PGO strategies
+    assert branch_config['pgo_strategy'] in ('per-checkin', 'periodic', 'try', None), \
+        "%s is not an understood PGO strategy" % branch_config['pgo_strategy']
 
-                s = scheduler_class(
-                    name=name,
-                    branch='%s-%s-pgo-talos' % (branch, platform),
-                    treeStableTimer=None,
-                    builderNames=builder_names,
-                    **extra_args
-                )
-                branchObjects['schedulers'].append(s)
+    talosObjects = _generateTalosObjects(branch, branch_config, PLATFORMS, SUITES)
+    branchObjects = mergeBuildObjects(branchObjects, talosObjects)
+
+    testObjects = _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_PLATFORMS)
+    branchObjects = mergeBuildObjects(branchObjects, testObjects)
 
     if branch_config.get('release_tests'):
-        releaseObjects = generateTalosReleaseBranchObjects(branch,
-                                                           branch_config, PLATFORMS, SUITES, ACTIVE_UNITTEST_PLATFORMS, factory_class)
-        for k, v in releaseObjects.items():
-            branchObjects[k].extend(v)
+        releaseObjects = generateTalosReleaseBranchObjects(
+            branch, branch_config, PLATFORMS, SUITES, ACTIVE_UNITTEST_PLATFORMS)
+        branchObjects = mergeBuildObjects(branchObjects, releaseObjects)
     return branchObjects
 
 
 def generateTalosReleaseBranchObjects(branch, branch_config, PLATFORMS, SUITES,
-                                      ACTIVE_UNITTEST_PLATFORMS, factory_class=TalosFactory):
+                                      ACTIVE_UNITTEST_PLATFORMS):
     branch_config = branch_config.copy()
     release_tests = branch_config['release_tests']
 
@@ -2926,7 +2983,7 @@ def generateTalosReleaseBranchObjects(branch, branch_config, PLATFORMS, SUITES,
     # Don't fetch symbols
     branch_config['fetch_symbols'] = branch_config['fetch_release_symbols']
     return generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
-                                      ACTIVE_UNITTEST_PLATFORMS, factory_class)
+                                      ACTIVE_UNITTEST_PLATFORMS)
 
 
 def mirrorAndBundleArgs(config):
