@@ -2723,9 +2723,6 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                 if slave_platform in slave_platforms and platform in ACTIVE_UNITTEST_PLATFORMS.keys() \
                         and branch_config.get('enable_unittests', True) and slave_platform in branch_config['platforms'][platform]:
                     testTypes = []
-                    # unittestSuites are gathered up for each platform from
-                    # config.py
-                    unittestSuites = []
                     if branch_config['platforms'][platform].get('enable_opt_unittests'):
                         testTypes.append('opt')
                     if branch_config['platforms'][platform].get('enable_debug_unittests'):
@@ -2852,6 +2849,9 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                             )
 
                         for scheduler_name, test_builders, merge in triggeredUnittestBuilders:
+                            if not test_builders:
+                                continue
+                            unittestSuites = []
                             for test in test_builders:
                                 unittestSuites.append(test.split(' ')[-1])
                             scheduler_branch = ('%s-%s-%s-unittest' %
@@ -2876,7 +2876,11 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                                 treeStableTimer=None,
                                 **extra_args
                             ))
+
                         for scheduler_name, test_builders, merge in pgoUnittestBuilders:
+                            if not test_builders:
+                                continue
+                            unittestSuites = []
                             for test in test_builders:
                                 unittestSuites.append(test.split(' ')[-1])
                             scheduler_branch = '%s-%s-pgo-unittest' % (
