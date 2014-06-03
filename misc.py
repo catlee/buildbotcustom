@@ -2757,10 +2757,8 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                         test_builders = []
                         pgo_builders = []
                         triggeredUnittestBuilders = []
-                        pgoUnittestBuilders = []
                         unittest_suites = "%s_unittest_suites" % test_type
-                        build_dir_prefix = platform_config[slave_platform].get(
-                                'build_dir_prefix', slave_platform)
+                        build_dir_prefix = platform_config[slave_platform].get('build_dir_prefix', slave_platform)
                         if test_type == "debug":
                             # Debug tests always need to download symbols for
                             # runtime assertions
@@ -2792,19 +2790,20 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                                 for s in suites['trychooser_suites']:
                                     builders_with_sets_mapping[s] = suites_name
 
-                        scheduler_slave_platform_identifier = platform_config[slave_platform].get(
-                                'scheduler_slave_platform_identifier', slave_platform)
+                        scheduler_slave_platform_identifier = platform_config[slave_platform].get('scheduler_slave_platform_identifier', slave_platform)
                         triggeredUnittestBuilders.append(
-                            (
-                                'tests-%s-%s-%s-unittest' % (
-                                    branch, scheduler_slave_platform_identifier, test_type),
-                                test_builders, merge_tests))
+                            ('tests-%s-%s-%s-unittest' % (branch, scheduler_slave_platform_identifier, test_type),
+                             '%s-%s-%s-unittest' % (branch, platform, test_type),
+                             test_builders,
+                             merge_tests)
+                        )
                         if create_pgo_builders and test_type == 'opt':
-                            pgoUnittestBuilders.append(
-                                (
-                                    'tests-%s-%s-pgo-unittest' % (
-                                        branch, scheduler_slave_platform_identifier),
-                                    pgo_builders, merge_tests))
+                            triggeredUnittestBuilders.append(
+                                ('tests-%s-%s-pgo-unittest' % (branch, scheduler_slave_platform_identifier),
+                                 '%s-%s-pgo-unittest' % (branch, platform),
+                                 pgo_builders,
+                                 merge_tests)
+                            )
 
                         for suites_name, suites in branch_config['platforms'][platform][slave_platform][unittest_suites]:
                             # create the builders
@@ -2871,14 +2870,12 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                                 )
                             )
 
-                        for scheduler_name, test_builders, merge in triggeredUnittestBuilders:
+                        for scheduler_name, scheduler_branch, test_builders, merge in triggeredUnittestBuilders:
                             if not test_builders:
                                 continue
                             unittestSuites = []
                             for test in test_builders:
                                 unittestSuites.append(test.split(' ')[-1])
-                            scheduler_branch = ('%s-%s-%s-unittest' %
-                                                (branch, platform, test_type))
                             if not merge:
                                 nomergeBuilders.update(test_builders)
                             extra_args = {}
@@ -2896,34 +2893,6 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                                 name=scheduler_name,
                                 branch=scheduler_branch,
                                 builderNames=test_builders,
-                                treeStableTimer=None,
-                                **extra_args
-                            ))
-
-                        for scheduler_name, test_builders, merge in pgoUnittestBuilders:
-                            if not test_builders:
-                                continue
-                            unittestSuites = []
-                            for test in test_builders:
-                                unittestSuites.append(test.split(' ')[-1])
-                            scheduler_branch = '%s-%s-pgo-unittest' % (
-                                branch, platform)
-                            if not merge:
-                                nomergeBuilders.update(pgo_builders)
-                            extra_args = {}
-                            if branch_config.get('enable_try'):
-                                scheduler_class = BuilderChooserScheduler
-                                extra_args['chooserFunc'] = tryChooser
-                                extra_args['numberOfBuildsToTrigger'] = 1
-                                extra_args['prettyNames'] = prettyNames
-                                extra_args['unittestSuites'] = unittestSuites
-                                extra_args['buildbotBranch'] = branch
-                            else:
-                                scheduler_class = Scheduler
-                            buildObjects['schedulers'].append(scheduler_class(
-                                name=scheduler_name,
-                                branch=scheduler_branch,
-                                builderNames=pgo_builders,
                                 treeStableTimer=None,
                                 **extra_args
                             ))
