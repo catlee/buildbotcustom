@@ -2472,7 +2472,7 @@ def _generateTalosObjects(branch, branch_config, PLATFORMS, SUITES):
 
     buildBranch = branch_config['build_branch']
 
-    prettyNames = collections.defaultdict(list)
+    prettyNames = {}
 
     for platform, platform_config in PLATFORMS.items():
         if 'platforms' in branch_config and \
@@ -2527,7 +2527,7 @@ def _generateTalosObjects(branch, branch_config, PLATFORMS, SUITES):
                 platformPrettyName = platform_name
                 if not slave_platform_try_default:
                     platformPrettyName += ' try-nondefault'
-                prettyNames[platform].append(platformPrettyName)
+                prettyNames.setdefault(platform, []).append(platformPrettyName)
                 for suite, talosConfig in SUITES.items():
                     tests, merge, extra, platforms = branch_config[
                         '%s_tests' % suite]
@@ -2699,7 +2699,7 @@ def _generateTalosObjects(branch, branch_config, PLATFORMS, SUITES):
 
 def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_PLATFORMS):
     buildObjects = {'schedulers': [], 'builders': []}
-    prettyNames = collections.defaultdict(list)
+    prettyNames = {}
     for platform, platform_config in PLATFORMS.items():
         if 'platforms' in branch_config and \
            platform in branch_config['platforms'] and \
@@ -2739,7 +2739,7 @@ def _generateUnittestObjects(branch, branch_config, PLATFORMS, ACTIVE_UNITTEST_P
                 platformPrettyName = platform_name
                 if not slave_platform_try_default:
                     platformPrettyName += ' try-nondefault'
-                prettyNames[platform].append(platformPrettyName)
+                prettyNames.setdefault(platform, []).append(platformPrettyName)
 
                 # Skip talos only platforms, not active platforms, branches
                 # with disabled unittests
