@@ -611,7 +611,7 @@ class EveryNthScheduler(Scheduler):
                 # Haven't hit the timeout yet, so let's wait more
                 log.msg("%s: skipping with %i/%i important changes since only %i/%is have elapsed" %
                         (self.name, nImportant, self.n, elapsed, self.idleTimeout))
-                return self.idleTimeout - elapsed
+                return now() + (self.idleTimeout - elapsed)
             log.msg("%s: triggering with %i/%i important changes since %is have elapsed" % (self.name, nImportant, self.n, elapsed))
         else:
             log.msg("%s: triggering since we have %i/%i important changes" % (self.name, nImportant, self.n))
