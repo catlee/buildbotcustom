@@ -575,3 +575,34 @@ def makePropertiesScheduler(base_class, propfuncs, *args, **kw):
     S.__name__ = base_class.__name__ + "-props"
 
     return S
+
+
+class EveryNthScheduler(Scheduler):
+    """
+    Triggers jobs every Nth change, or after idleTimeout seconds have elapsed
+    since the most recent change
+    """
+
+    compare_attrs = Scheduler.compare_attrs + ('n', 'idleTimeout')
+
+    def __init__(self, name, n, idleTimeout, **kwargs):
+        self.n = n
+        self.idleTimeout = idleTimeout
+
+        Scheduler.__init__(self, name=name, **kwargs)
+
+    def decide_and_remove_changes(self, t, important, unimportant):
+        """
+        Based on Scheduler.decide_and_remove_changes.
+
+        If we have n or more important changes, we should trigger jobs.
+
+        If more than idleTimeout has elapsed since the last change, we should trigger jobs.
+        """
+        if not important:
+            return None
+
+        most_recent = max([c.when for c in important])
+        now = util.now()
+        if self(important) >= self.n or now - most_recent > self.idleTimeout:
+            return Scheduler.decide_and_remove_changes(self, t, important, unimportant)

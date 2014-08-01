@@ -52,7 +52,7 @@ from buildbotcustom.process.factory import NightlyBuildFactory, \
     TryBuildFactory, ScriptFactory, SigningScriptFactory, rc_eval_func
 from buildbotcustom.process.factory import RemoteUnittestFactory
 from buildbotcustom.scheduler import MultiScheduler, BuilderChooserScheduler, \
-    PersistentScheduler, makePropertiesScheduler, SpecificNightly
+    PersistentScheduler, makePropertiesScheduler, SpecificNightly, EveryNthScheduler
 from buildbotcustom.l10n import TriggerableL10n
 from buildbotcustom.status.mail import MercurialEmailLookup, ChangeNotifier
 from buildbotcustom.status.generators import buildTryChangeMessage
@@ -2873,6 +2873,10 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 extra_args['unittestSuites'] = unittestSuites
                                 extra_args['buildersWithSetsMap'] = builders_with_sets_mapping
                                 extra_args['buildbotBranch'] = branch
+                            elif test_type == 'debug':
+                                scheduler_class = EveryNthScheduler
+                                extra_args['n'] = 2
+                                extra_args['idleTimeout'] = 30 * 60  # 30 minutes
                             else:
                                 scheduler_class = Scheduler
                             branchObjects['schedulers'].append(scheduler_class(
