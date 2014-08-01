@@ -602,7 +602,19 @@ class EveryNthScheduler(Scheduler):
         if not important:
             return None
 
-        most_recent = max([c.when for c in important])
-        now = util.now()
-        if self(important) >= self.n or now - most_recent > self.idleTimeout:
-            return Scheduler.decide_and_remove_changes(self, t, important, unimportant)
+        nImportant = len(important)
+        if nImportant < self.n:
+            log.msg("%s: skipping since only have %i/%i important changes" % (self.name, nImportant, self.n))
+
+            most_recent = max([c.when for c in important])
+            elapsed = int(now() - most_recent)
+
+            if elapsed < self.idleTimeout:
+                # Haven't hit the timeout yet, so let's wait more
+                log.msg("%s: skipping with %i/%i important changes since %is have elapsed" % (self.name, nImportant, self.n, elapsed))
+                return
+            log.msg("%s: triggering with %i/%i important changes since %is have elapsed" % (self.name, nImportant, self.n, elapsed))
+        else:
+            log.msg("%s: triggering since we have %i/%i important changes" % (self.name, nImportant, self.n))
+
+        return Scheduler.decide_and_remove_changes(self, t, important, unimportant)
