@@ -580,12 +580,12 @@ def makePropertiesScheduler(base_class, propfuncs, *args, **kw):
 class EveryNthScheduler(Scheduler):
     """
     Triggers jobs every Nth change, or after idleTimeout seconds have elapsed
-    since the most recent change
+    since the most recent change. Set idleTimeout to None to wait forever for n changes.
     """
 
     compare_attrs = Scheduler.compare_attrs + ('n', 'idleTimeout')
 
-    def __init__(self, name, n, idleTimeout, **kwargs):
+    def __init__(self, name, n, idleTimeout=None, **kwargs):
         self.n = n
         self.idleTimeout = idleTimeout
 
@@ -604,10 +604,15 @@ class EveryNthScheduler(Scheduler):
 
         nImportant = len(important)
         if nImportant < self.n:
+            if not self.idleTimeout:
+                log.msg("%s: skipping with %i/%i important changes since (no idle timeout)" %
+                        (self.name, nImportant, self.n))
+                return
+
             most_recent = max([c.when for c in important])
             elapsed = int(now() - most_recent)
 
-            if elapsed < self.idleTimeout:
+            if self.idleTimeout and elapsed < self.idleTimeout:
                 # Haven't hit the timeout yet, so let's wait more
                 log.msg("%s: skipping with %i/%i important changes since only %i/%is have elapsed" %
                         (self.name, nImportant, self.n, elapsed, self.idleTimeout))
