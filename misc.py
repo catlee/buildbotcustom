@@ -2873,12 +2873,20 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                                 extra_args['unittestSuites'] = unittestSuites
                                 extra_args['buildersWithSetsMap'] = builders_with_sets_mapping
                                 extra_args['buildbotBranch'] = branch
-                            elif test_type == 'debug':
-                                scheduler_class = EveryNthScheduler
-                                extra_args['n'] = 2
-                                extra_args['idleTimeout'] = 30 * 60  # 30 minutes
                             else:
                                 scheduler_class = Scheduler
+                                if test_type == 'debug':
+                                    skipcount = branch_config['platforms'][platform][slave_platform].get('debug_unittest_skipcount')
+                                    skiptimeout = branch_config['platforms'][platform][slave_platform].get('debug_unittest_skiptimeout')
+                                else:
+                                    skipcount = branch_config['platforms'][platform][slave_platform].get('opt_unittest_skipcount')
+                                    skiptimeout = branch_config['platforms'][platform][slave_platform].get('opt_unittest_skiptimeout')
+
+                                if skipcount:
+                                    scheduler_class = EveryNthScheduler
+                                    extra_args['n'] = skipcount
+                                    extra_args['idleTimeout'] = skiptimeout
+
                             branchObjects['schedulers'].append(scheduler_class(
                                 name=scheduler_name,
                                 branch=scheduler_branch,
