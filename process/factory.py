@@ -254,8 +254,9 @@ def get_signing_cmd(signingServers, python):
         '-n', '%(basedir)s/nonce',
         '-c', '%(toolsdir)s/release/signing/host.cert',
     ]
-    for ss, user, passwd in signingServers:
-        cmd.extend(['-H', ss])
+    for ss, user, passwd, formats in signingServers:
+        opt = "%s:%s" % (":".join(formats), ss)
+        cmd.extend(['-H', opt])
     return ' '.join(cmd)
 
 
@@ -4971,14 +4972,10 @@ class UnittestPackagedBuildFactory(MozillaTestFactory):
                     return ("mozmillVirtualenvSetup" in step.build.getProperties() and
                             len(step.build.getProperty("mozmillVirtualenvSetup")) > 0)
 
-                # We want to use system python on non-Windows
-                virtualenv_python = 'python' if self.platform.startswith(
-                    'win') else '/usr/bin/python'
-
                 self.addStep(ShellCommand(
                              name='setup virtualenv',
                              command=[
-                             virtualenv_python, 'resources/installmozmill.py',
+                             'python', 'resources/installmozmill.py',
                              MOZMILL_VIRTUALENV_DIR],
                              doStepIf=isVirtualenvSetup,
                              flunkOnFailure=True,
@@ -6313,6 +6310,6 @@ class SigningScriptFactory(ScriptFactory):
             self.env['MOZ_SIGN_CMD'] = WithProperties(get_signing_cmd(
                 self.signingServers, self.env.get('PYTHON26')))
             self.env['MOZ_SIGNING_SERVERS'] = ",".join(
-                s[0] for s in self.signingServers)
+                "%s:%s" % (":".join(s[3]), s[0]) for s in self.signingServers)
 
         ScriptFactory.runScript(self)
