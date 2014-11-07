@@ -765,6 +765,10 @@ def makeBundleBuilder(config, name):
                        'branch': name,
                        'platform': None,
                        'product': 'firefox',
+                       'job_tags': [
+                           'schedule:periodic',
+                           'type:hgbundle',
+                       ],
                        }
     }
     return bundle_builder
@@ -1005,6 +1009,11 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
         'branch': name,
         'platform': platform,
         'product': pf['stage_product'],
+        'job_tags': [
+            'product:%s' % pf['stage_product'],
+            'platform:%s' % pf['stage_platform'],
+            'type:build',
+        ],
     }
     dep_signing_servers = secrets.get(pf.get('dep_signing_servers'))
     nightly_signing_servers = secrets.get(pf.get('nightly_signing_servers'))
@@ -1023,6 +1032,8 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
                                 extra_args=base_extra_args,
                                 signingServers=dep_signing_servers,
                                 log_eval_func=return_codes_func)
+        props = deepcopy(mh_build_properties)
+        props['job_tags'].append('schedule:perpush')
         generic_builder = {
             'name': '%s build' % pf['base_name'],
             'builddir': base_builder_dir,
@@ -1031,7 +1042,7 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             'nextSlave': next_slave,
             'factory': factory,
             'category': name,
-            'properties': mh_build_properties.copy(),
+            'properties': props,
         }
         desktop_mh_builders.append(generic_builder)
         builds_created['done_generic_build'] = True
@@ -1043,6 +1054,9 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
                                             extra_args=non_unified_extra_args,
                                             signingServers=dep_signing_servers,
                                             log_eval_func=return_codes_func)
+        props = deepcopy(mh_build_properties)
+        props['job_tags'].append('schedule:periodic')
+        props['job_tags'].append('type:non-unified')
         nonunified_builder = {
             'name': '%s non-unified' % pf['base_name'],
             'builddir': '%s-nonunified' % base_builder_dir,
@@ -1052,7 +1066,7 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             'nextSlave': next_slave,
             'factory': non_unified_factory,
             'category': name,
-            'properties': mh_build_properties.copy(),
+            'properties': props,
         }
         desktop_mh_builders.append(nonunified_builder)
         builds_created['done_nonunified_build'] = True
@@ -1068,6 +1082,8 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
                                         copy_properties=['buildid', 'builduid'],
                                         use_credentials_file=True,
                                         log_eval_func=return_codes_func)
+        props = deepcopy(mh_build_properties)
+        props['job_tags'].append('schedule:nightly')
         nightly_builder = {
             'name': '%s nightly' % pf['base_name'],
             'builddir': '%s-nightly' % base_builder_dir,
@@ -1076,7 +1092,7 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             'nextSlave': next_slave,
             'factory': nightly_factory,
             'category': name,
-            'properties': mh_build_properties.copy(),
+            'properties': props,
         }
         desktop_mh_builders.append(nightly_builder)
         builds_created['done_nightly_build'] = True
@@ -1089,6 +1105,10 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             config, pf, mh_cfg=mh_cfg, extra_args=pgo_extra_args,
             signingServers=dep_signing_servers, log_eval_func=return_codes_func
         )
+        props = deepcopy(mh_build_properties)
+        props['job_tags'].append('schedule:periodic')
+        props['job_tags'].append('type:build')
+        props['job_tags'].append('type:pgo')
         pgo_builder = {
             'name': '%s pgo-build' % pf['base_name'],
             'builddir': '%s-pgo' % base_builder_dir,
@@ -1097,7 +1117,7 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             'factory': pgo_factory,
             'category': name,
             'nextSlave': next_slave,
-            'properties': mh_build_properties.copy(),
+            'properties': props,
         }
         desktop_mh_builders.append(pgo_builder)
         builds_created['done_pgo_build'] = True
@@ -1543,6 +1563,12 @@ def generateBranchObjects(config, name, secrets=None):
                     'upload_ssh_server': config.get('stage_server'),
                     'upload_ssh_user': config.get('stage_username'),
                     'upload_ssh_key': config.get('stage_ssh_key'),
+                    'job_tags': [
+                        'product:%s' % pf['stage_product'],
+                        'platform:%s' % platform,
+                        'schedule:perpush',
+                        'type:build',
+                    ],
                 }
             }
             if pf.get('enable_dep', True):
@@ -1790,7 +1816,14 @@ def generateBranchObjects(config, name, secrets=None):
                                    'platform': platform,
                                    'stage_platform': stage_platform,
                                    'product': pf['stage_product'],
-                                   'slavebuilddir': normalizeName('%s-%s' % (name, platform), pf['stage_product'])},
+                                   'slavebuilddir': normalizeName('%s-%s' % (name, platform), pf['stage_product']),
+                                   'job_tags': [
+                                       'product:%s' % pf['stage_product'],
+                                       'platform:%s' % pf['stage_platform'],
+                                       'schedule:perpush',
+                                       'type:build',
+                                   ],
+                                   },
                 }
                 branchObjects['builders'].append(mozilla2_dep_builder)
 
@@ -1822,7 +1855,15 @@ def generateBranchObjects(config, name, secrets=None):
                                    'platform': platform,
                                    'stage_platform': stage_platform + '-pgo',
                                    'product': pf['stage_product'],
-                                   'slavebuilddir': normalizeName('%s-%s-pgo' % (name, platform), pf['stage_product'])},
+                                   'slavebuilddir': normalizeName('%s-%s-pgo' % (name, platform), pf['stage_product']),
+                                   'job_tags': [
+                                       'product:%s' % pf['stage_product'],
+                                       'platform:%s' % pf['stage_platform'],
+                                       'type:build',
+                                       'type:pgo',
+                                       'schedule:periodic',  # TODO: not always!
+                                   ],
+                                   }
                 }
                 branchObjects['builders'].append(pgo_builder)
 
@@ -1856,7 +1897,15 @@ def generateBranchObjects(config, name, secrets=None):
                                    'platform': platform,
                                    'stage_platform': stage_platform + '-nonunified',
                                    'product': pf['stage_product'],
-                                   'slavebuilddir': normalizeName('%s-%s-nonunified' % (name, platform), pf['stage_product'])},
+                                   'slavebuilddir': normalizeName('%s-%s-nonunified' % (name, platform), pf['stage_product']),
+                                   'job_tags': [
+                                       'product:%s' % pf['stage_product'],
+                                       'platform:%s' % pf['stage_platform'],
+                                       'type:build',
+                                       'type:non-unified',
+                                       'schedule:periodic',  # TODO: not always!
+                                   ],
+                                   },
                 }
                 branchObjects['builders'].append(builder)
 
@@ -1949,6 +1998,13 @@ def generateBranchObjects(config, name, secrets=None):
                                        'platform': platform,
                                        'slavebuilddir': slavebuilddir,
                                        'script_repo_revision': config['mozharness_tag'],
+                                       'job_tags': [
+                                           'product:%s' % pf['stage_product'],
+                                           'platform:%s' % pf['stage_platform'],
+                                           'schedule:perpush',
+                                           'type:l10n',
+                                           'chunk:%i/%i' % (n, pf['l10n_chunks']),
+                                       ],
                                        },
                         'env': builder_env
                     })
@@ -2115,8 +2171,14 @@ def generateBranchObjects(config, name, secrets=None):
                                    'nightly_build': True,
                                    'slavebuilddir': normalizeName(
                                        '%s-%s-nightly' % (name, platform),
-                                       pf['stage_product']
-                                   )},
+                                       pf['stage_product']),
+                                   'job_tags': [
+                                       'product:%s' % pf['stage_product'],
+                                       'platform:%s' % pf['stage_platform'],
+                                       'schedule:nightly',
+                                       'type:build',
+                                   ],
+                                   },
                 }
                 branchObjects['builders'].append(mozilla2_nightly_builder)
 
@@ -2206,7 +2268,14 @@ def generateBranchObjects(config, name, secrets=None):
                                        'platform': platform,
                                        'product': pf['stage_product'],
                                        'stage_platform': stage_platform,
-                                       'slavebuilddir': slavebuilddir},
+                                       'slavebuilddir': slavebuilddir,
+                                       'job_tags': [
+                                           'product:%s' % pf['stage_product'],
+                                           'platform:%s' % stage_platform,
+                                           'schedule:nightly',
+                                           'type:l10n',
+                                       ],
+                                       },
                     }
                     branchObjects['builders'].append(
                         mozilla2_l10n_nightly_builder)
@@ -2274,7 +2343,15 @@ def generateBranchObjects(config, name, secrets=None):
                                    'product': pf['stage_product'],
                                    'platform': platform,
                                    'slavebuilddir': slavebuilddir,
-                                   'script_repo_revision': config['mozharness_tag'], },
+                                   'script_repo_revision': config['mozharness_tag'],
+                                   'job_tags': [
+                                       'product:%s' % pf['stage_product'],
+                                       'platform:%s' % pf['stage_platform'],
+                                       'schedule:perpush',
+                                       'type:l10n',
+                                       'chunk:%i/%i' % (n, l10n_chunks),
+                                   ],
+                                   },
                     'env': builder_env
                 })
 
@@ -2353,7 +2430,14 @@ def generateBranchObjects(config, name, secrets=None):
                                'platform': platform,
                                'stage_platform': stage_platform,
                                'product': pf['stage_product'],
-                               'slavebuilddir': slavebuilddir},
+                               'slavebuilddir': slavebuilddir,
+                               'job_tags': [
+                                   'product:%s' % pf['stage_product'],
+                                   'platform:%s' % stage_platform,
+                                   'schedule:perpush',
+                                   'type:l10n',
+                               ],
+                               }
             }
             branchObjects['builders'].append(mozilla2_l10n_dep_builder)
 
@@ -2392,7 +2476,15 @@ def generateBranchObjects(config, name, secrets=None):
                                'platform': platform,
                                'stage_platform': stage_platform,
                                'product': pf['stage_product'],
-                               'slavebuilddir': normalizeName('%s-%s-valgrind' % (name, platform), pf['stage_product'])},
+                               'slavebuilddir': normalizeName('%s-%s-valgrind' % (name, platform), pf['stage_product']),
+                               'job_tags': [
+                                   'product:%s' % pf['stage_product'],
+                                   'platform:%s' % pf['stage_platform'],
+                                   'schedule:perpush',
+                                   'type:valgrind',
+                                   'type:build',
+                               ],
+                               },
             }
             branchObjects['builders'].append(mozilla2_valgrind_builder)
 
@@ -2461,7 +2553,17 @@ def generateBranchObjects(config, name, secrets=None):
                 'factory': mozilla2_xulrunner_factory,
                 'category': name,
                 'nextSlave': _nextAWSSlave_wait_sort,
-                'properties': {'branch': name, 'platform': platform, 'slavebuilddir': normalizeName('%s-%s-xulrunner-nightly' % (name, platform)), 'product': 'xulrunner'},
+                'properties': {'branch': name,
+                               'platform': platform,
+                               'slavebuilddir': normalizeName('%s-%s-xulrunner-nightly' % (name, platform)),
+                               'product': 'xulrunner',
+                               'job_tags': [
+                                   'product:xulrunner',
+                                   'platform:%s' % pf['stage_platform'],
+                                   'schedule:nightly',
+                                   'type:build',
+                               ],
+                               },
             }
             branchObjects['builders'].append(mozilla2_xulrunner_builder)
 
@@ -3016,7 +3118,16 @@ def generatePeriodicFileUpdateBuilder(config, branch_name, platform, base_name, 
         'slavebuilddir': normalizeName('%s-%s-periodicupdate' % (branch_name, platform)),
         'factory': periodic_file_update_factory,
         'category': branch_name,
-        'properties': {'branch': branch_name, 'platform': platform, 'slavebuilddir': normalizeName('%s-%s-periodicupdate' % (branch_name, platform)), 'product': 'firefox'},
+        'properties': {'branch': branch_name,
+                       'platform': platform,
+                       'slavebuilddir': normalizeName('%s-%s-periodicupdate' % (branch_name, platform)),
+                       'product': 'firefox',
+                       'job_tags': [
+                           'product:firefox',
+                           'platform:%s' % platform,
+                           'schedule:periodic',
+                       ],
+                       },
     }
     return periodic_file_update_builder
 
@@ -3054,6 +3165,11 @@ def generateFuzzingObjects(config, SLAVES):
                        'branch': 'idle',
                        'platform': platform,
                        'product': 'fuzzing',
+                       'job_tags': [
+                           'product:fuzzing',
+                           'platform:%s' % platform,
+                           'schedule:idle',
+                       ],
                    },
                    }
         builders.append(builder)
@@ -3152,7 +3268,17 @@ def generateSpiderMonkeyObjects(project, config, SLAVES):
                        'factory': f,
                        'category': branch,
                        'env': env,
-                       'properties': {'branch': branch, 'platform': platform, 'product': 'spidermonkey'},
+                       'properties': {
+                           'branch': branch,
+                           'platform': platform,
+                           'product': 'spidermonkey',
+                           'job_tags': [
+                               'product:spidermonkey',
+                               'platform:%s' % platform,
+                               'schedule:perpush',
+                               'type:build',
+                           ],
+                       },
                        }
             builders.append(builder)
             if not bconfig.get('enable_merging', True):
