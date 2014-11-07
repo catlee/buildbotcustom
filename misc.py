@@ -1009,11 +1009,7 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
         'branch': name,
         'platform': platform,
         'product': pf['stage_product'],
-        'job_tags': [
-            'product:%s' % pf['stage_product'],
-            'platform:%s' % pf['stage_platform'],
-            'type:build',
-        ],
+        'job_tags': pf['job_tags'],
     }
     dep_signing_servers = secrets.get(pf.get('dep_signing_servers'))
     nightly_signing_servers = secrets.get(pf.get('nightly_signing_servers'))
@@ -1498,6 +1494,7 @@ def generateBranchObjects(config, name, secrets=None):
     for platform in enabled_platforms:
         # shorthand
         pf = config['platforms'][platform]
+        assert 'job_tags' in pf, '%s/%s missing job_tags' % (name, platform)
 
         # TODO still need to impl mozharness desktop: try, valgrind, xulrunnner,
         # etc builders
@@ -1541,6 +1538,9 @@ def generateBranchObjects(config, name, secrets=None):
             factory = makeMHFactory(config, pf,
                                     signingServers=secrets.get(pf.get('dep_signing_servers')),
                                     use_credentials_file=True)
+            job_tags = set(pf['job_tags'])
+            job_tags.add('schedule:perpush')
+
             builder = {
                 'name': '%s_dep' % pf['base_name'],
                 'slavenames': pf['slaves'],
@@ -1563,12 +1563,7 @@ def generateBranchObjects(config, name, secrets=None):
                     'upload_ssh_server': config.get('stage_server'),
                     'upload_ssh_user': config.get('stage_username'),
                     'upload_ssh_key': config.get('stage_ssh_key'),
-                    'job_tags': [
-                        'product:%s' % pf['stage_product'],
-                        'platform:%s' % platform,
-                        'schedule:perpush',
-                        'type:build',
-                    ],
+                    'job_tags': list(job_tags),
                 }
             }
             if pf.get('enable_dep', True):
@@ -1804,6 +1799,8 @@ def generateBranchObjects(config, name, secrets=None):
                 mozilla2_dep_factory = factory_class(**factory_kwargs)
                 # eg. TB Linux comm-central build
                 #    TB Linux comm-central leak test build
+                job_tags = set(pf['job_tags'])
+                job_tags.add('schedule:perpush')
                 mozilla2_dep_builder = {
                     'name': '%s build' % pf['base_name'],
                     'slavenames': pf['slaves'],
@@ -1817,12 +1814,7 @@ def generateBranchObjects(config, name, secrets=None):
                                    'stage_platform': stage_platform,
                                    'product': pf['stage_product'],
                                    'slavebuilddir': normalizeName('%s-%s' % (name, platform), pf['stage_product']),
-                                   'job_tags': [
-                                       'product:%s' % pf['stage_product'],
-                                       'platform:%s' % pf['stage_platform'],
-                                       'schedule:perpush',
-                                       'type:build',
-                                   ],
+                                   'job_tags': list(job_tags),
                                    },
                 }
                 branchObjects['builders'].append(mozilla2_dep_builder)
@@ -1843,6 +1835,9 @@ def generateBranchObjects(config, name, secrets=None):
                 pgo_kwargs['stagePlatform'] += '-pgo'
                 pgo_kwargs['unittestBranch'] = pgoUnittestBranch
                 pgo_factory = factory_class(**pgo_kwargs)
+                job_tags = set(pf['job_tags'])
+                job_tags.add('schedule:periodic')  # TODO: not always?
+                job_tags.add('type:pgo')
                 pgo_builder = {
                     'name': '%s pgo-build' % pf['base_name'],
                     'slavenames': pf['slaves'],
@@ -1856,13 +1851,7 @@ def generateBranchObjects(config, name, secrets=None):
                                    'stage_platform': stage_platform + '-pgo',
                                    'product': pf['stage_product'],
                                    'slavebuilddir': normalizeName('%s-%s-pgo' % (name, platform), pf['stage_product']),
-                                   'job_tags': [
-                                       'product:%s' % pf['stage_product'],
-                                       'platform:%s' % pf['stage_platform'],
-                                       'type:build',
-                                       'type:pgo',
-                                       'schedule:periodic',  # TODO: not always!
-                                   ],
+                                   'job_tags': list(job_tags),
                                    }
                 }
                 branchObjects['builders'].append(pgo_builder)
@@ -1885,6 +1874,9 @@ def generateBranchObjects(config, name, secrets=None):
                     kwargs['testPrettyNames'] = True
 
                 factory = factory_class(**kwargs)
+                job_tags = set(pf['job_tags'])
+                job_tags.add('schedule:periodic')  # TODO: not always?
+                job_tags.add('type:non-unified')
                 builder = {
                     'name': '%s non-unified' % pf['base_name'],
                     'slavenames': pf['slaves'],
@@ -1898,13 +1890,7 @@ def generateBranchObjects(config, name, secrets=None):
                                    'stage_platform': stage_platform + '-nonunified',
                                    'product': pf['stage_product'],
                                    'slavebuilddir': normalizeName('%s-%s-nonunified' % (name, platform), pf['stage_product']),
-                                   'job_tags': [
-                                       'product:%s' % pf['stage_product'],
-                                       'platform:%s' % pf['stage_platform'],
-                                       'type:build',
-                                       'type:non-unified',
-                                       'schedule:periodic',  # TODO: not always!
-                                   ],
+                                   'job_tags': list(job_tags),
                                    },
                 }
                 branchObjects['builders'].append(builder)
@@ -1983,6 +1969,10 @@ def generateBranchObjects(config, name, secrets=None):
                         extra_args=extra_args
                     )
                     slavebuilddir = normalizeName(builddir, pf['stage_product'])
+                    job_tags = set(pf['job_tags'])
+                    job_tags.add('schedule:perpush')
+                    job_tags.add('type:l10n')
+                    job_tags.add('chunk:%i/%i' % (n, pf['l10n_chunks']))
                     branchObjects['builders'].append({
                         'name': builderName,
                         'slavenames': pf.get('slaves'),
@@ -1998,13 +1988,7 @@ def generateBranchObjects(config, name, secrets=None):
                                        'platform': platform,
                                        'slavebuilddir': slavebuilddir,
                                        'script_repo_revision': config['mozharness_tag'],
-                                       'job_tags': [
-                                           'product:%s' % pf['stage_product'],
-                                           'platform:%s' % pf['stage_platform'],
-                                           'schedule:perpush',
-                                           'type:l10n',
-                                           'chunk:%i/%i' % (n, pf['l10n_chunks']),
-                                       ],
+                                       'job_tags': list(job_tags),
                                        },
                         'env': builder_env
                     })
@@ -2156,6 +2140,8 @@ def generateBranchObjects(config, name, secrets=None):
                 )
 
                 # eg. TB Linux comm-aurora nightly
+                job_tags = set(pf['job_tags'])
+                job_tags.add('schedule:nightly')
                 mozilla2_nightly_builder = {
                     'name': nightly_builder,
                     'slavenames': pf['slaves'],
@@ -2172,12 +2158,7 @@ def generateBranchObjects(config, name, secrets=None):
                                    'slavebuilddir': normalizeName(
                                        '%s-%s-nightly' % (name, platform),
                                        pf['stage_product']),
-                                   'job_tags': [
-                                       'product:%s' % pf['stage_product'],
-                                       'platform:%s' % pf['stage_platform'],
-                                       'schedule:nightly',
-                                       'type:build',
-                                   ],
+                                   'job_tags': list(job_tags),
                                    },
                 }
                 branchObjects['builders'].append(mozilla2_nightly_builder)
@@ -2255,6 +2236,9 @@ def generateBranchObjects(config, name, secrets=None):
                         **l10n_kwargs
                     )
                     # eg. Thunderbird comm-aurora linux l10n nightly
+                    job_tags = set(pf['job_tags'])
+                    job_tags.add('schedule:nightly')
+                    job_tags.add('type:l10n')
                     slavebuilddir = normalizeName('%s-%s-l10n-nightly' % (name, platform), pf['stage_product'], max_=50)
                     mozilla2_l10n_nightly_builder = {
                         'name': l10nNightlyBuilders[nightly_builder]['l10n_builder'],
@@ -2269,12 +2253,7 @@ def generateBranchObjects(config, name, secrets=None):
                                        'product': pf['stage_product'],
                                        'stage_platform': stage_platform,
                                        'slavebuilddir': slavebuilddir,
-                                       'job_tags': [
-                                           'product:%s' % pf['stage_product'],
-                                           'platform:%s' % stage_platform,
-                                           'schedule:nightly',
-                                           'type:l10n',
-                                       ],
+                                       'job_tags': list(job_tags),
                                        },
                     }
                     branchObjects['builders'].append(
@@ -2329,6 +2308,10 @@ def generateBranchObjects(config, name, secrets=None):
                     reboot_command=reboot_command,
                 )
                 slavebuilddir = normalizeName(builddir, pf['stage_product'])
+                job_tags = set(pf['job_tags'])
+                job_tags.add('schedule:perpush')
+                job_tags.add('type:l10n')
+                job_tags.add('chunk:%i/%i' % (n, l10n_chunks))
                 branchObjects['builders'].append({
                     'name': builderName,
                     'slavenames': pf.get('slaves'),
@@ -2344,13 +2327,7 @@ def generateBranchObjects(config, name, secrets=None):
                                    'platform': platform,
                                    'slavebuilddir': slavebuilddir,
                                    'script_repo_revision': config['mozharness_tag'],
-                                   'job_tags': [
-                                       'product:%s' % pf['stage_product'],
-                                       'platform:%s' % pf['stage_platform'],
-                                       'schedule:perpush',
-                                       'type:l10n',
-                                       'chunk:%i/%i' % (n, l10n_chunks),
-                                   ],
+                                   'job_tags': list(job_tags),
                                    },
                     'env': builder_env
                 })
@@ -2418,6 +2395,9 @@ def generateBranchObjects(config, name, secrets=None):
             )
             # eg. Thunderbird comm-central linux l10n dep
             slavebuilddir = normalizeName('%s-%s-l10n-dep' % (name, platform), pf['stage_product'], max_=50)
+            job_tags = set(pf['job_tags'])
+            job_tags.add('schedule:perpush')  # TODO: not always?
+            job_tags.add('type:l10n')
             mozilla2_l10n_dep_builder = {
                 'name': l10nBuilders[pf['base_name']]['l10n_builder'],
                 'slavenames': pf.get('l10n_slaves', pf['slaves']),
@@ -2431,12 +2411,7 @@ def generateBranchObjects(config, name, secrets=None):
                                'stage_platform': stage_platform,
                                'product': pf['stage_product'],
                                'slavebuilddir': slavebuilddir,
-                               'job_tags': [
-                                   'product:%s' % pf['stage_product'],
-                                   'platform:%s' % stage_platform,
-                                   'schedule:perpush',
-                                   'type:l10n',
-                               ],
+                               'job_tags': list(job_tags),
                                }
             }
             branchObjects['builders'].append(mozilla2_l10n_dep_builder)
@@ -2463,6 +2438,9 @@ def generateBranchObjects(config, name, secrets=None):
                 tooltool_script=pf.get('tooltool_script'),
                 tooltool_url_list=config.get('tooltool_url_list', []),
             )
+            job_tags = set(pf['job_tags'])
+            job_tags.add('schedule:perpush')
+            job_tags.add('type:valgrind')
             mozilla2_valgrind_builder = {
                 'name': '%s valgrind' % pf['base_name'],
                 'slavenames': pf['slaves'],
@@ -2477,13 +2455,7 @@ def generateBranchObjects(config, name, secrets=None):
                                'stage_platform': stage_platform,
                                'product': pf['stage_product'],
                                'slavebuilddir': normalizeName('%s-%s-valgrind' % (name, platform), pf['stage_product']),
-                               'job_tags': [
-                                   'product:%s' % pf['stage_product'],
-                                   'platform:%s' % pf['stage_platform'],
-                                   'schedule:perpush',
-                                   'type:valgrind',
-                                   'type:build',
-                               ],
+                               'job_tags': list(job_tags),
                                },
             }
             branchObjects['builders'].append(mozilla2_valgrind_builder)
@@ -2545,6 +2517,11 @@ def generateBranchObjects(config, name, secrets=None):
                 mock_copyin_files=pf.get('mock_copyin_files'),
                 enable_pymake=enable_pymake,
             )
+            job_tags = set(pf['job_tags'])
+            # Remove whatever product we had before and add product:xulrunner
+            job_tags = set(t for t in job_tags if not t.startswith('product:'))
+            job_tags.add('product:xulrunner')
+            job_tags.add('schedule:nightly')
             mozilla2_xulrunner_builder = {
                 'name': '%s xulrunner nightly' % pf['base_name'],
                 'slavenames': pf['slaves'],
