@@ -414,6 +414,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             mock_copyin_files=pf.get('mock_copyin_files'),
             env=tag_env,
         )
+        job_tags = set()
+        job_tags.add('product:%s' % releaseConfig['productName'])
+        job_tags.add('type:tag')
+        job_tags.add('type:release')
 
         builders.append({
             'name': builderPrefix('%s_tag' % releaseConfig['productName']),
@@ -434,6 +438,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
                 'event_group': 'tag',
+                'job_tags': list(job_tags),
             }
         })
     else:
@@ -486,6 +491,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             mock_copyin_files=pf.get('mock_copyin_files'),
         )
 
+        job_tags = set()
+        job_tags.add('product:%s' % releaseConfig['productName'])
+        job_tags.add('type:source')
+        job_tags.add('type:release')
         builders.append({
                         'name': builderPrefix('%s_source' % releaseConfig['productName']),
                         'slavenames': branchConfig['platforms']['linux']['slaves'] +
@@ -504,6 +513,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                     '%s_source' % releaseConfig['productName']), releaseConfig['productName']),
                             'platform': None,
                             'branch': 'release-%s' % sourceRepoInfo['name'],
+                            'job_tags': list(job_tags),
                         }
                         })
         deliverables_builders.append(
@@ -539,6 +549,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 mock_copyin_files=pf.get('mock_copyin_files'),
             )
 
+            job_tags = set()
+            job_tags.add('product:xulrunner')
+            job_tags.add('type:source')
+            job_tags.add('type:release')
+
             builders.append({
                             'name': builderPrefix('xulrunner_source'),
                             'slavenames': branchConfig['platforms']['linux']['slaves'] +
@@ -553,6 +568,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                 'platform': None,
                                 'branch': 'release-%s' % sourceRepoInfo['name'],
                                 'product': 'xulrunner',
+                                'job_tags': list(job_tags),
                             }
                             })
             xr_deliverables_builders.append(builderPrefix('xulrunner_source'))
@@ -700,6 +716,8 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 balrog_credentials_file=balrog_credentials_file,
             )
 
+            job_tags = set(pf['job_tags'])
+            job_tags.add('type:release')
             builders.append({
                 'name': builderPrefix('%s_build' % platform),
                 'slavenames': pf['slaves'],
@@ -714,6 +732,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
                     'event_group': 'build',
+                    'job_tags': list(job_tags),
                 },
             })
         else:
@@ -783,6 +802,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 # TODO: how to make this work with balrog, where we need 4 properties
                 # set (but webstatus only allows for 3).
                 # Can we avoid the need for script_repo_revision or release_tag?
+                job_tags = set()
+                job_tags.add('type:release')
+                job_tags.add('type:l10n')
+                job_tags.add('product:%s' % releaseConfig['productName'])
                 builders.append({
                     'name': builderPrefix("standalone_repack", platform),
                     'slavenames': pf.get('l10n_slaves', pf['slaves']),
@@ -800,11 +823,15 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         'platform': platform,
                         'branch': 'release-%s' % sourceRepoInfo['name'],
                         'release_config': releaseConfigFile,
+                        'job_tags': list(job_tags),
                     }
                 })
 
             for n, builderName in l10nBuilders(platform).iteritems():
                 builddir = builderPrefix('%s_repack' % platform) + '_' + str(n)
+                job_tags = set(pf['job_tags'])
+                job_tags.add('type:release')
+                job_tags.add('type:l10n')
                 properties = {
                     'builddir': builddir,
                     'slavebuilddir': normalizeName(builddir, releaseConfig['productName']),
@@ -814,6 +841,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'chunkTotal': int(l10nChunks),
                     'chunkNum': int(n),
                     'event_group': 'repack',
+                    'job_tags': list(job_tags),
                 }
                 if hasPlatformSubstring(platform, 'android'):
                     extra_args = releaseConfig['single_locale_options'][platform] + ['--cfg', branchConfig['mozharness_configs']['balrog'], '--total-chunks', str(l10nChunks), '--this-chunk', str(n)]
@@ -891,6 +919,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 properties={
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
+                    'job_tags': [],
                 },
             ))
             updates_upstream_builders.append(
@@ -977,6 +1006,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 mock_copyin_files=pf.get('mock_copyin_files'),
                 enable_pymake=enable_pymake,
             )
+            job_tags = set(pf['job_tags'])
+            job_tags = set(t for t in job_tags if not t.startswith('product:'))
+            job_tags.add('product:xulrunner')
+            job_tags.add('product:release')
             builders.append({
                 'name': builderPrefix('xulrunner_%s_build' % platform),
                 'slavenames': pf['slaves'],
@@ -990,6 +1023,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
                     'product': 'xulrunner',
+                    'job_tags': list(job_tags),
                 }
             })
         else:
@@ -1044,6 +1078,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 )
                 partner_repack_factory = PartnerRepackFactory(**repack_params)
 
+            job_tags = set()
+            job_tags.add('type:release')
+            job_tags.add('type:partner-repack')
             builders.append({
                 'name': builderPrefix('partner_repack', platform),
                 'slavenames': slaves,
@@ -1057,6 +1094,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'slavebuilddir': normalizeName(builderPrefix('partner_repack', platform), releaseConfig['productName']),
                     'platform': platform,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
+                    'job_tags': list(job_tags),
                 }
             })
             deliverables_builders.append(
@@ -1079,6 +1117,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 '--create-contrib-dirs',
             ],
         )
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:checksums')
+        job_tags.add('product:%s' % releaseConfig['productName'])
         builders.append({
             'name': builderPrefix('%s_checksums' % releaseConfig['productName']),
             'slavenames': branchConfig['platforms']['linux']['slaves'] +
@@ -1099,6 +1141,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'release_config': releaseConfigFile,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
                 'platform': None,
+                'job_tags': list(job_tags),
             }
         })
         post_deliverables_builders.append(
@@ -1116,6 +1159,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     '--ssh-key', branchConfig['stage_ssh_xulrunner_key'],
                 ],
             )
+            job_tags = set()
+            job_tags.add('type:release')
+            job_tags.add('type:checksums')
+            job_tags.add('product:xulrunner')
             builders.append({
                 'name': builderPrefix('xulrunner_checksums'),
                 'slavenames': branchConfig['platforms']['linux']['slaves'] +
@@ -1132,6 +1179,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     'release_config': releaseConfigFile,
                     'platform': None,
                     'branch': 'release-%s' % sourceRepoInfo['name'],
+                    'job_tags': list(job_tags),
                 }
             })
 
@@ -1198,6 +1246,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             balrog_credentials_file=balrog_credentials_file,
         )
 
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:updates')
+        job_tags.add('product:%s' % releaseConfig['productName'])
+
         builders.append({
             'name': builderPrefix('%s_updates' % releaseConfig['productName']),
             'slavenames': branchConfig['platforms']['linux']['slaves'],
@@ -1214,6 +1267,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'release_config': releaseConfigFile,
                 'script_repo_revision': releaseTag,
                 'event_group': 'update',
+                'job_tags': list(job_tags),
             }
         })
         post_signing_builders.append(builderPrefix('%s_updates' % releaseConfig['productName']))
@@ -1241,6 +1295,9 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             ],
         )
         update_shipping_factory = ScriptFactory(**update_shipping_factory_args)
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:update_shipping')
 
         builders.append({
             'name': builderPrefix('update_shipping'),
@@ -1257,6 +1314,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'script_repo_revision': releaseTag,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': list(job_tags),
             },
         })
         important_builders.append(builderPrefix('update_shipping'))
@@ -1271,6 +1329,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
                 'event_group': 'update',
+                'job_tags': [],
             },
         ))
         post_signing_builders.append(builderPrefix('%s_updates' % releaseConfig['productName']))
@@ -1298,6 +1357,13 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             env = builder_env.copy()
             env.update(branchConfig['platforms'][platform]['env'])
 
+            job_tags = set()
+            job_tags.add('type:release')
+            job_tags.add('type:update_verify')
+            job_tags.add('product:%s' % releaseConfig['productName'])
+            job_tags.add('chunk:%i/%i' % (n, updateVerifyChunks))
+
+
             builders.append({
                 'name': builderName,
                 'slavenames': branchConfig['platforms'][platform]['slaves'],
@@ -1316,6 +1382,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                'chunkTotal': int(updateVerifyChunks),
                                'chunkNum': int(n),
                                'event_group': 'update_verify',
+                               'job_tags': list(job_tags),
                                },
             })
             post_update_builders.append(builderName)
@@ -1335,6 +1402,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 c, s, permission_check_error),
         )
 
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:check_permissions')
+
         builders.append({
             'name': builderPrefix('check_permissions'),
             'slavenames': unix_slaves,
@@ -1348,6 +1419,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                            'release_config': releaseConfigFile,
                            'platform': None,
                            'branch': 'release-%s' % sourceRepoInfo['name'],
+                           'job_tags': list(job_tags),
                            },
         })
         post_deliverables_builders.append(builderPrefix('check_permissions'))
@@ -1363,6 +1435,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         ],
         )
 
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:antivirus')
+
         builders.append({
             'name': builderPrefix('antivirus'),
             'slavenames': unix_slaves,
@@ -1377,6 +1453,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                            'release_config': releaseConfigFile,
                            'platform': None,
                            'branch': 'release-%s' % sourceRepoInfo['name'],
+                           'job_tags': list(job_tags),
                            }
         })
         post_deliverables_builders.append(builderPrefix('antivirus'))
@@ -1393,6 +1470,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     ],
     )
 
+    job_tags = set()
+    job_tags.add('type:release')
+    job_tags.add('type:push_to_mirrors')
+
     builders.append({
         'name': builderPrefix('%s_push_to_mirrors' % releaseConfig['productName']),
         'slavenames': unix_slaves,
@@ -1408,6 +1489,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'script_repo_revision': releaseTag,
             'platform': None,
             'branch': 'release-%s' % sourceRepoInfo['name'],
+            'job_tags': list(job_tags),
         },
     })
 
@@ -1424,6 +1506,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         postrelease_factory_args["triggered_schedulers"] = [builderPrefix('xr_postrelease')]
     postrelease_factory = ScriptFactory(**postrelease_factory_args)
 
+    job_tags = set()
+    job_tags.add('type:release')
+    job_tags.add('product:%s' % releaseConfig['productName'])
+    job_tags.add('type:postrelease')
+
     builders.append({
         'name': builderPrefix('%s_postrelease' % releaseConfig['productName']),
         'slavenames': unix_slaves,
@@ -1439,6 +1526,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'script_repo_revision': releaseTag,
             'platform': None,
             'branch': 'release-%s' % sourceRepoInfo['name'],
+            'job_tags': list(job_tags),
         },
     })
 
@@ -1455,6 +1543,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             ],
             script_timeout=3 * 60 * 60,
         )
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('product:xulrunner')
+        job_tags.add('type:push_to_mirrors')
+
         builders.append({
             'name': builderPrefix('xulrunner_push_to_mirrors'),
             'slavenames': unix_slaves,
@@ -1470,6 +1563,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'script_repo_revision': releaseTag,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': list(job_tags),
             },
         })
 
@@ -1482,6 +1576,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                         '--ssh-key', branchConfig['stage_ssh_xulrunner_key'],
                         ],
         )
+
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('product:xulrunner')
+        job_tags.add('type:postrelease')
 
         builders.append({
             'name': builderPrefix('xr_postrelease'),
@@ -1498,6 +1597,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'script_repo_revision': releaseTag,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': list(job_tags),
             },
         })
 
@@ -1513,6 +1613,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'script_repo_revision': releaseTag,
             },
         ))
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:uptake_monitoring')
+        job_tags.add('product:%s' % releaseConfig['productName'])
         builders.append({
             'name': builderPrefix('%s_start_uptake_monitoring' % releaseConfig['productName']),
             'slavenames': all_slaves,
@@ -1528,6 +1632,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'script_repo_revision': releaseTag,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': list(job_tags),
             },
         })
 
@@ -1540,6 +1645,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             clobberBranch='release-%s' % sourceRepoInfo['name'],
             repoPath=sourceRepoInfo['path'],
         )
+
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:final_verification')
+        job_tags.add('product:%s' % releaseConfig['productName'])
 
         builders.append({
             'name': builderPrefix('final_verification'),
@@ -1554,6 +1664,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'slavebuilddir': normalizeName(builderPrefix('fnl_verf'), releaseConfig['productName']),
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': list(job_tags),
             },
         })
 
@@ -1566,6 +1677,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
                 'event_group': 'releasetest',
+                'job_tags': [],
             },
         ))
         important_builders.append(
@@ -1578,6 +1690,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             properties={
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': [],
             },
         ))
 
@@ -1589,6 +1702,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
                 'event_group': 'release',
+                'job_tags': [],
             },
         ))
         important_builders.append(builderPrefix('%s_ready_for_release' % releaseConfig['productName']))
@@ -1611,6 +1725,11 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             use_credentials_file=True,
         )
 
+        job_tags = set()
+        job_tags.add('type:release')
+        job_tags.add('type:bouncer_submitter')
+        job_tags.add('product:%s' % releaseConfig['productName'])
+
         builders.append({
             'name': builderPrefix('%s_bouncer_submitter' % releaseConfig['productName'] ),
             'slavenames': branchConfig['platforms']['linux']['slaves'] +
@@ -1626,6 +1745,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 'release_config': releaseConfigFile,
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': list(job_tags),
             }
         })
 
@@ -1875,6 +1995,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
             'properties': {
                 'platform': None,
                 'branch': 'release-%s' % sourceRepoInfo['name'],
+                'job_tags': [],
             },
         })
     else:
