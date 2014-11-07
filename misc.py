@@ -1970,7 +1970,8 @@ def generateBranchObjects(config, name, secrets=None):
                     )
                     slavebuilddir = normalizeName(builddir, pf['stage_product'])
                     job_tags = set(pf['job_tags'])
-                    job_tags.add('schedule:perpush')
+                    job_tags.remove('type:build')
+                    job_tags.add('schedule:nightly')
                     job_tags.add('type:l10n')
                     job_tags.add('chunk:%i/%i' % (n, pf['l10n_chunks']))
                     branchObjects['builders'].append({
@@ -2237,6 +2238,7 @@ def generateBranchObjects(config, name, secrets=None):
                     )
                     # eg. Thunderbird comm-aurora linux l10n nightly
                     job_tags = set(pf['job_tags'])
+                    job_tags.remove('type:build')
                     job_tags.add('schedule:nightly')
                     job_tags.add('type:l10n')
                     slavebuilddir = normalizeName('%s-%s-l10n-nightly' % (name, platform), pf['stage_product'], max_=50)
@@ -2309,6 +2311,7 @@ def generateBranchObjects(config, name, secrets=None):
                 )
                 slavebuilddir = normalizeName(builddir, pf['stage_product'])
                 job_tags = set(pf['job_tags'])
+                job_tags.remove('type:build')
                 job_tags.add('schedule:perpush')
                 job_tags.add('type:l10n')
                 job_tags.add('chunk:%i/%i' % (n, l10n_chunks))
@@ -2396,6 +2399,7 @@ def generateBranchObjects(config, name, secrets=None):
             # eg. Thunderbird comm-central linux l10n dep
             slavebuilddir = normalizeName('%s-%s-l10n-dep' % (name, platform), pf['stage_product'], max_=50)
             job_tags = set(pf['job_tags'])
+            job_tags.remove('type:build')
             job_tags.add('schedule:perpush')  # TODO: not always?
             job_tags.add('type:l10n')
             mozilla2_l10n_dep_builder = {
