@@ -9,8 +9,8 @@ from twisted.trial import unittest
 from buildbot.db import dbspec, connector
 from buildbot.db.schema.manager import DBSchemaManager
 
-import buildbotcustom.misc
-from buildbotcustom.misc import _nextIdleSlave, _nextAWSSlave, \
+import buildbotcustom.workerfuncs
+from buildbotcustom.workerfuncs import _nextIdleSlave, _nextAWSSlave, \
     _classifyAWSSlaves, _get_pending, J
 
 
@@ -85,7 +85,7 @@ class TestNextAWSSlave(unittest.TestCase):
         inhouse, ondemand, spot = _classifyAWSSlaves(self.slaves)
         # We need to mock out _get_pending so that we don't have to create a db
         # for these tests
-        with mock.patch.object(buildbotcustom.misc, "_get_pending") as \
+        with mock.patch.object(buildbotcustom.workerfuncs, "_get_pending") as \
                 _get_pending:
             request = mock.Mock()
             request.submittedAt = 0
@@ -115,10 +115,10 @@ class TestNextAWSSlave(unittest.TestCase):
         inhouse, ondemand, spot = _classifyAWSSlaves(self.slaves)
         # We need to mock out _get_pending so that we don't have to create a db
         # for these tests
-        with mock.patch.object(buildbotcustom.misc, "_get_pending") as \
+        with mock.patch.object(buildbotcustom.workerfuncs, "_get_pending") as \
                 _get_pending:
             # Also need to mock time
-            with mock.patch.object(buildbotcustom.misc, "now") as t:
+            with mock.patch.object(buildbotcustom.workerfuncs, "now") as t:
                 request = mock.Mock()
                 request.submittedAt = 0
                 _get_pending.return_value = [request]
@@ -143,7 +143,7 @@ class TestNextAWSSlave(unittest.TestCase):
         inhouse, ondemand, spot = _classifyAWSSlaves(self.slaves)
         # We need to mock out _get_pending so that we don't have to create a db
         # for these tests
-        with mock.patch.object(buildbotcustom.misc, "_get_pending") as \
+        with mock.patch.object(buildbotcustom.workerfuncs, "_get_pending") as \
                 _get_pending:
             _get_pending.return_value = []
 
@@ -166,7 +166,7 @@ class TestNextAWSSlave(unittest.TestCase):
 
 
 class TestGetPending(unittest.TestCase):
-    basedir = "test_misc_nextslaves"
+    basedir = "test_workerfuncs"
 
     def setUp(self):
         if os.path.exists(self.basedir):
