@@ -1,14 +1,13 @@
 from functools import wraps
 from twisted.python import log
 import random
-import inspect
-from buildbot.util import now
 
 import buildbotcustom.jacuzzi
 reload(buildbotcustom.jacuzzi)
 from buildbotcustom.jacuzzi import JacuzziAllocator
 
 J = JacuzziAllocator()
+
 
 def _getLastTimeOnBuilder(builder, slavename):
     # New builds are at the end of the buildCache, so
@@ -52,26 +51,6 @@ def safeNextSlave(func):
     return _nextSlave
 
 
-def _get_pending(builder):
-    """Returns the pending build requests for this builder"""
-    frame = inspect.currentframe()
-    # Walk up the stack until we find 't', a db transaction object. It allows
-    # us to make synchronous calls to the db from this thread.
-    # We need to commit this horrible crime because
-    # a) we're running in a thread
-    # b) so we can't use the db's existing sync query methods since they use a
-    # db connection created in another thread
-    # c) nor can we use deferreds (threads and deferreds don't play well
-    # together)
-    # d) there's no other way to get a db connection
-    while 't' not in frame.f_locals:
-        frame = frame.f_back
-    t = frame.f_locals['t']
-    del frame
-
-    return builder._getBuildable(t, None)
-
-
 def is_spot(name):
     return "-spot-" in name
 
@@ -99,19 +78,14 @@ def _classifyAWSSlaves(slaves):
     return inhouse, ondemand, spot
 
 
-def _nextAWSSlave(aws_wait=None, recentSort=False):
+def _nextAWSSlave(recentSort=False):
     """
     Returns a nextSlave function that pick the next available slave, with some
     special consideration for AWS instances:
-        - If the request is very new, wait for an inhouse instance to pick it
-          up. Set aws_wait to the number of seconds to wait before using an AWS
-          instance. Set to None to disable this behaviour.
-
-        - Otherwise give the job to a spot instance
+        - Prefer spot instances over ondemand instances
 
     If recentSort is True then pick slaves that most recently did this type of
     build. Otherwise pick randomly.
-
     """
     log.msg("nextAWSSlave: start")
 
@@ -131,8 +105,7 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
         # - inhouse slaves
         # - ondemand slaves
         # - spot slaves
-        # We always prefer to run on inhouse. We'll wait up to aws_wait
-        # seconds for one to show up!
+        # We always prefer to run on inhouse.
 
         # Easy! If there are no available slaves, don't return any!
         if not available_slaves:
@@ -144,24 +117,8 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
         if inhouse:
             log.msg("nextAWSSlave: Choosing inhouse because it's the best!")
             return sorter(inhouse, builder)
-
-        # We need to look at our build requests if we need to know # of
-        # retries, or if we're going to be waiting for an inhouse slave to come
-        # online.
-        if aws_wait or spot:
-            requests = _get_pending(builder)
-            if requests:
-                oldestRequestTime = sorted(requests, key=lambda r:
-                                           r.submittedAt)[0].submittedAt
-            else:
-                oldestRequestTime = 0
-
-        if aws_wait and now() - oldestRequestTime < aws_wait:
-            log.msg("nextAWSSlave: Waiting for inhouse slaves to show up")
-            return None
-
-        if spot:
-            log.msg("nextAWSSlave: Choosing spot since there aren't any retries")
+        elif spot:
+            log.msg("nextAWSSlave: Choosing spot")
             return sorter(spot, builder)
         elif ondemand:
             log.msg("nextAWSSlave: Choosing ondemand since there aren't any spot available")
@@ -171,7 +128,7 @@ def _nextAWSSlave(aws_wait=None, recentSort=False):
             return None
     return _nextSlave
 
-_nextAWSSlave_sort = safeNextSlave(J(_nextAWSSlave(aws_wait=0, recentSort=True)))
+_nextAWSSlave_sort = safeNextSlave(J(_nextAWSSlave(recentSort=True)))
 _nextAWSSlave_nowait = safeNextSlave(_nextAWSSlave())
 
 
@@ -194,4 +151,3 @@ def _nextIdleSlave(nReserved):
             return None
         return sorted(available_slaves, _recentSort(builder))[-1]
     return _nextslave
-
