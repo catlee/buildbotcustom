@@ -1,4 +1,5 @@
 import urllib2
+
 import time
 import inspect
 try:
@@ -35,7 +36,8 @@ class JacuzziAllocator(object):
         HTTP_TIMEOUT (int): How long to wait for a response from the service,
             in seconds, defaults to 10
         ESCAPE_TIMEOUT (int): How long to wait for an allocated slave to take a
-            job before allowing other slaves to take it. Defaults to 1800 (30 minutes)
+            job before allowing other slaves to take it. Defaults to 1800 (30
+            minutes)
     """
     BASE_URL = "http://jacuzzi-allocator.pub.build.mozilla.org/v1"
     CACHE_MAXAGE = 300  # 5 minutes
@@ -43,7 +45,7 @@ class JacuzziAllocator(object):
     MAX_TRIES = 3  # Try up to 3 times
     SLEEP_TIME = 10  # Wait 10s between tries
     HTTP_TIMEOUT = 10  # Timeout http fetches in 10s
-    ESCAPE_TIMEOUT = 10  # How long to wait for an allocated slave to take the job
+    ESCAPE_TIMEOUT = 1800  # How long to wait for an allocated slave
 
     def __init__(self):
         # Cache of builder name -> (timestamp, set of slavenames)
@@ -168,28 +170,45 @@ class JacuzziAllocator(object):
                 return frame.f_locals['requests']
             frame = frame.f_back
 
-    def waiting_too_long(self, builder):
+    def waiting_too_long(self, oldest_request=None):
         # MOAR STACK WALKING!
         # We need to walk up the stack to find the list of requests we're
         # processing, so we can find the oldest one.
         # We can't call builder.getBuildable(), because we're running in a
         # thread, and getBuildable() uses the dedicated DB connection from the
         # main thread
-        requests = self._get_requests_from_stack()
-        if requests:
-            oldest = min(req.submittedAt for req in requests)
-            self.log('oldest request submitted at %s' % oldest)
-            if oldest + self.ESCAPE_TIMEOUT < time.time():
-                return True
+        if not oldest_request:
+            requests = self._get_requests_from_stack()
+            if not requests:
+                # Couldn't find requests on the stack
+                self.log("couldn't find requests on the stack")
+                return False
+
+            oldest_request = min(req.submittedAt for req in requests)
+            self.log('oldest request submitted at %s' % oldest_request)
+
+        if oldest_request + self.ESCAPE_TIMEOUT < time.time():
+            return True
         return False
 
-    def get_slaves(self, builder, available_slaves):
+    def get_slaves(self, builder, available_slaves, oldest_request=None):
         """Returns which slaves are suitable for building this builder
 
         Args:
             builder (buildbot Builder object): builder to get slaves for
             available_slaves (list of buildbot Slave objects): slaves that are
                 currently available on this master
+            oldest_request (int): timestamp of the oldest request for this
+                builder. defaults to None, in case get_slaves will try and
+                determine the oldest request on its own.
+
+                Generally get_slaves() is called as the nextSlave function by
+                buildbot.process.builder.Builder._claim_buildreqs, and doesn't
+                provide us with the time of the oldest request. We have to walk
+                up the stack to find it in that case.
+
+                Other callers should provide the time of the oldest request for
+                this builder.
 
         Returns:
             None if no slaves are suitable for building this builder, otherwise
@@ -209,7 +228,7 @@ class JacuzziAllocator(object):
 
         buildername = builder.name
 
-        if self.waiting_too_long(builder):
+        if self.waiting_too_long(oldest_request):
             self.log("waiting too long for %s; using any free slave" % buildername)
             return available_slaves
 
