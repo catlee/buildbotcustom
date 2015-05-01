@@ -1,5 +1,6 @@
 import urllib2
 import time
+import inspect
 try:
     import json
     assert json  # pyflakes
@@ -9,6 +10,7 @@ except:
 from functools import wraps
 
 from twisted.python import log
+
 
 class JacuzziAllocator(object):
     """Class for contacting slave allocator service
@@ -32,6 +34,8 @@ class JacuzziAllocator(object):
             to 10
         HTTP_TIMEOUT (int): How long to wait for a response from the service,
             in seconds, defaults to 10
+        ESCAPE_TIMEOUT (int): How long to wait for an allocated slave to take a
+            job before allowing other slaves to take it. Defaults to 1800 (30 minutes)
     """
     BASE_URL = "http://jacuzzi-allocator.pub.build.mozilla.org/v1"
     CACHE_MAXAGE = 300  # 5 minutes
@@ -39,6 +43,7 @@ class JacuzziAllocator(object):
     MAX_TRIES = 3  # Try up to 3 times
     SLEEP_TIME = 10  # Wait 10s between tries
     HTTP_TIMEOUT = 10  # Timeout http fetches in 10s
+    ESCAPE_TIMEOUT = 10  # How long to wait for an allocated slave to take the job
 
     def __init__(self):
         # Cache of builder name -> (timestamp, set of slavenames)
@@ -99,20 +104,9 @@ class JacuzziAllocator(object):
         self.allocated_cache = (time.time() + self.CACHE_MAXAGE, slaves)
         return [s for s in available_slaves if s.slave.slavename not in slaves]
 
-    def get_slaves(self, buildername, available_slaves):
-        """Returns which slaves are suitable for building this builder
-
-        Args:
-            buildername (str): which builder to get slaves for
-            available_slaves (list of buildbot Slave objects): slaves that are
-                currently available on this master
-
-        Returns:
-            None if no slaves are suitable for building this builder, otherwise
-            returns a list of slaves to use
-        """
-        if not self.jacuzzi_enabled:
-            return available_slaves
+    def get_allocated_slaves(self, buildername):
+        """Returns the set of allocated slavenames for the builder, or None if
+        there are no allocated slaves for the builder."""
 
         # Check the cache for this builder
         self.log("checking cache for builder %s" % str(buildername))
@@ -122,12 +116,10 @@ class JacuzziAllocator(object):
             # If the cache is still fresh, use the builder's allocated slaves
             # to filter our list of available slaves
             if cache_expiry_time > time.time():
-                self.log("cache hit")
+                self.log("cache hit for %s" % buildername)
                 # TODO: This could get spammy
                 self.log("fresh cache: %s" % slaves)
-                if slaves:
-                    return [s for s in available_slaves if s.slave.slavename in slaves]
-                return None
+                return slaves
             else:
                 self.log("expired cache")
         else:
@@ -136,11 +128,6 @@ class JacuzziAllocator(object):
         url = "%s/builders/%s" % (self.BASE_URL, urllib2.quote(buildername, ""))
         for i in range(self.MAX_TRIES):
             try:
-                if self.missing_cache.get(buildername, 0) > time.time():
-                    self.log("skipping %s since we 404'ed last time" % url)
-                    # Use unallocted slaves instead
-                    return self.get_unallocated_slaves(available_slaves)
-
                 self.log("fetching %s" % url)
                 data = json.load(urllib2.urlopen(url, timeout=self.HTTP_TIMEOUT))
                 slaves = set(data['machines'])  # use sets for moar speed!
@@ -149,24 +136,14 @@ class JacuzziAllocator(object):
                 self.cache[buildername] = (time.time() + self.CACHE_MAXAGE, slaves)
                 # Filter the list of available slaves by the set the service
                 # returned to us
-                return [s for s in available_slaves if s.slave.slavename in slaves]
+                return slaves
             except urllib2.HTTPError, e:
                 # We couldn't find an allocation for this builder
                 # Fetch the list of all allocated slaves, and filter them out
                 # of our list of available slaves
                 if e.code == 404:
-                    try:
-                        slaves = self.get_unallocated_slaves(available_slaves)
-                        self.log("slaves: %s" % [s.slave.slavename for s in slaves])
-                        # We hit a 404 error, so we should remember
-                        # this for next time. We'll avoid doing the
-                        # per-builder lookup for CACHE_MAXAGE seconds, and
-                        # fall back to looking at all the allocated slaves
-                        self.log("remembering 404 result for %s seconds" % self.CACHE_MAXAGE)
-                        self.missing_cache[buildername] = time.time() + self.CACHE_MAXAGE
-                        return slaves
-                    except Exception:
-                        self.log("unhandled exception getting unallocated slaves", exc_info=True)
+                    self.cache[buildername] = (time.time() + self.CACHE_MAXAGE, None)
+                    return None
                 else:
                     self.log("unhandled http error %s" % e.code, exc_info=True)
             except Exception:
@@ -183,6 +160,68 @@ class JacuzziAllocator(object):
         self.cache[buildername] = (time.time() + self.CACHE_FAIL_MAXAGE, None)
         return None
 
+    def _get_requests_from_stack(self):
+        frame = inspect.currentframe().f_back
+        while frame:
+            if (inspect.getframeinfo(frame).function == '_claim_buildreqs'
+                    and 'requests' in frame.f_locals):
+                return frame.f_locals['requests']
+            frame = frame.f_back
+
+    def waiting_too_long(self, builder):
+        # MOAR STACK WALKING!
+        # We need to walk up the stack to find the list of requests we're
+        # processing, so we can find the oldest one.
+        # We can't call builder.getBuildable(), because we're running in a
+        # thread, and getBuildable() uses the dedicated DB connection from the
+        # main thread
+        requests = self._get_requests_from_stack()
+        if requests:
+            oldest = min(req.submittedAt for req in requests)
+            self.log('oldest request submitted at %s' % oldest)
+            if oldest + self.ESCAPE_TIMEOUT < time.time():
+                return True
+        return False
+
+    def get_slaves(self, builder, available_slaves):
+        """Returns which slaves are suitable for building this builder
+
+        Args:
+            builder (buildbot Builder object): builder to get slaves for
+            available_slaves (list of buildbot Slave objects): slaves that are
+                currently available on this master
+
+        Returns:
+            None if no slaves are suitable for building this builder, otherwise
+            returns a list of slaves to use
+        """
+
+        if not self.jacuzzi_enabled:
+            return available_slaves
+
+        # Basic flow we want to do here:
+        # if waiting_too_long:
+        #   use any slave
+        # if allocated slaves:
+        #   use an allocated jacuzzi slave
+        # else:
+        #   use an unallocated jacuzzi slave
+
+        buildername = builder.name
+
+        if self.waiting_too_long(builder):
+            self.log("waiting too long for %s; using any free slave" % buildername)
+            return available_slaves
+
+        # Get a list of available slaves allocated for this builder
+        # NB we get an empty list if there is an allocation, but no slaves
+        # available; we get None if there is no allocation
+        allocated_slaves = self.get_allocated_slaves(buildername)
+        if allocated_slaves is not None:
+            return [s for s in available_slaves if s.slave.name in allocated_slaves]
+        else:
+            return self.get_unallocated_slaves(available_slaves)
+
     def __call__(self, func):
         """
         Decorator for nextSlave functions that will contact the allocator
@@ -190,10 +229,9 @@ class JacuzziAllocator(object):
         """
         @wraps(func)
         def _nextSlave(builder, available_slaves):
-            my_available_slaves = self.get_slaves(builder.name, available_slaves)
+            my_available_slaves = self.get_slaves(builder, available_slaves)
             # Something went wrong; fallback to using any available machine
             if my_available_slaves is None:
                 return func(builder, available_slaves)
             return func(builder, my_available_slaves)
         return _nextSlave
-
