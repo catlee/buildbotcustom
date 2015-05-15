@@ -99,11 +99,9 @@ def normalizeName(name, product=None, min_=30, max_=30, filler='0'):
         'armv7a': 'a7',
         'system': 'sys',
         'panda': 'p',
-        'b2g30': 'b30',
         'b2g32': 'b32',
         'b2g34': 'b34',
         'b2g37': 'b37',
-        'v1_4': '14',
         'v2_0': '20',
         'v2_1': '21',
         'v2_1s': '21s',
@@ -176,4 +174,9 @@ def getPreviousVersion(version, partialVersions):
     if version.endswith('esr'):
         return str(max(LooseVersion(v) for v in partialVersions if v != version))
     else:
-        return str(max(StrictVersion(v) for v in partialVersions if v != version))
+        # StrictVersion truncates trailing zero in versions with more than 1
+        # dot. Compose a structure that will be sorted by StrictVersion and
+        # return untouched version
+        composed = sorted([(v, StrictVersion(v)) for v in partialVersions if v
+                           != version], key=lambda x: x[1], reverse=True)
+        return composed[0][0]
