@@ -2733,50 +2733,39 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                         **extra_args
                     ))
 
-        # Create one scheduler per # of tests to run
-        for tests, builder_names in talos_builders.items():
-            extra_args = {}
-            assert tests == 1
-            scheduler_class = Scheduler
-            name = 'tests-%s-%s-talos' % (branch, platform)
+        def makeTalosScheduler(builders, pgo=False):
+            schedulers = []
+            for tests, builder_names in builders.iteritems():
+                extra_args = {}
+                assert tests == 1
+                scheduler_class = Scheduler
+                if pgo:
+                    name = 'tests-%s-%s-pgo-talos' % (branch, platform)
+                    scheduler_branch = '%s-%s-pgo-talos' % (branch, platform)
+                else:
+                    name = 'tests-%s-%s-talos' % (branch, platform)
+                    scheduler_branch = '%s-%s-talos' % (branch, platform)
 
-            if branch_config.get('enable_try'):
-                scheduler_class = BuilderChooserScheduler
-                extra_args['chooserFunc'] = tryChooser
-                extra_args['prettyNames'] = prettyNames
-                extra_args['talosSuites'] = SUITES.keys()
-                extra_args['buildbotBranch'] = branch
+                if branch_config.get('enable_try'):
+                    scheduler_class = BuilderChooserScheduler
+                    extra_args['chooserFunc'] = tryChooser
+                    extra_args['prettyNames'] = prettyNames
+                    extra_args['talosSuites'] = SUITES.keys()
+                    extra_args['buildbotBranch'] = branch
 
-            s = scheduler_class(
-                name=name,
-                branch='%s-%s-talos' % (branch, platform),
-                treeStableTimer=None,
-                builderNames=builder_names,
-                **extra_args
-            )
-            branchObjects['schedulers'].append(s)
-        # PGO Schedulers
-        for tests, builder_names in talos_pgo_builders.items():
-            extra_args = {}
-            assert tests == 1
-            scheduler_class = Scheduler
-            name = 'tests-%s-%s-pgo-talos' % (branch, platform)
+                s = scheduler_class(
+                    name=name,
+                    branch=scheduler_branch,
+                    treeStableTimer=None,
+                    builderNames=builder_names,
+                    **extra_args
+                )
+                schedulers.append(s)
+            return schedulers
 
-            if branch_config.get('enable_try'):
-                scheduler_class = BuilderChooserScheduler
-                extra_args['chooserFunc'] = tryChooser
-                extra_args['prettyNames'] = prettyNames
-                extra_args['talosSuites'] = SUITES.keys()
-                extra_args['buildbotBranch'] = branch
-
-            s = scheduler_class(
-                name=name,
-                branch='%s-%s-pgo-talos' % (branch, platform),
-                treeStableTimer=None,
-                builderNames=builder_names,
-                **extra_args
-            )
-            branchObjects['schedulers'].append(s)
+        # Create talos schedulers
+        branchObjects['schedulers'].extend(makeTalosScheduler(talos_builders, False))
+        branchObjects['schedulers'].extend(makeTalosScheduler(talos_pgo_builders, True))
 
     return branchObjects
 
