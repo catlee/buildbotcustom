@@ -200,15 +200,9 @@ def parse_make_upload(rc, stdout, stderr):
     file urls.'''
     retval = {}
     for m in re.findall(
-        "^(https?://.*?\.(?:tar\.bz2|dmg|zip|apk|rpm|mar|tar\.gz))$",
+        "^(https?://.*?\.(?:tar\.bz2|dmg|zip|apk|mar|tar\.gz))$",
             "\n".join([stdout, stderr]).replace('\r\n', '\n'), re.M):
-        if 'devel' in m and m.endswith('.rpm'):
-            retval['develRpmUrl'] = m
-        elif 'tests' in m and m.endswith('.rpm'):
-            retval['testsRpmUrl'] = m
-        elif m.endswith('.rpm'):
-            retval['packageRpmUrl'] = m
-        elif m.endswith("crashreporter-symbols.zip"):
+        if m.endswith("crashreporter-symbols.zip"):
             retval['symbolsUrl'] = m
         elif m.endswith("crashreporter-symbols-full.zip"):
             retval['symbolsUrl'] = m
@@ -942,8 +936,6 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
         # Examples of what happens:
         #   platform = 'linux' sets self.platform_variation to []
         #   platform = 'linux-opt' sets self.platform_variation to ['opt']
-        # platform = 'linux-opt-rpm' sets self.platform_variation to
-        # ['opt','rpm']
         platform_chunks = self.complete_platform.split('-', 1)
         if len(platform_chunks) > 1:
             self.platform_variation = platform_chunks[1].split('-')
@@ -1577,8 +1569,6 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
         workdir = WithProperties('%(basedir)s/build')
         if self.platform.startswith('win'):
             workdir = "build/"
-        if 'rpm' in self.platform_variation:
-            pkgArgs.append("MOZ_PKG_FORMAT=RPM")
         if self.packageSDK:
             self.addStep(MockCommand(
                          name='make_sdk',
@@ -1621,7 +1611,7 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
         # Get package details
         self.packageFilename = self.getPackageFilename(self.platform,
                                                        self.platform_variation)
-        if self.packageFilename and 'rpm' not in self.platform_variation and self.productName not in ('b2g',):
+        if self.packageFilename and self.productName not in ('b2g',):
             self.addFilePropertiesSteps(filename=self.packageFilename,
                                         directory='build/%s/dist' % self.mozillaObjdir,
                                         fileType='package',
@@ -2234,12 +2224,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
             self.addCreatePartialUpdateSteps()
 
     def doUpload(self, postUploadBuildDir=None, uploadMulti=False):
-        # Because of how the RPM packaging works,
-        # we need to tell make upload to look for RPMS
-        if 'rpm' in self.complete_platform:
-            upload_vars = ["MOZ_PKG_FORMAT=RPM"]
-        else:
-            upload_vars = []
+        upload_vars = []
         uploadEnv = self.env.copy()
         uploadEnv.update({'UPLOAD_HOST': self.stageServer,
                           'UPLOAD_USER': self.stageUsername,

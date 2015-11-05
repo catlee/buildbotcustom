@@ -1616,7 +1616,7 @@ def generateBranchObjects(config, name, secrets=None):
         if config.get('use_mozharness_repo_cache'):  # branch supports it
             mozharness_repo_cache = pf.get('mozharness_repo_cache')
 
-        # Some platforms shouldn't do dep builds (i.e. RPM)
+        # Some platforms shouldn't do dep builds
         if pf.get('enable_dep', True) or pf.get('enable_periodic', False):
             # This condition just checks to see if we used
             # mozharness to create this builder already. Once we port all
