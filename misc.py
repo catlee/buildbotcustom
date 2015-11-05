@@ -733,16 +733,13 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
     # We only support mozharness stuff now!
     assert mozharness
     builders = []
-    pf = config['platforms'].get(platform, {})
     if slaves is None:
         slavenames = config['platforms'][platform]['slaves']
     else:
         slavenames = slaves
     if not category:
         category = branch_name
-    productName = pf['product_name']
     branchProperty = branch_name
-    posixBinarySuffix = '' if 'mobile' in name_prefix else '-bin'
     properties = {'branch': branchProperty, 'platform': platform,
                   'slavebuilddir': 'test', 'stage_platform': stagePlatform,
                   'product': stageProduct, 'repo_path': config['repo_path'],
