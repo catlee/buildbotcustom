@@ -1,9 +1,7 @@
-
 from __future__ import absolute_import
 
 import os.path
 import re
-import random
 
 from twisted.python import log
 
@@ -51,11 +49,10 @@ from buildbotcustom.steps.base import ShellCommand, SetProperty, Mercurial, \
 from buildbotcustom.steps.misc import TinderboxShellCommand, SendChangeStep, \
     MozillaClobberer, FindFile, DownloadFile, UnpackFile, \
     SetBuildProperty, DisconnectStep, OutputStep, \
-    RepackPartners, UnpackTest, FunctionalStep, setBuildIDProps
+    RepackPartners, FunctionalStep, setBuildIDProps
 from buildbotcustom.steps.source import MercurialCloneCommand
 from buildbotcustom.steps.test import GraphServerPost
 from buildbotcustom.steps.signing import SigningServerAuthenication
-from buildbotcustom.env import MozillaEnvironments
 from buildbotcustom.common import getSupportedPlatforms, getPlatformFtpDir, \
     genBuildID, normalizeName, getPreviousVersion
 from buildbotcustom.steps.mock import MockReset, MockInit, MockCommand, \
@@ -4328,17 +4325,6 @@ class MozillaTestFactory(MozillaBuildFactory):
                              'sudo hwclock --set --date="$(date +%m/%d/%y\ %H:%M:%S)"'],
                 ))
             self.addPeriodicRebootSteps()
-
-
-def resolution_step():
-    return ShellCommand(
-        name='show_resolution',
-        flunkOnFailure=False,
-        warnOnFailure=False,
-        haltOnFailure=False,
-        workdir='/Users/cltbld',
-        command=['bash', '-c', 'screenresolution get && screenresolution list && system_profiler SPDisplaysDataType']
-    )
 
 
 class PartnerRepackFactory(ReleaseFactory):
