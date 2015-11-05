@@ -109,7 +109,7 @@ class SendChangeStep(ShellCommand):
             files = props.render(self.files)
             user = props.render(self.user)
             sendchange_props = []
-            for key, value in self.sendchange_props.items():
+            for key, value in self.sendchange_props.iteritems():
                 sendchange_props.append((key, props.render(value)))
 
             self.addCompleteLog("sendchange", """\

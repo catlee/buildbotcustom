@@ -3920,7 +3920,7 @@ class ReleaseUpdatesFactory(ReleaseFactory):
             t) for t in release.info.getTags(self.baseTag, self.buildNumber)]
         releaseTag = release.info.getReleaseTag(self.baseTag)
 
-        for platform, cfg in self.verifyConfigs.items():
+        for platform, cfg in self.verifyConfigs.iteritems():
             command = [
                 self.python, 'tools/scripts/updates/create-update-verify-configs.py',
                 '-c', WithProperties(self.patcherConfigFile),

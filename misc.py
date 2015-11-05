@@ -1322,7 +1322,7 @@ def generateBranchObjects(config, name, secrets=None):
         scheduler_name_prefix = name
 
     if config.get("enable_onchange_scheduler", True):
-        for product, product_builders in buildersByProduct.items():
+        for product, product_builders in buildersByProduct.iteritems():
             if config.get('enable_try'):
                 fileIsImportant = lambda c: isHgPollerTriggered(c, config['hgurl'])
             else:
@@ -2345,7 +2345,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
 
     buildBranch = branch_config['build_branch']
 
-    for platform, platform_config in PLATFORMS.items():
+    for platform, platform_config in PLATFORMS.iteritems():
         if 'platforms' in branch_config and \
            platform in branch_config['platforms'] and \
            not branch_config['platforms'][platform].get('enable_talos', True):
@@ -2401,7 +2401,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
             if not slave_platform_try_default:
                 platformPrettyName += ' try-nondefault'
             prettyNames.setdefault(platform, []).append(platformPrettyName)
-            for suite, talosConfig in SUITES.items():
+            for suite, talosConfig in SUITES.iteritems():
                 tests, merge, extra, platforms = branch_config[
                     '%s_tests' % suite]
                 if tests == 0 or slave_platform not in platforms:
@@ -2691,7 +2691,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                             suites_by_skipconfig[skipcount, skiptimeout].append(test)
 
                         # Create a new Scheduler for every skip config
-                        for (skipcount, skiptimeout), test_builders in suites_by_skipconfig.items():
+                        for (skipcount, skiptimeout), test_builders in suites_by_skipconfig.iteritems():
                             scheduler_class = Scheduler
                             s_name = scheduler_name
                             extra_args = {}
@@ -2895,7 +2895,7 @@ def generateSpiderMonkeyObjects(project, config, SLAVES):
 
     prettyNames = {}   # Map(variant => Map(platform => prettyName))
     builderNames = {}  # Map(variant => builder names)
-    for platform, variants in config['variants'].items():
+    for platform, variants in config['variants'].iteritems():
         if platform not in bconfig['platforms']:
             continue
 
