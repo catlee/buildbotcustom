@@ -2511,221 +2511,228 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
 
             # Skip talos only platforms, not active platforms, branches
             # with disabled unittests
-            if slave_platform in slave_platforms and platform in ACTIVE_UNITTEST_PLATFORMS.keys() \
-                    and branch_config.get('enable_unittests', True) and slave_platform in branch_config['platforms'][platform]:
-                testTypes = []
-                # unittestSuites are gathered up for each platform from
-                # config.py
-                unittestSuites = []
-                if branch_config['platforms'][platform].get('enable_opt_unittests'):
-                    testTypes.append('opt')
-                if branch_config['platforms'][platform].get('enable_debug_unittests'):
-                    testTypes.append('debug')
+            if slave_platform not in slave_platforms:
+                continue
+            if platform not in ACTIVE_UNITTEST_PLATFORMS:
+                continue
+            if not branch_config.get('enable_unittests', True):
+                continue
+            if slave_platform not in branch_config['platforms'][platform]:
+                continue
 
-                merge_tests = branch_config.get('enable_merging', True)
+            testTypes = []
+            # unittestSuites are gathered up for each platform from
+            # config.py
+            unittestSuites = []
+            if branch_config['platforms'][platform].get('enable_opt_unittests'):
+                testTypes.append('opt')
+            if branch_config['platforms'][platform].get('enable_debug_unittests'):
+                testTypes.append('debug')
 
-                for test_type in testTypes:
-                    test_builders = []
-                    pgo_builders = []
-                    triggeredUnittestBuilders = []
-                    pgoUnittestBuilders = []
-                    unittest_suites = "%s_unittest_suites" % test_type
-                    build_dir_prefix = platform_config[slave_platform].get(
-                        'build_dir_prefix', slave_platform)
-                    if test_type == "debug":
-                        # Debug tests always need to download symbols for
-                        # runtime assertions
+            merge_tests = branch_config.get('enable_merging', True)
+
+            for test_type in testTypes:
+                test_builders = []
+                pgo_builders = []
+                triggeredUnittestBuilders = []
+                pgoUnittestBuilders = []
+                unittest_suites = "%s_unittest_suites" % test_type
+                build_dir_prefix = platform_config[slave_platform].get(
+                    'build_dir_prefix', slave_platform)
+                if test_type == "debug":
+                    # Debug tests always need to download symbols for
+                    # runtime assertions
+                    pf = branch_config['platforms'][platform]
+                    if pf.get('download_symbols', False) or pf.get('download_symbols_ondemand', True):
+                        # Copy the platform config so we can modify it here
+                        # safely
+                        branch_config['platforms'][platform] = deepcopy(branch_config['platforms'][platform])
+                        # Get a new reference
                         pf = branch_config['platforms'][platform]
-                        if pf.get('download_symbols', False) or pf.get('download_symbols_ondemand', True):
-                            # Copy the platform config so we can modify it here
-                            # safely
-                            branch_config['platforms'][platform] = deepcopy(branch_config['platforms'][platform])
-                            # Get a new reference
-                            pf = branch_config['platforms'][platform]
-                            pf['download_symbols'] = True
-                            pf['download_symbols_ondemand'] = False
-                        slave_platform_name = "%s-debug" % build_dir_prefix
-                    elif test_type == "mobile":
-                        slave_platform_name = "%s-mobile" % build_dir_prefix
-                    else:
-                        slave_platform_name = build_dir_prefix
+                        pf['download_symbols'] = True
+                        pf['download_symbols_ondemand'] = False
+                    slave_platform_name = "%s-debug" % build_dir_prefix
+                elif test_type == "mobile":
+                    slave_platform_name = "%s-mobile" % build_dir_prefix
+                else:
+                    slave_platform_name = build_dir_prefix
 
-                    # in case this builder is a set of suites
-                    builders_with_sets_mapping = {}
-                    # create builder names for TinderboxMailNotifier
-                    for suites_name, suites in branch_config['platforms'][platform][slave_platform][unittest_suites]:
-                        test_builders.extend(generateTestBuilderNames(
-                            '%s %s %s test' % (platform_name, branch, test_type), suites_name, suites))
-                        if create_pgo_builders and test_type == 'opt':
-                            pgo_builders.extend(generateTestBuilderNames(
-                                                '%s %s pgo test' % (platform_name, branch), suites_name, suites))
-                        if type(suites) is dict and suites.has_key('trychooser_suites'):
-                            for s in suites['trychooser_suites']:
-                                builders_with_sets_mapping[s] = suites_name
-
-                    scheduler_slave_platform_identifier = platform_config[slave_platform].get(
-                        'scheduler_slave_platform_identifier', slave_platform)
-                    triggeredUnittestBuilders.append(
-                        (
-                            'tests-%s-%s-%s-unittest' % (
-                                branch, scheduler_slave_platform_identifier, test_type),
-                            test_builders, merge_tests))
+                # in case this builder is a set of suites
+                builders_with_sets_mapping = {}
+                # create builder names for schedulers
+                for suites_name, suites in branch_config['platforms'][platform][slave_platform][unittest_suites]:
+                    test_builders.extend(generateTestBuilderNames(
+                        '%s %s %s test' % (platform_name, branch, test_type), suites_name, suites))
                     if create_pgo_builders and test_type == 'opt':
-                        pgoUnittestBuilders.append(
-                            (
-                                'tests-%s-%s-pgo-unittest' % (
-                                    branch, scheduler_slave_platform_identifier),
-                                pgo_builders, merge_tests))
+                        pgo_builders.extend(generateTestBuilderNames(
+                                            '%s %s pgo test' % (platform_name, branch), suites_name, suites))
+                    if isinstance(suites, dict) and 'trychooser_suites' in suites:
+                        for s in suites['trychooser_suites']:
+                            builders_with_sets_mapping[s] = suites_name
 
-                    for suites_name, suites in branch_config['platforms'][platform][slave_platform][unittest_suites]:
-                        # create the builders
-                        test_builder_kwargs = {
-                            "config": branch_config,
-                            "branch_name": branch,
-                            "platform": platform,
-                            "name_prefix": "%s %s %s test" % (platform_name, branch, test_type),
-                            "build_dir_prefix": "%s_%s_test" % (branch, slave_platform_name),
-                            "suites_name": suites_name,
-                            "suites": suites,
-                            "mochitestLeakThreshold": branch_config.get('mochitest_leak_threshold', None),
-                            "crashtestLeakThreshold": branch_config.get('crashtest_leak_threshold', None),
-                            "slaves": platform_config[slave_platform]['slaves'],
-                            "resetHwClock": branch_config['platforms'][platform][slave_platform].get('reset_hw_clock', False),
-                            "stagePlatform": stage_platform,
-                            "stageProduct": stage_product
-                        }
-                        test_builder_chunks = None
-                        if isinstance(suites, dict) and "use_mozharness" in suites:
-                            test_builder_kwargs['mozharness_repo'] = branch_config['mozharness_repo']
-                            test_builder_kwargs['mozharness_tag'] = branch_config['mozharness_tag']
-                            test_builder_kwargs['mozharness'] = True
-                            test_builder_kwargs['script_repo_manifest'] = branch_config.get('script_repo_manifest')
-                            test_builder_kwargs['relengapi_archiver_repo_path'] = branch_config.get('mozharness_archiver_repo_path')
-                            test_builder_kwargs['relengapi_archiver_rev'] = branch_config.get('mozharness_archiver_rev')
-                            # allow mozharness_python to be overridden per test slave platform in case Python
-                            # not installed to a consistent location.
-                            if 'mozharness_config' in platform_config[slave_platform] and \
-                                    'mozharness_python' in platform_config[slave_platform]['mozharness_config']:
-                                test_builder_kwargs['mozharness_python'] = \
-                                    platform_config[slave_platform]['mozharness_config']['mozharness_python']
-                            else:
-                                test_builder_kwargs['mozharness_python'] = platform_config['mozharness_config']['mozharness_python']
-                            if suites_name in branch_config['platforms'][platform][slave_platform].get('suite_config', {}):
-                                test_builder_kwargs['mozharness_suite_config'] = deepcopy(branch_config['platforms'][platform][slave_platform]['suite_config'][suites_name])
-                            else:
-                                test_builder_kwargs[
-                                    'mozharness_suite_config'] = {}
-                            test_builder_kwargs['mozharness_suite_config']['hg_bin'] = platform_config['mozharness_config']['hg_bin']
-                            test_builder_kwargs['mozharness_suite_config']['reboot_command'] = platform_config['mozharness_config']['reboot_command']
-                            test_builder_kwargs['mozharness_suite_config']['env'] = MozillaEnvironments.get('%s-unittest' % platform, {}).copy()
-                            test_builder_kwargs['mozharness_suite_config']['env'].update(branch_config['platforms'][platform].get('unittest-env', {}))
-                            if branch_config.get('blob_upload') and suites.get('blob_upload'):
-                                test_builder_kwargs['mozharness_suite_config']['blob_upload'] = True
-                            if suites.get('download_symbols', True) and branch_config['fetch_symbols'] and \
-                                    branch_config['platforms'][platform][slave_platform].get('download_symbols', True):
-                                if test_type == 'opt':
-                                    test_builder_kwargs['mozharness_suite_config']['download_symbols'] = 'ondemand'
-                                else:
-                                    test_builder_kwargs['mozharness_suite_config']['download_symbols'] = 'true'
-                            if test_type == 'opt':
-                                test_builder_kwargs['is_debug'] = False
-                            else:
-                                test_builder_kwargs['is_debug'] = True
-                            if suites.get('totalChunks'):
-                                test_builder_chunks = suites['totalChunks']
+                scheduler_slave_platform_identifier = platform_config[slave_platform].get(
+                    'scheduler_slave_platform_identifier', slave_platform)
+                triggeredUnittestBuilders.append(
+                    (
+                        'tests-%s-%s-%s-unittest' % (
+                            branch, scheduler_slave_platform_identifier, test_type),
+                        test_builders, merge_tests))
+                if create_pgo_builders and test_type == 'opt':
+                    pgoUnittestBuilders.append(
+                        (
+                            'tests-%s-%s-pgo-unittest' % (
+                                branch, scheduler_slave_platform_identifier),
+                            pgo_builders, merge_tests))
 
-                        branchObjects['builders'].extend(
-                            generateChunkedUnittestBuilders(
-                                test_builder_chunks,
-                                platform_name,
-                                branch,
-                                test_type,
-                                create_pgo_builders,
-                                **test_builder_kwargs
-                            )
+                for suites_name, suites in branch_config['platforms'][platform][slave_platform][unittest_suites]:
+                    # create the builders
+                    test_builder_kwargs = {
+                        "config": branch_config,
+                        "branch_name": branch,
+                        "platform": platform,
+                        "name_prefix": "%s %s %s test" % (platform_name, branch, test_type),
+                        "build_dir_prefix": "%s_%s_test" % (branch, slave_platform_name),
+                        "suites_name": suites_name,
+                        "suites": suites,
+                        "mochitestLeakThreshold": branch_config.get('mochitest_leak_threshold', None),
+                        "crashtestLeakThreshold": branch_config.get('crashtest_leak_threshold', None),
+                        "slaves": platform_config[slave_platform]['slaves'],
+                        "resetHwClock": branch_config['platforms'][platform][slave_platform].get('reset_hw_clock', False),
+                        "stagePlatform": stage_platform,
+                        "stageProduct": stage_product
+                    }
+                    test_builder_chunks = None
+                    assert suites['use_mozharness']
+                    test_builder_kwargs['mozharness_repo'] = branch_config['mozharness_repo']
+                    test_builder_kwargs['mozharness_tag'] = branch_config['mozharness_tag']
+                    test_builder_kwargs['mozharness'] = True
+                    test_builder_kwargs['script_repo_manifest'] = branch_config.get('script_repo_manifest')
+                    test_builder_kwargs['relengapi_archiver_repo_path'] = branch_config.get('mozharness_archiver_repo_path')
+                    test_builder_kwargs['relengapi_archiver_rev'] = branch_config.get('mozharness_archiver_rev')
+                    # allow mozharness_python to be overridden per test slave platform in case Python
+                    # not installed to a consistent location.
+                    if 'mozharness_config' in platform_config[slave_platform] and \
+                            'mozharness_python' in platform_config[slave_platform]['mozharness_config']:
+                        test_builder_kwargs['mozharness_python'] = \
+                            platform_config[slave_platform]['mozharness_config']['mozharness_python']
+                    else:
+                        test_builder_kwargs['mozharness_python'] = platform_config['mozharness_config']['mozharness_python']
+                    if suites_name in branch_config['platforms'][platform][slave_platform].get('suite_config', {}):
+                        test_builder_kwargs['mozharness_suite_config'] = deepcopy(branch_config['platforms'][platform][slave_platform]['suite_config'][suites_name])
+                    else:
+                        test_builder_kwargs[
+                            'mozharness_suite_config'] = {}
+                    test_builder_kwargs['mozharness_suite_config']['hg_bin'] = platform_config['mozharness_config']['hg_bin']
+                    test_builder_kwargs['mozharness_suite_config']['reboot_command'] = platform_config['mozharness_config']['reboot_command']
+                    test_builder_kwargs['mozharness_suite_config']['env'] = MozillaEnvironments.get('%s-unittest' % platform, {}).copy()
+                    test_builder_kwargs['mozharness_suite_config']['env'].update(branch_config['platforms'][platform].get('unittest-env', {}))
+                    if branch_config.get('blob_upload') and suites.get('blob_upload'):
+                        test_builder_kwargs['mozharness_suite_config']['blob_upload'] = True
+                    if suites.get('download_symbols', True) and branch_config['fetch_symbols'] and \
+                            branch_config['platforms'][platform][slave_platform].get('download_symbols', True):
+                        if test_type == 'opt':
+                            test_builder_kwargs['mozharness_suite_config']['download_symbols'] = 'ondemand'
+                        else:
+                            test_builder_kwargs['mozharness_suite_config']['download_symbols'] = 'true'
+                    if test_type == 'opt':
+                        test_builder_kwargs['is_debug'] = False
+                    else:
+                        test_builder_kwargs['is_debug'] = True
+                    if suites.get('totalChunks'):
+                        test_builder_chunks = suites['totalChunks']
+
+                    branchObjects['builders'].extend(
+                        generateChunkedUnittestBuilders(
+                            test_builder_chunks,
+                            platform_name,
+                            branch,
+                            test_type,
+                            create_pgo_builders,
+                            **test_builder_kwargs
                         )
+                    )
 
-                    if branch_config.get("enable_test_schedulers", True):
-                        for scheduler_name, test_builders, merge in triggeredUnittestBuilders:
+                if branch_config.get("enable_test_schedulers", True):
+                    for scheduler_name, test_builders, merge in triggeredUnittestBuilders:
+                        for test in test_builders:
+                            unittestSuites.append(test.split(' ')[-1])
+                        scheduler_branch = ('%s-%s-%s-unittest' %
+                                            (branch, platform, test_type))
+                        if not merge:
+                            nomergeBuilders.update(test_builders)
+                        extra_args = {}
+                        if branch_config.get('enable_try'):
+                            scheduler_class = BuilderChooserScheduler
+                            extra_args['chooserFunc'] = tryChooser
+                            extra_args['prettyNames'] = prettyNames
+                            extra_args['unittestSuites'] = unittestSuites
+                            extra_args['buildersWithSetsMap'] = builders_with_sets_mapping
+                            extra_args['buildbotBranch'] = branch
+                            branchObjects['schedulers'].append(scheduler_class(
+                                    name=scheduler_name,
+                                    branch=scheduler_branch,
+                                    builderNames=test_builders,
+                                    treeStableTimer=None,
+                                    **extra_args
+                            ))
+                        else:
+                            scheduler_class = Scheduler
+                            suites_by_skipconfig = collections.defaultdict(list)
+                            skipcount = 0
+                            skiptimeout = 0
                             for test in test_builders:
-                                unittestSuites.append(test.split(' ')[-1])
-                            scheduler_branch = ('%s-%s-%s-unittest' %
-                                                (branch, platform, test_type))
-                            if not merge:
-                                nomergeBuilders.update(test_builders)
-                            extra_args = {}
-                            if branch_config.get('enable_try'):
-                                scheduler_class = BuilderChooserScheduler
-                                extra_args['chooserFunc'] = tryChooser
-                                extra_args['prettyNames'] = prettyNames
-                                extra_args['unittestSuites'] = unittestSuites
-                                extra_args['buildersWithSetsMap'] = builders_with_sets_mapping
-                                extra_args['buildbotBranch'] = branch
-                                branchObjects['schedulers'].append(scheduler_class(
-                                        name=scheduler_name,
-                                        branch=scheduler_branch,
-                                        builderNames=test_builders,
-                                        treeStableTimer=None,
-                                        **extra_args
-                                ))
-                            else:
-                                scheduler_class = Scheduler
-                                suites_by_skipconfig = collections.defaultdict(list)
                                 skipcount = 0
                                 skiptimeout = 0
-                                for test in test_builders:
-                                    skipcount = 0
-                                    skiptimeout = 0
-                                    if branch_config['platforms'][platform][slave_platform].get('skipconfig'):
-                                        #extract last word in the test string as it should correspond to the name of the test
-                                        test_name = test.split()[-1]
-                                        if (test_type, test_name) in branch_config['platforms'][platform][slave_platform]['skipconfig']:
-                                            skipcount, skiptimeout = branch_config['platforms'][platform][slave_platform]['skipconfig'][test_type, test_name]
-                                            builderMergeLimits[test] = skipcount
-                                    suites_by_skipconfig[skipcount, skiptimeout].append(test)
+                                if branch_config['platforms'][platform][slave_platform].get('skipconfig'):
+                                    #extract last word in the test string as it should correspond to the name of the test
+                                    test_name = test.split()[-1]
+                                    if (test_type, test_name) in branch_config['platforms'][platform][slave_platform]['skipconfig']:
+                                        skipcount, skiptimeout = branch_config['platforms'][platform][slave_platform]['skipconfig'][test_type, test_name]
+                                        builderMergeLimits[test] = skipcount
+                                suites_by_skipconfig[skipcount, skiptimeout].append(test)
 
-                                # Create a new Scheduler for every skip config
-                                for (skipcount, skiptimeout), test_builders in suites_by_skipconfig.items():
-                                    scheduler_class = Scheduler
-                                    s_name = scheduler_name
-                                    extra_args = {}
-
-                                    if skipcount > 0:
-                                        scheduler_class = EveryNthScheduler
-                                        extra_args['n'] = skipcount
-                                        extra_args['idleTimeout'] = skiptimeout
-                                        s_name = scheduler_name + "-" + str(skipcount) + "-"  + str(skiptimeout)
-
-                                    branchObjects['schedulers'].append(scheduler_class(
-                                        name=s_name,
-                                        branch=scheduler_branch,
-                                        builderNames=test_builders,
-                                        treeStableTimer=None,
-                                        **extra_args
-                                    ))
-                        for scheduler_name, test_builders, merge in pgoUnittestBuilders:
-                            for test in test_builders:
-                                unittestSuites.append(test.split(' ')[-1])
-                            scheduler_branch = '%s-%s-pgo-unittest' % (
-                                branch, platform)
-                            if not merge:
-                                nomergeBuilders.update(pgo_builders)
-                            extra_args = {}
-                            if branch_config.get('enable_try'):
-                                scheduler_class = BuilderChooserScheduler
-                                extra_args['chooserFunc'] = tryChooser
-                                extra_args['prettyNames'] = prettyNames
-                                extra_args['unittestSuites'] = unittestSuites
-                                extra_args['buildbotBranch'] = branch
-                            else:
+                            # Create a new Scheduler for every skip config
+                            for (skipcount, skiptimeout), test_builders in suites_by_skipconfig.items():
                                 scheduler_class = Scheduler
-                            branchObjects['schedulers'].append(scheduler_class(
-                                name=scheduler_name,
-                                branch=scheduler_branch,
-                                builderNames=pgo_builders,
-                                treeStableTimer=None,
-                                **extra_args
-                            ))
+                                s_name = scheduler_name
+                                extra_args = {}
+
+                                if skipcount > 0:
+                                    scheduler_class = EveryNthScheduler
+                                    extra_args['n'] = skipcount
+                                    extra_args['idleTimeout'] = skiptimeout
+                                    s_name = scheduler_name + "-" + str(skipcount) + "-"  + str(skiptimeout)
+
+                                branchObjects['schedulers'].append(scheduler_class(
+                                    name=s_name,
+                                    branch=scheduler_branch,
+                                    builderNames=test_builders,
+                                    treeStableTimer=None,
+                                    **extra_args
+                                ))
+                    for scheduler_name, test_builders, merge in pgoUnittestBuilders:
+                        for test in test_builders:
+                            unittestSuites.append(test.split(' ')[-1])
+                        scheduler_branch = '%s-%s-pgo-unittest' % (
+                            branch, platform)
+                        if not merge:
+                            nomergeBuilders.update(pgo_builders)
+                        extra_args = {}
+                        if branch_config.get('enable_try'):
+                            scheduler_class = BuilderChooserScheduler
+                            extra_args['chooserFunc'] = tryChooser
+                            extra_args['prettyNames'] = prettyNames
+                            extra_args['unittestSuites'] = unittestSuites
+                            extra_args['buildbotBranch'] = branch
+                        else:
+                            scheduler_class = Scheduler
+                        branchObjects['schedulers'].append(scheduler_class(
+                            name=scheduler_name,
+                            branch=scheduler_branch,
+                            builderNames=pgo_builders,
+                            treeStableTimer=None,
+                            **extra_args
+                        ))
 
         if branch_config.get("enable_test_schedulers", True):
             # Create one scheduler per # of tests to run
