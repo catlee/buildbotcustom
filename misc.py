@@ -848,13 +848,8 @@ def generateMozharnessTalosBuilder(platform, mozharness_repo, script_path,
     )
 
 
-def generateUnittestBuilders(
-    platform_name,
-    branch,
-    test_type,
-    create_pgo_builders,
-    **test_builder_kwargs
-):
+def generateUnittestBuilders(platform_name, branch, test_type,
+                             create_pgo_builders, **test_builder_kwargs):
     builders = []
     builders.extend(generateTestBuilder(**test_builder_kwargs))
     if create_pgo_builders and test_type == 'opt':
