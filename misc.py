@@ -1034,7 +1034,7 @@ def generateBranchObjects(config, name, secrets=None):
        'mozilla-1.9.1'.
        config is a dictionary containing all of the necessary configuration
        information for a branch. The required keys depends greatly on what's
-       enabled for a branch (unittests, xulrunner, l10n, etc). The best way
+       enabled for a branch (unittests, l10n, etc). The best way
        to figure out what you need to pass is by looking at existing configs
        and using 'buildbot checkconfig' to verify.
     """
@@ -1054,7 +1054,6 @@ def generateBranchObjects(config, name, secrets=None):
     buildersForNightly = []
     buildersByProduct = {}
     nightlyBuilders = []
-    xulrunnerNightlyBuilders = []
     periodicBuilders = []
     weeklyBuilders = []
     # prettyNames is a mapping to pass to the try_parser for validation
@@ -1199,8 +1198,6 @@ def generateBranchObjects(config, name, secrets=None):
                config.get('enable_hsts_update', False) or \
                config.get('enable_hpkp_update', False):
                 weeklyBuilders.append('%s periodic file update' % base_name)
-        if pf.get('enable_xulrunner', False) and config.get('enable_xulrunner', False):
-            xulrunnerNightlyBuilders.append('%s xulrunner nightly' % base_name)
 
     if config['enable_weekly_bundle']:
         bundle_builder = makeBundleBuilder(config, name)
@@ -1325,7 +1322,7 @@ def generateBranchObjects(config, name, secrets=None):
 
     # Now, setup the nightly en-US schedulers and maybe,
     # their downstream l10n ones
-    if (nightlyBuilders or xulrunnerNightlyBuilders) and config.get("enable_nightly_scheduler", True):
+    if nightlyBuilders and config.get("enable_nightly_scheduler", True):
         if config.get('enable_nightly_lastgood', False):
             goodFunc = lastGoodFunc(
                 branch=config['repo_path'],
@@ -1349,7 +1346,7 @@ def generateBranchObjects(config, name, secrets=None):
                 # bug 482123 - keep the minute to avoid problems with DST
                 # changes
                 hour=config['start_hour'], minute=config['start_minute'],
-                builderNames=nightlyBuilders + xulrunnerNightlyBuilders,
+                builderNames=nightlyBuilders,
             )
         branchObjects['schedulers'].append(nightly_scheduler)
 
@@ -1370,7 +1367,7 @@ def generateBranchObjects(config, name, secrets=None):
             )
         branchObjects['schedulers'].append(periodic_scheduler)
 
-    for builder in nightlyBuilders + xulrunnerNightlyBuilders:
+    for builder in nightlyBuilders:
         # looping through l10n builders
 
         if builder in l10nNightlyBuilders and \
@@ -1423,7 +1420,7 @@ def generateBranchObjects(config, name, secrets=None):
         # shorthand
         pf = config['platforms'][platform]
 
-        # TODO still need to impl mozharness desktop: try, valgrind, xulrunnner,
+        # TODO still need to impl mozharness desktop: try, valgrind
         # etc builders
         # For now, let's just record when we create desktop builds like
         # generic, pgo, and nightly via mozharness and fall back to buildbot
@@ -2184,65 +2181,6 @@ def generateBranchObjects(config, name, secrets=None):
                 periodicFileUpdateBuilder = generatePeriodicFileUpdateBuilder(
                     config, name, platform, pf['base_name'], pf['slaves'])
                 branchObjects['builders'].append(periodicFileUpdateBuilder)
-
-        if pf.get('enable_xulrunner', False) and config.get('enable_xulrunner', False):
-            xr_env = pf['env'].copy()
-            xr_env['SYMBOL_SERVER_USER'] = config['stage_username_xulrunner']
-            xr_env['SYMBOL_SERVER_PATH'] = config[
-                'symbol_server_xulrunner_path']
-            xr_env['SYMBOL_SERVER_SSH_KEY'] = \
-                xr_env['SYMBOL_SERVER_SSH_KEY'].replace(config['stage_ssh_key'], config['stage_ssh_xulrunner_key'])
-            if 'xr_mozconfig' in pf:
-                mozconfig = pf['xr_mozconfig']
-            else:
-                mozconfig = '%s/%s/xulrunner' % (platform, name)
-            xulrunnerStageBasePath = '%s/xulrunner' % config['stage_base_path']
-            mozilla2_xulrunner_factory = NightlyBuildFactory(
-                env=xr_env,
-                objdir=pf['platform_objdir'],
-                platform=platform,
-                hgHost=config['hghost'],
-                repoPath=config['repo_path'],
-                buildToolsRepoPath=config['build_tools_repo_path'],
-                configRepoPath=config['config_repo_path'],
-                profiledBuild=False,
-                productName='xulrunner',
-                mozconfig=mozconfig,
-                srcMozconfig=pf.get('src_xulrunner_mozconfig'),
-                stageServer=config['stage_server'],
-                stageUsername=config['stage_username_xulrunner'],
-                stageGroup=config['stage_group'],
-                stageSshKey=config['stage_ssh_xulrunner_key'],
-                stageBasePath=xulrunnerStageBasePath,
-                uploadPackages=uploadPackages,
-                uploadSymbols=True,
-                nightly=True,
-                buildSpace=buildSpace,
-                clobberURL=config['base_clobber_url'],
-                clobberTime=clobberTime,
-                buildsBeforeReboot=pf['builds_before_reboot'],
-                packageSDK=True,
-                signingServers=secrets.get(pf.get('nightly_signing_servers')),
-                tooltool_manifest_src=pf.get('tooltool_manifest_src'),
-                tooltool_script=pf.get('tooltool_script'),
-                tooltool_url_list=config.get('tooltool_url_list', []),
-                use_mock=pf.get('use_mock'),
-                mock_target=pf.get('mock_target'),
-                mock_packages=pf.get('mock_packages'),
-                mock_copyin_files=pf.get('mock_copyin_files'),
-                enable_pymake=enable_pymake,
-            )
-            mozilla2_xulrunner_builder = {
-                'name': '%s xulrunner nightly' % pf['base_name'],
-                'slavenames': pf['slaves'],
-                'builddir': '%s-%s-xulrunner-nightly' % (name, platform),
-                'slavebuilddir': normalizeName('%s-%s-xulrunner-nightly' % (name, platform), pf['stage_product']),
-                'factory': mozilla2_xulrunner_factory,
-                'category': name,
-                'nextSlave': _nextAWSSlave_sort,
-                'properties': {'branch': name, 'platform': platform, 'slavebuilddir': normalizeName('%s-%s-xulrunner-nightly' % (name, platform)), 'product': 'xulrunner'},
-            }
-            branchObjects['builders'].append(mozilla2_xulrunner_builder)
 
         # -- end of per-platform loop --
 

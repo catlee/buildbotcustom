@@ -1621,14 +1621,14 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
         # Get package details
         self.packageFilename = self.getPackageFilename(self.platform,
                                                        self.platform_variation)
-        if self.packageFilename and 'rpm' not in self.platform_variation and self.productName not in ('xulrunner', 'b2g'):
+        if self.packageFilename and 'rpm' not in self.platform_variation and self.productName not in ('b2g',):
             self.addFilePropertiesSteps(filename=self.packageFilename,
                                         directory='build/%s/dist' % self.mozillaObjdir,
                                         fileType='package',
                                         haltOnFailure=True)
         # Windows special cases
         installerFilename = self.getInstallerFilename()
-        if self.enableInstaller and self.productName != 'xulrunner':
+        if self.enableInstaller:
             self.addStep(ShellCommand(
                 name='make_installer',
                 command=self.makeCmd + ['installer'] + pkgArgs,
@@ -1642,48 +1642,37 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
                                             fileType='installer',
                                             haltOnFailure=True)
 
-        if self.productName == 'xulrunner':
-            self.addStep(SetProperty(
-                command=[
-                    'python', 'build%s/config/printconfigsetting.py' % self.mozillaSrcDir,
-                         'build/%s/dist/bin/platform.ini' % self.mozillaObjdir,
-                         'Build', 'BuildID'],
-                property='buildid',
-                workdir='.',
-                name='get_build_id',
-            ))
+        if self.mozillaSrcDir:
+            useConfigDir = '%s/config' % self.baseWorkDir
         else:
-            if self.mozillaSrcDir:
-                useConfigDir = '%s/config' % self.baseWorkDir
-            else:
-                useConfigDir = 'build%s/config' % self.mozillaSrcDir
-            self.addStep(SetProperty(
-                command=[
-                    'python', '%s/printconfigsetting.py' % useConfigDir,
-                         'build/%s/dist/bin/application.ini' % self.mozillaObjdir,
-                         'App', 'BuildID'],
-                property='buildid',
-                workdir='.',
-                name='get_build_id',
-            ))
-            self.addStep(SetProperty(
-                command=[
-                    'python', '%s/printconfigsetting.py' % useConfigDir,
-                         'build/%s/dist/bin/application.ini' % self.mozillaObjdir,
-                         'App', 'Version'],
-                property='appVersion',
-                workdir='.',
-                name='get_app_version',
-            ))
-            self.addStep(SetProperty(
-                command=[
-                    'python', '%s/printconfigsetting.py' % useConfigDir,
-                         'build/%s/dist/bin/application.ini' % self.mozillaObjdir,
-                         'App', 'Name'],
-                property='appName',
-                workdir='.',
-                name='get_app_name',
-            ))
+            useConfigDir = 'build%s/config' % self.mozillaSrcDir
+        self.addStep(SetProperty(
+            command=[
+                'python', '%s/printconfigsetting.py' % useConfigDir,
+                        'build/%s/dist/bin/application.ini' % self.mozillaObjdir,
+                        'App', 'BuildID'],
+            property='buildid',
+            workdir='.',
+            name='get_build_id',
+        ))
+        self.addStep(SetProperty(
+            command=[
+                'python', '%s/printconfigsetting.py' % useConfigDir,
+                        'build/%s/dist/bin/application.ini' % self.mozillaObjdir,
+                        'App', 'Version'],
+            property='appVersion',
+            workdir='.',
+            name='get_app_version',
+        ))
+        self.addStep(SetProperty(
+            command=[
+                'python', '%s/printconfigsetting.py' % useConfigDir,
+                        'build/%s/dist/bin/application.ini' % self.mozillaObjdir,
+                        'App', 'Name'],
+            property='appName',
+            workdir='.',
+            name='get_app_name',
+        ))
         self.pkg_env = pkg_env
 
     def addUploadSteps(self):
@@ -2293,42 +2282,26 @@ class NightlyBuildFactory(MercurialBuildFactory):
             uploadArgs['builddir'] = postUploadBuildDir
         uploadEnv['POST_UPLOAD_CMD'] = postUploadCmdPrefix(**uploadArgs)
 
-        if self.productName == 'xulrunner':
-            self.addStep(RetryingMockProperty(
-                         command=self.makeCmd + ['-f', 'client.mk', 'upload'],
-                         env=uploadEnv,
-                         workdir='build',
-                         extract_fn=parse_make_upload,
-                         haltOnFailure=True,
-                         description=["upload"],
-                         timeout=60 * 60,  # 60 minutes
-                         log_eval_func=lambda c, s: regex_log_evaluator(
-                             c, s, upload_errors),
-                         locks=[upload_lock.access('counting')],
-                         mock=self.use_mock,
-                         target=self.mock_target,
-                         ))
-        else:
-            objdir = WithProperties(
-                '%(basedir)s/' + self.baseWorkDir + '/' + self.objdir)
-            if self.platform.startswith('win'):
-                objdir = '%s/%s' % (self.baseWorkDir, self.objdir)
-            self.addStep(RetryingMockProperty(
-                name='make_upload',
-                command=self.makeCmd + ['upload'] + upload_vars,
-                env=uploadEnv,
-                workdir=objdir,
-                extract_fn=parse_make_upload,
-                haltOnFailure=True,
-                description=self.makeCmd + ['upload'],
-                mock=self.use_mock,
-                target=self.mock_target,
-                mock_workdir_prefix=None,
-                timeout=40 * 60,  # 40 minutes
-                log_eval_func=lambda c, s: regex_log_evaluator(
-                    c, s, upload_errors),
-                locks=[upload_lock.access('counting')],
-            ))
+        objdir = WithProperties(
+            '%(basedir)s/' + self.baseWorkDir + '/' + self.objdir)
+        if self.platform.startswith('win'):
+            objdir = '%s/%s' % (self.baseWorkDir, self.objdir)
+        self.addStep(RetryingMockProperty(
+            name='make_upload',
+            command=self.makeCmd + ['upload'] + upload_vars,
+            env=uploadEnv,
+            workdir=objdir,
+            extract_fn=parse_make_upload,
+            haltOnFailure=True,
+            description=self.makeCmd + ['upload'],
+            mock=self.use_mock,
+            target=self.mock_target,
+            mock_workdir_prefix=None,
+            timeout=40 * 60,  # 40 minutes
+            log_eval_func=lambda c, s: regex_log_evaluator(
+                c, s, upload_errors),
+            locks=[upload_lock.access('counting')],
+        ))
 
         def getPartialInfo(build):
             return [{
@@ -2744,47 +2717,6 @@ class ReleaseBuildFactory(MercurialBuildFactory):
                          ))
         if self.balrog_api_root:
             self.submitBalrogUpdates(type_='release')
-
-
-class XulrunnerReleaseBuildFactory(ReleaseBuildFactory):
-
-    def doUpload(self, postUploadBuildDir=None, uploadMulti=False):
-        uploadEnv = self.env.copy()
-        uploadEnv.update({'UPLOAD_HOST': self.stageServer,
-                          'UPLOAD_USER': self.stageUsername,
-                          'UPLOAD_TO_TEMP': '1'})
-        if self.stageSshKey:
-            uploadEnv['UPLOAD_SSH_KEY'] = '~/.ssh/%s' % self.stageSshKey
-
-        uploadEnv['POST_UPLOAD_CMD'] = 'post_upload.py ' + \
-                                       '-p %s ' % self.productName + \
-                                       '-v %s ' % self.version + \
-                                       '-n %s ' % self.buildNumber + \
-                                       '--release-to-candidates-dir'
-        if self.signingServers and self.enableSigning:
-            uploadEnv['POST_UPLOAD_CMD'] += ' --signed'
-
-        def get_url(rc, stdout, stderr):
-            for m in re.findall("^(https?://.*?\.(?:tar\.bz2|dmg|zip))", "\n".join([stdout, stderr]), re.M):
-                if m.endswith("crashreporter-symbols.zip"):
-                    continue
-                if m.endswith("tests.tar.bz2"):
-                    continue
-                return {'packageUrl': m}
-            return {'packageUrl': ''}
-
-        self.addStep(RetryingMockProperty(
-                     command=self.makeCmd + ['-f', 'client.mk', 'upload'],
-                     env=uploadEnv,
-                     workdir='build',
-                     extract_fn=get_url,
-                     haltOnFailure=True,
-                     description=['upload'],
-                     log_eval_func=lambda c, s: regex_log_evaluator(
-                         c, s, upload_errors),
-                     mock=self.use_mock,
-                     target=self.mock_target,
-                     ))
 
 
 def identToProperties(default_prop=None):
@@ -3717,8 +3649,7 @@ class SingleSourceFactory(ReleaseFactory):
         # created in the expected place.
         self.env['MOZ_OBJDIR'] = WithProperties('%(basedir)s/' + self.absObjDir)
         self.env['MOZ_PKG_PRETTYNAMES'] = '1'
-        if appVersion is None or version != appVersion or \
-                (self.branchName == 'mozilla-1.9.2' and productName == 'xulrunner'):
+        if appVersion is None or version != appVersion:
             self.env['MOZ_PKG_VERSION'] = version
         self.env['MOZ_PKG_APPNAME'] = productName
         self.env['no_tooltool'] = "1"
