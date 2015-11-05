@@ -47,7 +47,7 @@ reload(mozilla_buildtools.queuedir)
 from buildbotcustom.common import normalizeName
 from buildbotcustom.changes.hgpoller import HgPoller, HgAllLocalesPoller
 from buildbotcustom.process.factory import NightlyBuildFactory, \
-    NightlyRepackFactory, UnittestPackagedBuildFactory, \
+    NightlyRepackFactory, \
     TryBuildFactory, ScriptFactory, SigningScriptFactory, rc_eval_func
 from buildbotcustom.scheduler import BuilderChooserScheduler, \
     PersistentScheduler, makePropertiesScheduler, SpecificNightly, EveryNthScheduler
@@ -730,6 +730,8 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                         mozharness_repo=None, mozharness_tag='production',
                         script_repo_manifest=None, relengapi_archiver_repo_path=None,
                         relengapi_archiver_rev=None, is_debug=None):
+    # We only support mozharness stuff now!
+    assert mozharness
     builders = []
     pf = config['platforms'].get(platform, {})
     if slaves is None:
@@ -745,104 +747,70 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
                   'slavebuilddir': 'test', 'stage_platform': stagePlatform,
                   'product': stageProduct, 'repo_path': config['repo_path'],
                   'moz_repo_path': config.get('moz_repo_path', '')}
-    if mozharness:
-        # suites is a dict!
-        if mozharness_suite_config is None:
-            mozharness_suite_config = {}
-        extra_args = []
-        if mozharness_suite_config.get('config_files'):
-            extra_args.extend(['--cfg', ','.join(mozharness_suite_config['config_files'])])
-        extra_args.extend(mozharness_suite_config.get('extra_args', suites.get('extra_args', [])))
-        if is_debug is True:
-            extra_args.extend(
-                mozharness_suite_config.get(
-                    'debug_extra_args',
-                    suites.get('debug_extra_args', [])
-                )
+    # suites is a dict!
+    if mozharness_suite_config is None:
+        mozharness_suite_config = {}
+    extra_args = []
+    if mozharness_suite_config.get('config_files'):
+        extra_args.extend(['--cfg', ','.join(mozharness_suite_config['config_files'])])
+    extra_args.extend(mozharness_suite_config.get('extra_args', suites.get('extra_args', [])))
+    if is_debug is True:
+        extra_args.extend(
+            mozharness_suite_config.get(
+                'debug_extra_args',
+                suites.get('debug_extra_args', [])
             )
-        elif is_debug is False:
-            extra_args.extend(
-                mozharness_suite_config.get(
-                    'opt_extra_args',
-                    suites.get('opt_extra_args', [])
-                )
+        )
+    elif is_debug is False:
+        extra_args.extend(
+            mozharness_suite_config.get(
+                'opt_extra_args',
+                suites.get('opt_extra_args', [])
             )
-        if mozharness_suite_config.get('blob_upload'):
-            extra_args.extend(['--blob-upload-branch', branch_name])
-        if mozharness_suite_config.get('download_symbols'):
-            extra_args.extend(['--download-symbols', mozharness_suite_config['download_symbols']])
-        reboot_command = mozharness_suite_config.get(
-            'reboot_command', suites.get('reboot_command', None))
-        hg_bin = mozharness_suite_config.get(
-            'hg_bin', suites.get('hg_bin', 'hg'))
-        properties['script_repo_revision'] = mozharness_tag
-        factory = ScriptFactory(
-            interpreter=mozharness_python,
-            scriptRepo=mozharness_repo,
-            scriptName=suites['script_path'],
-            hg_bin=hg_bin,
-            extra_args=extra_args,
-            use_credentials_file=True,
-            script_maxtime=suites.get('script_maxtime', 7200),
-            script_timeout=suites.get('timeout', 1800),
-            script_repo_manifest=script_repo_manifest,
-            relengapi_archiver_repo_path=relengapi_archiver_repo_path,
-            relengapi_archiver_rev=relengapi_archiver_rev,
-            reboot_command=reboot_command,
-            platform=platform,
-            env=mozharness_suite_config.get('env', {}),
-            log_eval_func=rc_eval_func({
-                0: SUCCESS,
-                1: WARNINGS,
-                2: FAILURE,
-                3: EXCEPTION,
-                4: RETRY,
-            }),
         )
-        builder = {
-            'name': '%s %s' % (name_prefix, suites_name),
-            'slavenames': slavenames,
-            'builddir': '%s-%s' % (build_dir_prefix, suites_name),
-            'slavebuilddir': 'test',
-            'factory': factory,
-            'category': category,
-            'properties': properties,
-            'nextSlave': _nextAWSSlave_nowait,
-        }
-        builders.append(builder)
-    else:
-        factory = UnittestPackagedBuildFactory(
-            platform=platform,
-            test_suites=suites,
-            mochitest_leak_threshold=mochitestLeakThreshold,
-            crashtest_leak_threshold=crashtestLeakThreshold,
-            hgHost=config['hghost'],
-            repoPath=config['repo_path'],
-            productName=productName,
-            posixBinarySuffix=posixBinarySuffix,
-            macResSubdir=pf.get('mac_res_subdir', 'Resources'),
-            buildToolsRepoPath=config['build_tools_repo_path'],
-            buildSpace=1.0,
-            buildsBeforeReboot=config['platforms'][
-                platform]['builds_before_reboot'],
-            downloadSymbols=pf.get('download_symbols', False),
-            downloadSymbolsOnDemand=pf.get(
-                'download_symbols_ondemand', True),
-            env=pf.get('unittest-env', {}),
-            resetHwClock=resetHwClock,
-        )
-        builder = {
-            'name': '%s %s' % (name_prefix, suites_name),
-            'slavenames': slavenames,
-            'builddir': '%s-%s' % (build_dir_prefix, suites_name),
-            'slavebuilddir': 'test',
-            'factory': factory,
-            'category': category,
-            'properties': properties,
-            'env': MozillaEnvironments.get(config['platforms'][platform].get('env_name'), {}),
-            'nextSlave': _nextAWSSlave_nowait,
-        }
-        builders.append(builder)
+    if mozharness_suite_config.get('blob_upload'):
+        extra_args.extend(['--blob-upload-branch', branch_name])
+    if mozharness_suite_config.get('download_symbols'):
+        extra_args.extend(['--download-symbols', mozharness_suite_config['download_symbols']])
+    reboot_command = mozharness_suite_config.get(
+        'reboot_command', suites.get('reboot_command', None))
+    hg_bin = mozharness_suite_config.get(
+        'hg_bin', suites.get('hg_bin', 'hg'))
+    properties['script_repo_revision'] = mozharness_tag
+    factory = ScriptFactory(
+        interpreter=mozharness_python,
+        scriptRepo=mozharness_repo,
+        scriptName=suites['script_path'],
+        hg_bin=hg_bin,
+        extra_args=extra_args,
+        use_credentials_file=True,
+        script_maxtime=suites.get('script_maxtime', 7200),
+        script_timeout=suites.get('timeout', 1800),
+        script_repo_manifest=script_repo_manifest,
+        relengapi_archiver_repo_path=relengapi_archiver_repo_path,
+        relengapi_archiver_rev=relengapi_archiver_rev,
+        reboot_command=reboot_command,
+        platform=platform,
+        env=mozharness_suite_config.get('env', {}),
+        log_eval_func=rc_eval_func({
+            0: SUCCESS,
+            1: WARNINGS,
+            2: FAILURE,
+            3: EXCEPTION,
+            4: RETRY,
+        }),
+    )
+    builder = {
+        'name': '%s %s' % (name_prefix, suites_name),
+        'slavenames': slavenames,
+        'builddir': '%s-%s' % (build_dir_prefix, suites_name),
+        'slavebuilddir': 'test',
+        'factory': factory,
+        'category': category,
+        'properties': properties,
+        'nextSlave': _nextAWSSlave_nowait,
+    }
+    builders.append(builder)
     return builders
 
 
