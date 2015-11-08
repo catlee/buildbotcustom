@@ -204,6 +204,8 @@ def parse_make_upload(rc, stdout, stderr):
             "\n".join([stdout, stderr]).replace('\r\n', '\n'), re.M):
         if m.endswith("crashreporter-symbols.zip"):
             retval['symbolsUrl'] = m
+        elif 'mozharness' in m and m.endswith('.zip'):
+            pass
         elif m.endswith("crashreporter-symbols-full.zip"):
             retval['symbolsUrl'] = m
         elif m.endswith("tests.tar.bz2") or m.endswith("tests.zip"):
@@ -1495,10 +1497,15 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
 
     def addTestPrettyNamesSteps(self):
         # Disable signing for l10n check steps
-        env = self.env
+        env = self.env.copy()
         if 'MOZ_SIGN_CMD' in env:
             env = env.copy()
             del env['MOZ_SIGN_CMD']
+
+        if self.complete_platform == 'macosx64':
+            # make package is broken in universal (opt) builds) if
+            # MOZ_OBJDIR is set but you're calling in a specific arch, bug 1195546
+            env.update({'MOZ_CURRENT_PROJECT': os.path.basename(self.objdir)})
 
         if 'mac' in self.platform:
             # Need to run this target or else the packaging targets will
@@ -1569,11 +1576,18 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
         workdir = WithProperties('%(basedir)s/build')
         if self.platform.startswith('win'):
             workdir = "build/"
+
+        pkg_env2 = pkg_env.copy()
+        if self.complete_platform == 'macosx64':
+            # make package is broken in universal (opt) builds) if
+            # MOZ_OBJDIR is set but you're calling in a specific arch, bug 1195546
+            pkg_env2.update({'MOZ_CURRENT_PROJECT': os.path.basename(self.objdir)})
+
         if self.packageSDK:
             self.addStep(MockCommand(
                          name='make_sdk',
                          command=self.makeCmd + ['-f', 'client.mk', 'sdk'],
-                         env=pkg_env,
+                         env=pkg_env2,
                          workdir=workdir,
                          mock=self.use_mock,
                          target=self.mock_target,
@@ -1585,18 +1599,14 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
                          name='make_pkg_tests',
                          command=self.makeCmd + [
                              'package-tests'] + pkgTestArgs,
-                         env=pkg_env,
+                         env=pkg_env2,
                          workdir=objdir,
                          mock=self.use_mock,
                          target=self.mock_target,
                          mock_workdir_prefix=None,
                          haltOnFailure=True,
                          ))
-        pkg_env2 = pkg_env.copy()
-        if self.complete_platform == 'macosx64':
-            # make package is broken in universal (opt) builds) if
-            # MOZ_OBJDIR is set but you're calling in a specific arch, bug 1195546
-            pkg_env2.update({'MOZ_CURRENT_PROJECT': os.path.basename(self.objdir)})
+
         self.addStep(MockCommand(
             name='make_pkg',
             command=self.makeCmd + ['package'] + pkgArgs,
