@@ -861,6 +861,14 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             desktop_mh_builders.extend(l10n_builders)
             builds_created['done_l10n_repacks'] = True
 
+    # Handle l10n for try
+    elif config['enable_try'] and config['enable_l10n']:
+        if is_l10n_with_mh(config, platform):
+            l10n_builders = mh_l10n_builders(config, platform, name, secrets,
+                                             is_nightly=False)
+            desktop_mh_builders.extend(l10n_builders)
+            builds_created['done_l10n_repacks'] = True
+
     # if we_do_pgo:
     if (config['pgo_strategy'] in ('periodic', 'try') and
             platform in config['pgo_platforms']):
@@ -1160,7 +1168,7 @@ def generateBranchObjects(config, name, secrets=None):
                 **extra_args
             ))
 
-    if config['enable_l10n'] and config.get("enable_l10n_dep_scheduler", True):
+    if config['enable_l10n'] and config.get("enable_l10n_dep_scheduler", True) and not config['enable_try']:
         l10n_builders = []
         for b in l10nBuilders:
             l10n_builders.append(l10nBuilders[b]['l10n_builder'])
