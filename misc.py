@@ -1168,7 +1168,7 @@ def generateBranchObjects(config, name, secrets=None):
                 **extra_args
             ))
 
-    if config['enable_l10n'] and config.get("enable_l10n_dep_scheduler", True) and not config['enable_try']:
+    if config['enable_l10n'] and config.get("enable_l10n_dep_scheduler", True) and not config.get('enable_try'):
         l10n_builders = []
         for b in l10nBuilders:
             l10n_builders.append(l10nBuilders[b]['l10n_builder'])
