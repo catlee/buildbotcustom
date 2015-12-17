@@ -862,7 +862,7 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
             builds_created['done_l10n_repacks'] = True
 
     # Handle l10n for try
-    elif config['enable_try'] and config['enable_l10n']:
+    elif config.get('enable_try') and config['enable_l10n']:
         if is_l10n_with_mh(config, platform):
             l10n_builders = mh_l10n_builders(config, platform, name, secrets,
                                              is_nightly=False)
