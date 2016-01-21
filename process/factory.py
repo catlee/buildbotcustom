@@ -257,15 +257,11 @@ def getPlatformMinidumpPath(platform):
     platform_minidump_path = {
         'linux': WithProperties('%(toolsdir:-)s/breakpad/linux/minidump_stackwalk'),
         'linuxqt': WithProperties('%(toolsdir:-)s/breakpad/linux/minidump_stackwalk'),
-        'linux32_gecko': WithProperties('%(toolsdir:-)s/breakpad/linux/minidump_stackwalk'),
         'linux64': WithProperties('%(toolsdir:-)s/breakpad/linux64/minidump_stackwalk'),
-        'linux64_gecko': WithProperties('%(toolsdir:-)s/breakpad/linux64/minidump_stackwalk'),
         'win32': WithProperties('%(toolsdir:-)s/breakpad/win32/minidump_stackwalk.exe'),
-        'win32_gecko': WithProperties('%(toolsdir:-)s/breakpad/win32/minidump_stackwalk.exe'),
         'win64': WithProperties('%(toolsdir:-)s/breakpad/win64/minidump_stackwalk.exe'),
         'macosx': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         'macosx64': WithProperties('%(toolsdir:-)s/breakpad/osx64/minidump_stackwalk'),
-        'macosx64_gecko': WithProperties('%(toolsdir:-)s/breakpad/osx/minidump_stackwalk'),
         # Android uses OSX *and* Linux because the Foopies are on both.
         'android': WithProperties('/builds/minidump_stackwalk'),
         'android-x86': WithProperties('/builds/minidump_stackwalk'),
@@ -1361,6 +1357,7 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
         once."""
         if not getattr(self, '_gotBuildInfo', False):
             printconfig_env = self.env.copy()
+            printconfig_env.update({'TOOLTOOL_DIR': WithProperties('%(basedir)s/build')})
             del printconfig_env['MOZ_OBJDIR']
             printconfig_workdir = WithProperties('%(basedir)s/build/' + self.objdir)
             # hax https://bugzilla.mozilla.org/show_bug.cgi?id=1232466#c10
@@ -1368,9 +1365,13 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
                 python = ['c:/mozilla-build/python27/python', '-u']
             else:
                 python = ['/tools/buildbot/bin/python']
+            if self.mozillaSrcDir:
+                machPath = '%(basedir)s/build/mozilla/mach'
+            else:
+                machPath = '%(basedir)s/build/mach'
             # we need abs paths because we are in a non relative workdir
             printconfig_base_command = python + [
-                WithProperties('%(basedir)s/build/mach'), 'python',
+                WithProperties(machPath), 'python',
                 WithProperties('%(basedir)s/build' + '%s/config/printconfigsetting.py' % self.mozillaSrcDir),
                 WithProperties('%(basedir)s/build' + '/%s/dist/bin/application.ini' % self.mozillaObjdir),
             ]
@@ -1653,6 +1654,7 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
                                             haltOnFailure=True)
 
         printconfig_env = self.env.copy()
+        printconfig_env.update({'TOOLTOOL_DIR': WithProperties('%(basedir)s/build')})
         del printconfig_env['MOZ_OBJDIR']
         printconfig_workdir = WithProperties('%(basedir)s/build/' + self.objdir)
         # hax https://bugzilla.mozilla.org/show_bug.cgi?id=1232466#c10
@@ -1660,9 +1662,13 @@ class MercurialBuildFactory(MozillaBuildFactory, MockMixin, TooltoolMixin):
             python = ['c:/mozilla-build/python27/python', '-u']
         else:
             python = ['/tools/buildbot/bin/python']
+        if self.mozillaSrcDir:
+            machPath = '%(basedir)s/build/mozilla/mach'
+        else:
+            machPath = '%(basedir)s/build/mach'
         # we need abs paths because we are in a non relative workdir
         printconfig_base_command = python + [
-            WithProperties('%(basedir)s/build/mach'), 'python',
+            WithProperties(machPath), 'python',
             WithProperties('%(basedir)s/build' + '%s/config/printconfigsetting.py' % self.mozillaSrcDir),
             WithProperties('%(basedir)s/build' + '/%s/dist/bin/application.ini' % self.mozillaObjdir),
         ]
@@ -2158,6 +2164,7 @@ class NightlyBuildFactory(MercurialBuildFactory):
             haltOnFailure=True,
         ))
         printconfig_env = self.env.copy()
+        printconfig_env.update({'TOOLTOOL_DIR': WithProperties('%(basedir)s/build')})
         del printconfig_env['MOZ_OBJDIR']
         printconfig_workdir = WithProperties('%(basedir)s/build/' + self.objdir)
         # hax https://bugzilla.mozilla.org/show_bug.cgi?id=1232466#c10
@@ -2165,9 +2172,13 @@ class NightlyBuildFactory(MercurialBuildFactory):
             python = ['c:/mozilla-build/python27/python', '-u']
         else:
             python = ['/tools/buildbot/bin/python']
+        if self.mozillaSrcDir:
+            machPath = '%(basedir)s/build/mozilla/mach'
+        else:
+            machPath = '%(basedir)s/build/mach'
         # we need abs paths because we are in a non relative workdir
         printconfig_base_command = python + [
-            WithProperties('%(basedir)s/build/mach'), 'python',
+            WithProperties(machPath), 'python',
             # abs*Dir attrs lie. they are not absolute paths
             WithProperties('%(basedir)s/' + '%s/config/printconfigsetting.py' % self.absMozillaSrcDir),
             WithProperties('%(basedir)s/' + self.absMozillaObjDir + '/%(previous_inipath)s')
@@ -3256,6 +3267,13 @@ class BaseRepackFactory(MozillaBuildFactory, TooltoolMixin):
         prettyEnv = self.env.copy()
         prettyEnv['MOZ_PKG_PRETTYNAMES'] = '1'
         prettyEnv['ZIP_IN'] = WithProperties('%(zip_in)s')
+
+        if self.productName == 'thunderbird' and self.platform.startswith('macosx'):
+            # This is a hack to get Thunderbird mac repacks working again and
+            # it should likely be checked if this code also works with all
+            # products. See bug 1231174 for more details.
+            prettyEnv.update({'MOZ_CURRENT_PROJECT': os.path.basename(self.objdir)})
+
         if self.platform.startswith('win'):
             self.addStep(MockProperty(
                          command=self.makeCmd + ['--no-print-directory',
@@ -3514,13 +3532,21 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
 
     def doRepack(self):
         self.downloadMarTools()
+
+        installersEnv = self.env.copy()
+        if self.productName == 'thunderbird' and self.platform.startswith('macosx'):
+            # This is a hack to get Thunderbird mac repacks working again and
+            # it should likely be checked if this code also works with all
+            # products. See bug 1231174 for details.
+            installersEnv.update({'MOZ_CURRENT_PROJECT': os.path.basename(self.objdir)})
+
         self.addStep(MockCommand(
                      name='repack_installers',
                      description=['repack', 'installers'],
                      command=self.makeCmd + [WithProperties('installers-%(locale)s'),
                                              WithProperties('LOCALE_MERGEDIR=%(basedir)s/' +
                                                             "%s/merged" % self.baseWorkDir)],
-                     env=self.env,
+                     env=installersEnv,
                      haltOnFailure=True,
                      workdir='%s/%s/locales' % (self.absObjDir, self.appName),
                      mock=self.use_mock,
@@ -3537,6 +3563,7 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
             haltOnFailure=True,
         ))
         printconfig_env = self.env.copy()
+        printconfig_env.update({'TOOLTOOL_DIR': WithProperties('%(basedir)s/build')})
         del printconfig_env['MOZ_OBJDIR']
         printconfig_workdir = WithProperties('%(basedir)s/build/' + self.objdir)
         # hax https://bugzilla.mozilla.org/show_bug.cgi?id=1232466#c10
@@ -3544,9 +3571,13 @@ class NightlyRepackFactory(BaseRepackFactory, NightlyBuildFactory):
             python = ['c:/mozilla-build/python27/python', '-u']
         else:
             python = ['/tools/buildbot/bin/python']
+        if self.mozillaSrcDir:
+            machPath = '%(basedir)s/build/mozilla/mach'
+        else:
+            machPath = '%(basedir)s/build/mach'
         # we need abs paths because we are in a non relative workdir
         printconfig_base_command = python + [
-            WithProperties('%(basedir)s/build/mach'), 'python',
+            WithProperties(machPath), 'python',
             # abs*Dir attrs lie. they are not absolute paths
             WithProperties('%(basedir)s/' + '%s/config/printconfigsetting.py' % self.absMozillaSrcDir),
             WithProperties('%(basedir)s/' + self.absMozillaObjDir + '%(inipath)s')
@@ -4278,160 +4309,6 @@ class MozillaTestFactory(MozillaBuildFactory):
             self.addPeriodicRebootSteps()
 
 
-class PartnerRepackFactory(ReleaseFactory):
-    def getReleaseTag(self, product, version):
-        return product.upper() + '_' + \
-            str(version).replace('.', '_') + '_' + \
-            'RELEASE'
-
-    def __init__(self, productName, partnersRepoPath,
-                 stagingServer, stageUsername, stageSshKey,
-                 version=None, buildNumber=1, partnersRepoRevision='default',
-                 nightlyDir="nightly", platformList=None, packageDmg=True,
-                 partnerUploadDir='unsigned/partner-repacks',
-                 baseWorkDir='.', python='python', releasePromotion=False,
-                 **kwargs):
-        ReleaseFactory.__init__(self, baseWorkDir=baseWorkDir, **kwargs)
-        self.productName = productName
-        self.version = version
-        self.buildNumber = buildNumber
-        self.partnersRepoPath = partnersRepoPath
-        self.partnersRepoRevision = partnersRepoRevision
-        self.stagingServer = stagingServer
-        self.stageUsername = stageUsername
-        self.stageSshKey = stageSshKey
-        self.partnersRepackDir = '%s/partner-repacks' % self.baseWorkDir
-        self.partnerUploadDir = partnerUploadDir
-        self.packageDmg = packageDmg
-        self.python = python
-        self.platformList = platformList
-        self.releasePromotion = releasePromotion
-
-        if not self.releasePromotion:
-            self.candidatesDir = self.getCandidatesDir(productName,
-                                                       version,
-                                                       buildNumber,
-                                                       nightlyDir=nightlyDir)
-            self.releaseTag = self.getReleaseTag(productName, version)
-
-        self.extraRepackArgs = []
-        if nightlyDir:
-            self.extraRepackArgs.extend(['--nightly-dir', '%s/%s' %
-                                        (productName, nightlyDir)])
-        if self.packageDmg:
-            self.extraRepackArgs.extend(['--pkg-dmg',
-                                        WithProperties('%(scriptsdir)s/pkg-dmg')])
-        if platformList:
-            for platform in platformList:
-                self.extraRepackArgs.extend(['--platform', platform])
-
-        self.getPartnerRepackData()
-        self.doPartnerRepacks()
-
-    def getPartnerRepackData(self):
-        # We start fresh every time.
-        self.addStep(ShellCommand(
-            name='rm_partners_repo',
-            command=['rm', '-rf', self.partnersRepackDir],
-            description=['remove', 'partners', 'repo'],
-            workdir=self.baseWorkDir,
-        ))
-        self.addStep(self.makeHgtoolStep(
-            name='clone_partner_repacks',
-            repo_url='https://%s/%s' % (self.hgHost, self.partnersRepoPath),
-            wc=self.partnersRepackDir,
-            workdir=self.baseWorkDir,
-            rev=self.partnersRepoRevision,
-            env=self.env,
-            use_properties=False,
-        ))
-        if self.releasePromotion:
-            command=['bash', '-c',
-                        WithProperties('wget https://hg.mozilla.org/' + self.repoPath +
-                                    '/raw-file/%(revision)s/build/upload.py')]
-        else:
-            command=['bash', '-c',
-                        'wget https://hg.mozilla.org/%s/raw-file/%s/build/upload.py' % (self.repoPath, self.releaseTag)]
-        self.addStep(ShellCommand(
-            name='download_upload.py',
-            command=command,
-            description=['download', 'upload.py'],
-            workdir='%s/scripts' % self.partnersRepackDir,
-            haltOnFailure=True
-        ))
-        if self.packageDmg:
-            if self.releasePromotion:
-                command=['bash', '-c',
-                         WithProperties('wget https://hg.mozilla.org/' + self.repoPath +
-                                        '/raw-file/%(revision)s/build/package/mac_osx/pkg-dmg')]
-            else:
-                command=['bash', '-c',
-                         'wget https://hg.mozilla.org/%s/raw-file/%s/build/package/mac_osx/pkg-dmg' % (self.repoPath, self.releaseTag)]
-            self.addStep(ShellCommand(
-                name='download_pkg-dmg',
-                command=command,
-                description=['download', 'pkg-dmg'],
-                workdir='%s/scripts' % self.partnersRepackDir,
-                haltOnFailure=True
-            ))
-            self.addStep(ShellCommand(
-                name='chmod_pkg-dmg',
-                command=['chmod', '755', 'pkg-dmg'],
-                description=['chmod', 'pkg-dmg'],
-                workdir='%s/scripts' % self.partnersRepackDir,
-                haltOnFailure=True
-            ))
-            self.addStep(SetProperty(
-                name='set_scriptsdir',
-                command=['bash', '-c', 'pwd'],
-                property='scriptsdir',
-                workdir='%s/scripts' % self.partnersRepackDir,
-            ))
-            if self.releasePromotion:
-                self.addStep(SetProperty(
-                    name='set_version',
-                    command=['wget', '-q', '-O-',
-                              WithProperties('https://hg.mozilla.org/' + self.repoPath +
-                                             '/raw-file/%(revision)s/browser/' +
-                                             'config/version.txt')],
-                    property='version',
-                    workdir='%s/scripts' % self.partnersRepackDir,
-                ))
-
-    def doPartnerRepacks(self):
-        if self.enableSigning and self.signingServers:
-            self.addGetTokenSteps()
-        pr_env = self.env.copy()
-        pr_env['PYTHONPATH'] = WithProperties('%(toolsdir)s/lib/python:.')
-        command=[self.python, './partner-repacks.py',
-                 '--repo', self.repoPath,
-                 '--hgroot', 'https://%s' % self.hgHost,
-                 '--dmg-extract-script',
-                 WithProperties(
-                     '%(toolsdir)s/release/common/unpack-diskimage.sh'),
-                 '--upload-user', self.stageUsername,
-                 '--upload-host', self.stagingServer,
-                 '--upload-ssh-key', '~/.ssh/{}'.format(self.stageSshKey),
-                ]
-        if self.releasePromotion:
-            command.extend(['--use-tinderbox-builds',
-                            '--revision', WithProperties('%(revision)s')])
-        else:
-            command.extend(['--version', str(self.version),
-                            '--build-number', str(self.buildNumber),
-                            '--staging-server', self.stagingServer])
-
-        self.addStep(RepackPartners(
-            name='repack_partner_builds',
-            command=command + self.extraRepackArgs,
-            env=pr_env,
-            description=['repacking', 'partner', 'builds'],
-            descriptionDone=['repacked', 'partner', 'builds'],
-            workdir='%s/scripts' % self.partnersRepackDir,
-            haltOnFailure=True
-        ))
-
-
 def rc_eval_func(exit_statuses):
     def eval_func(cmd, step):
         rc = cmd.rc
@@ -4560,8 +4437,10 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
         if relengapi_archiver_repo_path:
             if relengapi_archiver_release_tag:
                 archiver_revision = "--tag %s " % relengapi_archiver_release_tag
+                script_repo_revision = relengapi_archiver_release_tag
             else:
                 archiver_revision = "--rev %s " % (relengapi_archiver_rev or '%(revision)s',)
+                script_repo_revision = "%s" % (relengapi_archiver_rev or '%(revision)s',)
             if self.script_repo_cache:
                 assert self.tools_repo_cache
                 archiver_client_path = \
@@ -4605,6 +4484,13 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
                 script_path = scriptName
             else:
                 script_path = 'scripts/%s' % scriptName
+            self.addStep(SetProperty(
+                name='get_script_repo_revision',
+                property='script_repo_revision',
+                command=['echo', WithProperties(script_repo_revision)],
+                workdir=".",
+                haltOnFailure=False,
+            ))
         elif self.script_repo_cache:
             # all slaves bar win tests have a copy of hgtool on their path.
             # However, let's use runner's checkout version like we do for
@@ -4754,11 +4640,6 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
                 workdir='.',
                 flunkOnFailure=False,
             ))
-        self.addStep(OutputStep(
-            name='tinderboxprint_script_revlink',
-            data=WithProperties(
-                'TinderboxPrint: script_revlink: %(script_repo_url)s/rev/%(script_repo_revision)s'
-        )))
         if self.tooltool_manifest_src:
             self.addStep(SetProperty(
                 name='set_toolsdir',
@@ -4904,12 +4785,20 @@ class SigningScriptFactory(ScriptFactory):
                 name='download_token',
             ))
             # toolsdir, basedir
-            self.addStep(SetProperty(
-                name='set_toolsdir',
-                command=self.get_basedir_cmd,
-                property='toolsdir',
-                workdir='scripts',
-            ))
+            if self.tools_repo_cache:
+                self.addStep(SetProperty(
+                    name='set_toolsdir',
+                    command=['bash', '-c', 'pwd'],
+                    property='toolsdir',
+                    workdir=self.tools_repo_cache
+                ))
+            else:
+                self.addStep(SetProperty(
+                    name='set_toolsdir',
+                    command=self.get_basedir_cmd,
+                    property='toolsdir',
+                    workdir='scripts',
+                ))
             self.addStep(SetProperty(
                 name='set_basedir',
                 command=self.get_basedir_cmd,

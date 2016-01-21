@@ -8,9 +8,7 @@ def getSupportedPlatforms():
     return ('linux', 'linuxqt', 'linux64',
             'win32', 'macosx', 'macosx64',
             'win64', 'android',
-            'gb_armv7a_gecko', 'linux32_gecko',
-            'macosx64_gecko', 'win32_gecko',
-            'linux64_gecko')
+            'gb_armv7a_gecko')
 
 
 def getPlatformFtpDir(platform):
@@ -100,8 +98,6 @@ def normalizeName(name, product=None, min_=30, max_=30, filler='0'):
         'panda': 'p',
         'b2g37': 'b37',
         'b2g44': 'b44',
-        'v2_2': '22',
-        'v2_2r': '22r',
         'v2_5': '25',
         'b2g-ota': 'ota',
         'standalone': 'sa',

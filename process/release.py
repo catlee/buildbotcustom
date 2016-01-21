@@ -9,7 +9,7 @@ import hashlib
 from distutils.version import LooseVersion
 
 from buildbot.process.buildstep import regex_log_evaluator
-from buildbot.scheduler import Scheduler, Dependent, Triggerable
+from buildbot.scheduler import Scheduler, Dependent
 from buildbot.status.mail import MailNotifier
 from buildbot.steps.trigger import Trigger
 from buildbot.status.builder import Results
@@ -33,7 +33,7 @@ from buildbotcustom.misc import (
 from buildbotcustom.common import normalizeName
 from buildbotcustom.process.factory import (
     ScriptFactory, SingleSourceFactory, ReleaseBuildFactory,
-    ReleaseUpdatesFactory, ReleaseFinalVerification, PartnerRepackFactory,
+    ReleaseUpdatesFactory, ReleaseFinalVerification,
     makeDummyBuilder, SigningScriptFactory,
     DummyFactory)
 from release.platforms import buildbot2ftp
@@ -41,8 +41,7 @@ from release.paths import makeCandidatesDir
 from buildbotcustom.scheduler import TriggerBouncerCheck, \
     makePropertiesScheduler, AggregatingScheduler
 from buildbotcustom.misc_scheduler import buildIDSchedFunc, buildUIDSchedFunc
-from buildbotcustom.status.errors import update_verify_error, \
-    permission_check_error
+from buildbotcustom.status.errors import update_verify_error
 from build.paths import getRealpath
 from release.info import getRuntimeTag, getReleaseTag
 import BuildSlaves
@@ -613,6 +612,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                 partialUpdates=partialUpdates_hacked,  # FIXME: hack
                 talosMasters=talosMasters,
                 packageTests=packageTests,
+                packageSDK=releaseConfig.get('packageSDK', False),
                 unittestMasters=unittestMasters,
                 unittestBranch=unittestBranch,
                 clobberURL=clobberer_url,
@@ -889,12 +889,10 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                                           releaseConfig['l10nPlatforms']):
             slaves = None
             partner_repack_factory = None
-            if releaseConfig.get('partnerRepackConfig', {}).get('use_mozharness'):
+            if releaseConfig['productName'] == 'fennec':
+                mh_cfg = releaseConfig['partnerRepackConfig']['platforms'][platform]
+                extra_args = mh_cfg.get('extra_args', ['--cfg', mh_cfg['config_file']])
                 slaves = branchConfig['platforms']['linux']['slaves']
-                mh_cfg = releaseConfig[
-                    'partnerRepackConfig']['platforms'][platform]
-                extra_args = mh_cfg.get(
-                    'extra_args', ['--cfg', mh_cfg['config_file']])
                 partner_repack_factory = ScriptFactory(
                     scriptRepo=mozharness_repo,
                     scriptName=mh_cfg['script'],
@@ -904,25 +902,24 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
                     relengapi_archiver_release_tag=releaseTag,
                 )
             else:
-                pr_pf = branchConfig['platforms']['macosx64']
-                slaves = pr_pf['slaves']
-                repack_params = dict(
-                    hgHost=branchConfig['hghost'],
-                    repoPath=sourceRepoInfo['path'],
-                    buildToolsRepoPath=tools_repo_path,
-                    productName=releaseConfig['productName'],
-                    version=releaseConfig['version'],
-                    buildNumber=releaseConfig['buildNumber'],
-                    partnersRepoPath=releaseConfig['partnersRepoPath'],
-                    partnersRepoRevision=releaseTag,
-                    platformList=[platform],
-                    stagingServer=releaseConfig['stagingServer'],
-                    stageUsername=branchConfig['stage_username'],
-                    stageSshKey=branchConfig['stage_ssh_key'],
+                mh_cfg = releaseConfig['partnerRepackConfig']
+                extra_args = mh_cfg.get('extra_args', ['--cfg', mh_cfg['config_file']])
+                extra_args.extend([
+                        "--version", releaseConfig["version"],
+                        "--build-number", releaseConfig["buildNumber"],
+                        "--platform", platform,
+                        "--s3cfg", mh_cfg['s3cfg']
+                        ])
+                slaves = branchConfig['platforms']['macosx64']['slaves']
+                partner_repack_factory = SigningScriptFactory(
                     signingServers=getSigningServers(platform),
-                    env=pr_pf['env'],
+                    scriptRepo=mozharness_repo,
+                    interpreter="python2.7",
+                    scriptName=mh_cfg['script'],
+                    extra_args=extra_args,
+                    relengapi_archiver_repo_path=relengapi_archiver_repo_path,
+                    relengapi_archiver_release_tag=releaseTag,
                 )
-                partner_repack_factory = PartnerRepackFactory(**repack_params)
 
             builders.append({
                 'name': builderPrefix('partner_repack', platform),
@@ -1214,38 +1211,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         post_signing_builders.append(builderPrefix('%s_%s_updates' % (releaseConfig['productName'], releaseChannel)))
 
 
-    if releaseConfig.get('enablePermissionCheck'):
-        check_permissions_factory = ScriptFactory(
-            scriptRepo=tools_repo,
-            script_timeout=3 * 60 * 60,
-            scriptName='scripts/release/stage-tasks.sh',
-            extra_args=['permissions',
-                        '--extra-excludes=*.zip',
-                        '--extra-excludes=*.zip.asc',
-                        '--ssh-user', branchConfig['stage_username'],
-                        '--ssh-key', branchConfig['stage_ssh_key'],
-                        ],
-            log_eval_func=lambda c, s: regex_log_evaluator(
-                c, s, permission_check_error),
-        )
-
-        builders.append({
-            'name': builderPrefix('check_permissions'),
-            'slavenames': unix_slaves,
-            'category': builderPrefix(''),
-            'builddir': builderPrefix('check_permissions'),
-            'slavebuilddir': normalizeName(builderPrefix('chk_prms'), releaseConfig['productName']),
-            'factory': check_permissions_factory,
-            'env': builder_env,
-            'properties': {'slavebuilddir': normalizeName(builderPrefix('chk_prms'), releaseConfig['productName']),
-                           'script_repo_revision': releaseTag,
-                           'release_config': releaseConfigFile,
-                           'platform': None,
-                           'branch': 'release-%s' % sourceRepoInfo['name'],
-                           },
-        })
-        post_deliverables_builders.append(builderPrefix('check_permissions'))
-
     if not releaseConfig.get('disableVirusCheck'):
         antivirus_factory = ScriptFactory(
             scriptRepo=mozharness_repo,
@@ -1316,11 +1281,7 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
     postrelease_factory_args = dict(
         scriptRepo=tools_repo,
         use_credentials_file=True,
-        scriptName='scripts/release/stage-tasks.sh',
-        extra_args=['postrelease',
-                    '--ssh-user', branchConfig['stage_username'],
-                    '--ssh-key', branchConfig['stage_ssh_key'],
-                    ],
+        scriptName='scripts/release/post-release.sh',
     )
     postrelease_factory = ScriptFactory(**postrelease_factory_args)
 
@@ -1626,11 +1587,6 @@ def generateReleaseBranchObjects(releaseConfig, branchConfig,
         push_to_mirrors_upstreams.extend([
             builderPrefix("%s_checksums" % releaseConfig["productName"]),
         ])
-        if releaseConfig.get('enablePermissionCheck'):
-            push_to_mirrors_upstreams.extend([
-                builderPrefix("check_permissions"),
-            ])
-
         schedulers.append(AggregatingScheduler(
             name=builderPrefix("%s_push_to_mirrors" % releaseConfig["productName"]),
             branch=sourceRepoInfo["path"],
@@ -1859,6 +1815,7 @@ def generateReleasePromotionBuilders(config, name, secrets):
              "-c",  config['bouncer_submitter_config'],
              "--credentials-file", "oauth.txt",
              "--bouncer-api-prefix", config['tuxedoServerUrl'],
+             "--repo", config['repo_path'],
         ]
     }
 
@@ -1873,16 +1830,19 @@ def generateReleasePromotionBuilders(config, name, secrets):
                                              )
 
     bouncer_builder = {
-                      "name": bouncer_buildername, 
+                      "name": bouncer_buildername,
                       "slavenames": config["platforms"]["linux"]["slaves"] + config["platforms"]["linux64"]["slaves"],
                       "builddir": bouncer_buildername,
                       "slavebuilddir": normalizeName(bouncer_buildername),
                       "factory": bouncer_submitter_factory,
                       "category": "release-%s-%s" % (config["bouncer_branch"], ''),
                       "properties": {
+                          "branch": config["bouncer_branch"],
                           "platform": None,
                           "product": pf["product_name"],
-                          "branch": config["bouncer_branch"]
+                          "repo_path": config["repo_path"],
+                          "script_repo_revision": config["mozharness_tag"],
+                          "bouncer_enabled": config["bouncer_enabled"]
                       }
     }
     builders.append(bouncer_builder)
