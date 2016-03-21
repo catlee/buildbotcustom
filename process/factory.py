@@ -4393,6 +4393,7 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
         self.mock_target = mock_target
         self.mock_packages = mock_packages
         self.mock_copyin_files = mock_copyin_files
+        self.get_basedir_cmd = ['bash', '-c', 'pwd']
         self.triggered_schedulers = triggered_schedulers
         self.env = env.copy()
         self.use_credentials_file = use_credentials_file
@@ -4406,9 +4407,19 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
 
         assert len(self.tooltool_url_list) <= 1, "multiple urls not currently supported by tooltool"
 
+        if platform and 'win' in platform:
+            self.get_basedir_cmd = ['cd']
+
         self.addStep(SetBuildProperty(
             property_name='master',
             value=lambda b: b.builder.botmaster.parent.buildbotURL
+        ))
+        self.addStep(SetProperty(
+            name='get_basedir',
+            property='basedir',
+            command=self.get_basedir_cmd,
+            workdir='.',
+            haltOnFailure=True,
         ))
         self.env['PROPERTIES_FILE'] = WithProperties(
             '%(basedir)s/' + properties_file)
@@ -4430,8 +4441,6 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
             command=['rm', '-rf', 'properties'],
             workdir=".",
         ))
-        # TODO: This should be set at reconfig time
-        # TODO: Add checks that we have toolsdir, etc. as static properties
         self.addStep(SetBuildProperty(
             property_name='script_repo_url',
             value=scriptRepo,
@@ -4488,10 +4497,12 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
                 script_path = scriptName
             else:
                 script_path = 'scripts/%s' % scriptName
-            self.addStep(SetBuildProperty(
+            self.addStep(SetProperty(
                 name='get_script_repo_revision',
-                property_name='script_repo_revision',
-                value=lambda b: b.getProperty('script_repo_revision'),
+                property='script_repo_revision',
+                command=['echo', WithProperties(script_repo_revision)],
+                workdir=".",
+                haltOnFailure=False,
             ))
         elif self.script_repo_cache:
             # all slaves bar win tests have a copy of hgtool on their path.
@@ -4529,7 +4540,6 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
                     haltOnFailure=True,
                 ))
             else:
-                # TODO: Set this statically
                 self.addStep(SetBuildProperty(
                     property_name='script_repo_checkout',
                     value=self.script_repo_cache,
@@ -4635,6 +4645,7 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
         if extra_args:
             self.cmd.extend(extra_args)
 
+
         if use_credentials_file:
             self.addStep(FileDownload(
                 mastersrc=os.path.join(os.getcwd(), 'BuildSlaves.py'),
@@ -4689,6 +4700,12 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
             ))
 
         if self.tooltool_manifest_src:
+            self.addStep(SetProperty(
+                name='set_toolsdir',
+                command=['bash', '-c', 'pwd'],
+                property='toolsdir',
+                workdir='scripts',
+            ))
             self.addTooltoolStep(workdir='build')
 
     def runScript(self, env=None):
@@ -4780,6 +4797,27 @@ class SigningScriptFactory(ScriptFactory):
                 slavedest=token,
                 workdir='.',
                 name='download_token',
+            ))
+            # toolsdir, basedir
+            if self.tools_repo_cache:
+                self.addStep(SetProperty(
+                    name='set_toolsdir',
+                    command=['bash', '-c', 'pwd'],
+                    property='toolsdir',
+                    workdir=self.tools_repo_cache
+                ))
+            else:
+                self.addStep(SetProperty(
+                    name='set_toolsdir',
+                    command=self.get_basedir_cmd,
+                    property='toolsdir',
+                    workdir='scripts',
+                ))
+            self.addStep(SetProperty(
+                name='set_basedir',
+                command=self.get_basedir_cmd,
+                property='basedir',
+                workdir='.',
             ))
             signing_env = self.env.copy()
             signing_env['MOZ_SIGN_CMD'] = WithProperties(get_signing_cmd(
