@@ -567,7 +567,9 @@ def generateTestBuilder(config, branch_name, platform, name_prefix,
     properties = {'branch': branchProperty, 'platform': platform,
                   'slavebuilddir': 'test', 'stage_platform': stagePlatform,
                   'product': stageProduct, 'repo_path': config['repo_path'],
-                  'moz_repo_path': config.get('moz_repo_path', '')}
+                  'moz_repo_path': config.get('moz_repo_path', ''),
+                  'basedir': None,  # TODO
+                 }
     # suites is a dict!
     if mozharness_suite_config is None:
         mozharness_suite_config = {}
@@ -753,6 +755,8 @@ def generateDesktopMozharnessBuilders(name, platform, config, secrets,
         'product': pf['stage_product'],
         'repo_path': config['repo_path'],
         'script_repo_revision': config["mozharness_tag"],
+        'toolsdir': None,  # TODO
+        'basedir': None,  # TODO
     }
     dep_signing_servers = secrets.get(pf.get('dep_signing_servers'))
     nightly_signing_servers = secrets.get(pf.get('nightly_signing_servers'))
@@ -2001,6 +2005,12 @@ def generateBranchObjects(config, name, secrets=None):
 
         # -- end of per-platform loop --
 
+    # Check that we have all our stuff
+    for builder in branchObjects['builders']:
+        if isinstance(builder['factory'], ScriptFactory):
+            assert 'toolsdir' in builder['properties'], builder['name']
+            assert 'basedir' in builder['properties'], builder['name']
+
     return branchObjects
 
 
@@ -2168,6 +2178,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                     'product': stage_product,
                     'builddir': builddir,
                     'slavebuilddir': slavebuilddir,
+                    'basedir': None,  # TODO
                 }
 
                 assert branch_config.get('mozharness_talos', True) and platform_config[slave_platform].get('mozharness_talos', True)
@@ -2205,6 +2216,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                         'product': stage_product,
                         'builddir': builddir,
                         'slavebuilddir': slavebuilddir,
+                        'basedir': None,  # TODO
                     }
                     assert branch_config.get('mozharness_talos') and not platform_config.get('is_mobile')
                     args = _makeGenerateMozharnessTalosBuilderArgs(suite, talosBranch, platform,
@@ -2496,6 +2508,12 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
         # Create talos schedulers
         branchObjects['schedulers'].extend(makeTalosScheduler(talos_builders, False))
         branchObjects['schedulers'].extend(makeTalosScheduler(talos_pgo_builders, True))
+
+    # Check that we have all our stuff
+    for builder in branchObjects['builders']:
+        if isinstance(builder['factory'], ScriptFactory):
+            #assert 'toolsdir' in builder['properties'], builder['name']
+            assert 'basedir' in builder['properties'], builder['name']
 
     return branchObjects
 
