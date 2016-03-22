@@ -2220,7 +2220,7 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
                         'name': "%s %s pgo talos %s" % (platform_name, branch, suite),
                         'slavenames': platform_config[slave_platform]['slaves'],
                         'builddir': builddir + '-pgo',
-                        'slavebuilddir': slavebuilddir + '-pgo',
+                        'slavebuilddir': slavebuilddir,
                         'factory': pgo_factory,
                         'category': branch,
                         'properties': properties,
@@ -2989,7 +2989,7 @@ def validateBuilders(builders):
             if b['properties']['platform'].startswith('win'):
                 # On Windows, test slaves use C:\slave\test, but build slaves
                 # use /c/builds/moz2_slave
-                if slavebuilddir in ('test', 'test-pgo'):  # TODO: This check is too fragile
+                if slavebuilddir == 'test':  # TODO: This check is too fragile
                     rootdir = r'C:\slave'
                     basedir = '%s\%s' % (rootdir, slavebuilddir)
                 else:
