@@ -2001,6 +2001,9 @@ def generateBranchObjects(config, name, secrets=None):
 
         # -- end of per-platform loop --
 
+    # Sanity check builders
+    validateBuilders(branchObjects['builders'])
+
     return branchObjects
 
 
@@ -2497,6 +2500,9 @@ def generateTalosBranchObjects(branch, branch_config, PLATFORMS, SUITES,
         branchObjects['schedulers'].extend(makeTalosScheduler(talos_builders, False))
         branchObjects['schedulers'].extend(makeTalosScheduler(talos_pgo_builders, True))
 
+    # Sanity check builders
+    validateBuilders(branchObjects['builders'])
+
     return branchObjects
 
 
@@ -2950,6 +2956,7 @@ def mh_l10n_scheduler_name(config, platform):
     pf = config['platforms'][platform]
     return '%s nightly l10n' % (pf['base_name'])
 
+
 def mh_l10n_builder_names(config, platform, branch, is_nightly):
     # let's check if we need to create builders for this config/platform
     names = []
@@ -2968,3 +2975,30 @@ def mh_l10n_builder_names(config, platform, branch, is_nightly):
     return names
 
 
+def validateBuilders(builders):
+    for b in builders:
+        if isinstance(b['factory'], ScriptFactory):
+            if 'basedir' in b['properties']:
+                continue
+
+            if 'slavebuilddir' in b:
+                slavebuilddir = b['slavebuilddir']
+            else:
+                slavebuilddir = b['builddir']
+
+            if b['properties']['platform'].startswith('win'):
+                # On Windows, test slaves use C:\slave\test, but build slaves
+                # use /c/builds/moz2_slave
+                if slavebuilddir in ('test', 'test-pgo'):  # TODO: This check is too fragile
+                    rootdir = r'C:\slave'
+                    basedir = '%s\%s' % (rootdir, slavebuilddir)
+                else:
+                    rootdir = '/c/builds/moz2_slave'
+                    basedir = '%s/%s' % (rootdir, slavebuilddir)
+            else:
+                rootdir = '/builds/slave'
+                basedir = '%s/%s' % (rootdir, slavebuilddir)
+
+            b['properties']['basedir'] = basedir
+            print basedir, b['name']
+            assert 'basedir' in b['properties'], b['name']
