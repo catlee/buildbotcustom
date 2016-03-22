@@ -4485,13 +4485,10 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
                 script_path = scriptName
             else:
                 script_path = 'scripts/%s' % scriptName
-            # TODO: Can this be a simple SetBuildProperty?
-            # What's the use case?
-            self.addStep(SetProperty(
+            self.addStep(SetBuildProperty(
                 name='get_script_repo_revision',
-                property='script_repo_revision',
-                command=['echo', WithProperties(script_repo_revision)],
-                workdir=".",
+                property_name='script_repo_revision',
+                value=lambda b: b.getProperties().render(script_repo_revision),
                 haltOnFailure=False,
             ))
         elif self.script_repo_cache:
