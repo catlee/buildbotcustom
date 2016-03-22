@@ -4429,11 +4429,6 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
                 workdir="."
             ))
             self.env['EXTRA_DATA'] = WithProperties('%(basedir)s/data.json')
-        self.addStep(SetBuildProperty(
-            property_name='script_repo_url',
-            value=scriptRepo,
-        ))
-        script_repo_url = WithProperties('%(script_repo_url)s')
 
         if relengapi_archiver_repo_path:
             if relengapi_archiver_release_tag:
@@ -4497,31 +4492,7 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
         else:
             # fall back to legacy clobbering + cloning script repo
             if script_repo_manifest:
-                # By setting scriptRepoManifest we indicate that we don't
-                # want to use scriptRepo but we want to let the manifest associated
-                # to set the repo to checkout and which revision/branch to update to
-                # If the repo specified in the manifest matches scriptRepo we will
-                # use the cached version if available (i.e. script_repo_cache has
-                # been set)
-                self.addStep(ShellCommand(
-                    command=['bash', '-c',
-                             WithProperties('wget -Orepository_manifest.py ' + \
-                             '--no-check-certificate --tries=10 --waitretry=3 ' + \
-                             'http://hg.mozilla.org/build/tools/raw-file/default/buildfarm/utils/repository_manifest.py')],
-                    haltOnFailure=True,
-                ))
-                self.addStep(SetProperty(
-                    name="set_script_repo_url_and_script_repo_revision",
-                    extract_fn=extractProperties,
-                    command=['bash', '-c',
-                        WithProperties(
-                        'python repository_manifest.py ' +
-                        '--default-repo %s ' % scriptRepo +
-                        '--default-revision %(script_repo_revision)s ' +
-                        '--manifest-url %s' % script_repo_manifest)],
-                    log_eval_func=rc_eval_func({0: SUCCESS, None: EXCEPTION}),
-                    haltOnFailure=True,
-                ))
+                assert False, 'legacy script_repo_manifest unsupported now'
 
             self.addStep(ShellCommand(
                 name="clobber_scripts",
@@ -4532,7 +4503,7 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
             ))
             self.addStep(MercurialCloneCommand(
                 name="clone_scripts",
-                command=[hg_bin, 'clone', script_repo_url, 'scripts'],
+                command=[hg_bin, 'clone', scriptRepo, 'scripts'],
                 workdir=".",
                 haltOnFailure=True,
                 retry=False,
