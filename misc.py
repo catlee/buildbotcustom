@@ -2978,6 +2978,7 @@ def mh_l10n_builder_names(config, platform, branch, is_nightly):
 def validateBuilders(builders):
     for b in builders:
         if isinstance(b['factory'], ScriptFactory):
+            # TODO: do the same for 'master' property?
             if 'basedir' in b['properties']:
                 continue
 

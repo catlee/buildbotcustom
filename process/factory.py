@@ -4483,7 +4483,7 @@ class ScriptFactory(RequestSortingBuildFactory, TooltoolMixin):
             self.addStep(SetBuildProperty(
                 name='get_script_repo_revision',
                 property_name='script_repo_revision',
-                value=lambda b: b.getProperties().render(script_repo_revision),
+                value=lambda b: b.getProperties().render(WithPropertie(script_repo_revision)),
                 haltOnFailure=False,
             ))
         elif self.script_repo_cache:
