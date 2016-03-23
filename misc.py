@@ -2987,7 +2987,9 @@ def validateBuilders(builders):
             else:
                 slavebuilddir = b['builddir']
 
-            if b['properties']['platform'].startswith('win'):
+            platform = b['properties']['platform']
+
+            if platform.startswith('win') or platform.startswith('xp-'):
                 # On Windows, test slaves use C:\slave\test, but build slaves
                 # use /c/builds/moz2_slave
                 if slavebuilddir == 'test':  # TODO: This check is too fragile
