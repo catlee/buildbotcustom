@@ -3001,5 +3001,4 @@ def validateBuilders(builders):
                 basedir = '%s/%s' % (rootdir, slavebuilddir)
 
             b['properties']['basedir'] = basedir
-            print basedir, b['name']
             assert 'basedir' in b['properties'], b['name']
